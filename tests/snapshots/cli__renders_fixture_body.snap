@@ -1,0 +1,65 @@
+---
+source: tests/cli.rs
+expression: "&html[start..end]"
+---
+<article class="markdown-body">
+<h1 id="github-flavored-markdown-sample">GitHub Flavored Markdown sample<a href="#github-flavored-markdown-sample" aria-label="Link to heading 'GitHub Flavored Markdown sample'" data-heading-content="GitHub Flavored Markdown sample" class="anchor"></a></h1>
+<p>Text with <strong>bold</strong>, <em>italic</em>, <del>strikethrough</del>, <code>code</code>, and a link to
+<a href="https://github.com">https://github.com</a> plus an emoji 🚀.</p>
+<h2 id="lists">Lists<a href="#lists" aria-label="Link to heading 'Lists'" data-heading-content="Lists" class="anchor"></a></h2>
+<ul class="contains-task-list">
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" checked="" disabled="" /> task done</li>
+<li class="task-list-item"><input type="checkbox" class="task-list-item-checkbox" disabled="" /> task open
+<ol>
+<li>nested ordered</li>
+<li>second</li>
+</ol>
+</li>
+</ul>
+<h2 id="table">Table<a href="#table" aria-label="Link to heading 'Table'" data-heading-content="Table" class="anchor"></a></h2>
+<table>
+<thead>
+<tr>
+<th align="left">Left</th>
+<th align="center">Center</th>
+<th align="right">Right</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td align="left">a</td>
+<td align="center">b</td>
+<td align="right">c</td>
+</tr>
+</tbody>
+</table>
+<h2 id="code">Code<a href="#code" aria-label="Link to heading 'Code'" data-heading-content="Code" class="anchor"></a></h2>
+<pre class="syntax-highlighting" lang="rust"><code><span class="hl-source hl-rust"><span class="hl-meta hl-function hl-rust"><span class="hl-meta hl-function hl-rust"><span class="hl-storage hl-type hl-function hl-rust">fn</span> </span><span class="hl-entity hl-name hl-function hl-rust">main</span></span><span class="hl-meta hl-function hl-rust"><span class="hl-meta hl-function hl-parameters hl-rust"><span class="hl-punctuation hl-section hl-parameters hl-begin hl-rust">(</span></span><span class="hl-meta hl-function hl-rust"><span class="hl-meta hl-function hl-parameters hl-rust"><span class="hl-punctuation hl-section hl-parameters hl-end hl-rust">)</span></span></span></span><span class="hl-meta hl-function hl-rust"> </span><span class="hl-meta hl-function hl-rust"><span class="hl-meta hl-block hl-rust"><span class="hl-punctuation hl-section hl-block hl-begin hl-rust">{</span>
+    <span class="hl-support hl-macro hl-rust">println!</span><span class="hl-meta hl-group hl-rust"><span class="hl-punctuation hl-section hl-group hl-begin hl-rust">(</span></span><span class="hl-meta hl-group hl-rust"><span class="hl-string hl-quoted hl-double hl-rust"><span class="hl-punctuation hl-definition hl-string hl-begin hl-rust">&quot;</span>hello<span class="hl-punctuation hl-definition hl-string hl-end hl-rust">&quot;</span></span></span><span class="hl-meta hl-group hl-rust"><span class="hl-punctuation hl-section hl-group hl-end hl-rust">)</span></span><span class="hl-punctuation hl-terminator hl-rust">;</span>
+</span><span class="hl-meta hl-block hl-rust"><span class="hl-punctuation hl-section hl-block hl-end hl-rust">}</span></span></span>
+</span></code></pre>
+<h2 id="alerts">Alerts<a href="#alerts" aria-label="Link to heading 'Alerts'" data-heading-content="Alerts" class="anchor"></a></h2>
+<div class="markdown-alert markdown-alert-note">
+<p class="markdown-alert-title">Note</p>
+<p>Useful information.</p>
+</div>
+<div class="markdown-alert markdown-alert-warning">
+<p class="markdown-alert-title">Warning</p>
+<p>Be careful.</p>
+</div>
+<h2 id="footnote">Footnote<a href="#footnote" aria-label="Link to heading 'Footnote'" data-heading-content="Footnote" class="anchor"></a></h2>
+<p>Here is a footnote reference.<sup class="footnote-ref"><a href="#fn-1" id="fnref-1" data-footnote-ref>1</a></sup></p>
+<h2 id="raw-html">Raw HTML<a href="#raw-html" aria-label="Link to heading 'Raw HTML'" data-heading-content="Raw HTML" class="anchor"></a></h2>
+<p align="center"><img src="logo.png" alt="logo" width="64"></p>
+<h2 id="mermaid">Mermaid<a href="#mermaid" aria-label="Link to heading 'Mermaid'" data-heading-content="Mermaid" class="anchor"></a></h2>
+<pre class="mermaid">graph LR
+  A[Markdown] --&gt; B{markdown-viewer}
+  B --&gt; C[Browser]
+</pre>
+<section class="footnotes" data-footnotes>
+<ol>
+<li id="fn-1">
+<p>The footnote. <a href="#fnref-1" class="footnote-backref" data-footnote-backref data-footnote-backref-idx="1" aria-label="Back to reference 1">↩</a></p>
+</li>
+</ol>
+</section>
