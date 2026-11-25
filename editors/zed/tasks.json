@@ -1,0 +1,24 @@
+// markdown-viewer tasks for Zed. Add these to ~/.config/zed/tasks.json
+// (or a project's .zed/tasks.json), inside its top-level [ … ].
+[
+  {
+    // Show the line under the cursor in the preview, opening a preview
+    // window first if there isn't one. The preview updates when you save.
+    "label": "markdown-viewer: show this line",
+    "command": "markdown-viewer",
+    "args": ["--goto", "$ZED_FILE:$ZED_ROW", "--exit-when-closed"],
+    "allow_concurrent_runs": true,
+    "reveal": "never",
+    "hide": "always",
+    "tags": ["markdown"]
+  },
+  {
+    // Browse the project's Markdown files, starting at its README.
+    "label": "markdown-viewer: browse project",
+    "command": "markdown-viewer",
+    "args": ["$ZED_WORKTREE_ROOT", "--exit-when-closed"],
+    "reveal": "never",
+    "hide": "always",
+    "tags": ["markdown"]
+  }
+]

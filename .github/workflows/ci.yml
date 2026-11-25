@@ -27,6 +27,8 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
+      - name: VS Code extension tests
+        run: node editors/vscode/test/extension.test.js
 
   # The same builds and packages as a release, so problems (a retired
   # runner image, a broken package) show up before tagging.

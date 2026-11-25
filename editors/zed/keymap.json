@@ -1,0 +1,10 @@
+// markdown-viewer key binding for Zed. Add this to ~/.config/zed/keymap.json,
+// inside its top-level [ … ]. Pick another key if this one is taken.
+[
+  {
+    "context": "Editor && extension == md",
+    "bindings": {
+      "ctrl-alt-v": ["task::Spawn", { "task_name": "markdown-viewer: show this line" }]
+    }
+  }
+]

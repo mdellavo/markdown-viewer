@@ -1,0 +1,60 @@
+{
+  "name": "markdown-viewer",
+  "displayName": "markdown-viewer",
+  "description": "Preview Markdown with markdown-viewer, scrolling the preview as your cursor moves.",
+  "version": "0.5.0",
+  "publisher": "mdellavo",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mdellavo/markdown-viewer",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:markdown"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "markdownViewer.showLine",
+        "title": "Show This Line in Preview",
+        "category": "markdown-viewer"
+      },
+      {
+        "command": "markdownViewer.toggleFollow",
+        "title": "Toggle Following the Cursor",
+        "category": "markdown-viewer"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "markdownViewer.showLine",
+        "key": "ctrl+alt+v",
+        "mac": "cmd+alt+v",
+        "when": "editorLangId == markdown"
+      }
+    ],
+    "configuration": {
+      "title": "markdown-viewer",
+      "properties": {
+        "markdownViewer.path": {
+          "type": "string",
+          "default": "markdown-viewer",
+          "description": "The markdown-viewer command (a full path if it isn't on your PATH)."
+        },
+        "markdownViewer.followCursor": {
+          "type": "boolean",
+          "default": true,
+          "description": "While a preview is open, scroll it to the line your cursor is on."
+        }
+      }
+    }
+  }
+}
