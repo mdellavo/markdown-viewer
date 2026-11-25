@@ -29,6 +29,13 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
 - `src/pdf.rs`: `--pdf` via a headless Chromium-based browser with a
   throwaway profile.
 - `src/frontmatter.rs`: YAML front matter as a GitHub-style table.
+- `src/codeblocks.rs`: code block extras from the info string (`title`,
+  `{ranges}`, `showLineNumbers`); splits highlighted code into
+  `.mdv-line` spans, closing and reopening spans across line breaks.
+- `src/toc.rs`: `[TOC]` / `<!-- TOC [maxN] -->` markers.
+- `src/gitdiff.rs`: lines changed since `HEAD`, via `git diff -U0`.
+- `src/links.rs`: `--check-links` (local files, anchors, wiki links;
+  web links through `curl` with `--online`) and the `/__mdv/check` endpoint.
 - `src/obsidian.rs`: resolving `[[wiki links]]` and `![[embeds]]` (by name
   anywhere in the vault, closest first). Obsidian mode turns on inside a
   vault; the served root then becomes the vault so linked notes open.
@@ -37,6 +44,11 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
 - `src/instances.rs`: registry of running viewers (next to the state file),
   so a second launch for the same target reuses the first
   (`/__mdv/whoami`), and `browser::focus` brings its window forward.
+  `--goto` finds a viewer serving the file or a folder containing it and
+  posts to `/__mdv/goto`; the server broadcasts a `goto` event to pages.
+- `editors/`: Zed tasks and key binding, and a dependency-free VS Code
+  extension (tested with a stand-in `vscode` module:
+  `node editors/vscode/test/extension.test.js`, also run in CI).
 - `src/browser.rs`: opens the page as an app window (`--app=` for Chromium),
   a new window (`--new-window` for Chromium/Firefox, AppleScript for Safari)
   or a tab, falling back in that order. Finds the default browser via
@@ -83,9 +95,15 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
     buttons). `live.js` runs them all on new content before swapping it in.
     Follow the same pattern for any new client-side rendering.
   - `window.mdvRetheme`: functions to redraw for a new theme (Mermaid).
-  - `mdv:updated`: dispatched by `live.js` after a swap, with
+  - `mdv:updated`: dispatched by `live.js` after an update, with
     `detail.changed`, the first changed block. `ui.js` rebuilds the contents
-    and word count, and scrolls to and highlights the change.
+    and word count, refreshes git marks, and scrolls to the change.
+  - `mdv:goto`: `live.js` received a `--goto` for this page.
+- Live updates are block patches: `live.js` keeps the server's raw blocks
+  (keys without `data-sourcepos`), matches them from both ends, enhances and
+  replaces only the changed range, and re-syncs positions below it. This
+  needs page blocks to map 1:1 to the server's top-level elements, so
+  enhancers must replace a top-level element with exactly one element.
 - `window.mdvInitial`: promises for the page's own first render;
   `live.js` waits for them before comparing, and never jumps on the first
   sync after connecting.

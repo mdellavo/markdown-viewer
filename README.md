@@ -39,7 +39,13 @@ markdown-viewer --watch examples/example.md
 - GitHub alerts, with GitHub's icons: `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`,
   `[!WARNING]` and `[!CAUTION]`.
 - Syntax highlighting for fenced code blocks, done when the page is built
-  (no JavaScript), with a copy button on each block.
+  (no JavaScript), with copy and wrap buttons on each block.
+- Code block extras, set after the language (GitHub ignores them):
+  ```` ```rust title="main.rs" {3-5} showLineNumbers ```` adds a file-name
+  title, highlights lines 3 to 5 and numbers the lines. `--line-numbers`
+  numbers every block.
+- A `[TOC]` line, or `<!-- TOC -->`, becomes a table of contents built from
+  the headings (`<!-- TOC max2 -->` for two levels).
 - Theme-aware images: `#gh-light-mode-only` and `#gh-dark-mode-only` image
   URLs show only in that theme, as on GitHub.
 - Math, typeset with [KaTeX](https://katex.org/):
@@ -61,6 +67,10 @@ markdown-viewer --watch examples/example.md
   - `[[wiki links]]`, including `[[Note|label]]` and `[[Note#Heading]]`,
     found by name anywhere in the vault. Missing notes are marked.
   - `![[image.png]]` embeds (with an optional width, `![[image.png|300]]`).
+  - `![[Note]]` shows the note inline, and `![[Note#Heading]]` just that
+    section.
+  - A **Backlinks** tab listing the notes that link to this one (it also
+    works outside a vault, for ordinary Markdown links).
   - Callouts (`> [!tip] Title`), including folded ones (`> [!faq]-`).
   - `==highlights==`, with `%%comments%%` hidden.
 
@@ -82,7 +92,9 @@ markdown-viewer --watch examples/example.md
   scroll, and, when serving, a list of the folder's Markdown files with a
   filter that also searches their text.
 - Double-click a paragraph (or press <kbd>e</kbd>) to open the source in your
-  editor at that line (see [Editor](#editor)).
+  editor at that line (see [Editor](#editor)). The other way round,
+  `markdown-viewer --goto file.md:42` scrolls the preview to a line; the
+  [Zed and VS Code integrations](editors/) use it to follow your cursor.
 - Reopening a file takes you back to where you were reading.
 - Opening a file that's already being viewed brings its window to the front
   instead of opening another.
@@ -92,6 +104,15 @@ markdown-viewer --watch examples/example.md
 - Preview standard input (`markdown-viewer -`) or the clipboard
   (`--clipboard`; with `--watch` the page follows the clipboard as it
   changes).
+- Larger or smaller text (<kbd>+</kbd> / <kbd>-</kbd>), remembered between
+  runs.
+- Show what changed since the last git commit (<kbd>D</kbd>): changed blocks
+  get a bar in the margin, like an editor's gutter.
+- Copy the whole page (<kbd>c</kbd>): rich text for Docs, Slack or email, with
+  the Markdown as plain text.
+- Check the page's links (<kbd>l</kbd>), or every file's with
+  `--check-links` (see [Checking links](#checking-links)).
+- Large files stay fast: an edit updates only the blocks that changed.
 - Word count and reading time in the toolbar.
 - Keyboard shortcuts for everything (see [In the viewer](#in-the-viewer)).
 - Your theme and sidebar choices are remembered between runs.
@@ -159,6 +180,8 @@ markdown-viewer README.md --pdf out.pdf  # write a PDF
 markdown-viewer docs/                    # browse a folder (live)
 git show HEAD~1:README.md | markdown-viewer -   # preview standard input
 markdown-viewer --clipboard --watch      # follow the clipboard as it changes
+markdown-viewer --check-links docs/      # report broken links (exit status 1)
+markdown-viewer --goto README.md:42      # scroll a running preview to line 42
 ```
 
 | Option | Description |
@@ -180,6 +203,11 @@ markdown-viewer --clipboard --watch      # follow the clipboard as it changes
 | `--obsidian`, `--no-obsidian` | Force Obsidian notes on or off (default: on inside a vault) |
 | `--editor <COMMAND>` | Editor for double-click-to-source (see [Editor](#editor)) |
 | `--clipboard` | Preview the clipboard instead of a file |
+| `--line-numbers` | Number the lines of every code block |
+| `--goto <FILE:LINE>` | Scroll a running viewer to a line, or open one there |
+| `--if-running` | With `--goto`: do nothing if no viewer is showing the file |
+| `--check-links` | Check the links in a file or folder and report broken ones |
+| `--online` | With `--check-links`: also check web links (needs `curl`) |
 | `--exit-when-closed` | With `--watch`: exit once the page has been closed for 5 seconds |
 | `--install-finder` | macOS: add the Finder integration for your user |
 | `--uninstall-finder` | macOS: remove the Finder integration |
@@ -203,6 +231,11 @@ button.
 | <kbd>/</kbd> | Search the text of every file (when serving) |
 | <kbd>e</kbd> | Open the source in your editor here (or double-click a paragraph) |
 | <kbd>s</kbd> | Present as slides: arrows or space to move, <kbd>Esc</kbd> to stop |
+| <kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd> | Larger / smaller / normal text |
+| <kbd>c</kbd> | Copy the page |
+| <kbd>b</kbd> | Backlinks: other files that link here (when serving) |
+| <kbd>l</kbd> | Check this page's links (when serving) |
+| <kbd>D</kbd> | Show what changed since the last git commit (when serving) |
 | <kbd>j</kbd> / <kbd>k</kbd> | Scroll down / up |
 | <kbd>d</kbd> / <kbd>u</kbd> | Half a page down / up |
 | <kbd>g</kbd> / <kbd>G</kbd> | Top / bottom |
@@ -247,6 +280,7 @@ port = 6419
 editor = "zed"          # or "code -g {file}:{line}"
 front_matter = "table"  # table or hide
 number_headings = true
+line_numbers = true     # number every code block
 obsidian = false        # default: on inside an Obsidian vault
 ```
 
@@ -302,6 +336,27 @@ and quits by itself when you close its window. Output goes to
 The app runs the `markdown-viewer` you installed it from. For Homebrew that's
 the stable `bin` link, so upgrades keep working. Remove it with
 `markdown-viewer --uninstall-finder`.
+
+### Checking links
+
+```sh
+markdown-viewer --check-links README.md          # one file
+markdown-viewer --check-links docs/              # every Markdown file in a folder
+markdown-viewer --check-links docs/ --online     # also request web links
+```
+
+It reports each broken link as `file:line: target (reason)` and exits with
+status 1 if there are any, so it works in CI. It checks relative files and
+images, `#anchors` (in the same file or another one), and wiki links in an
+Obsidian vault. Web links are only checked with `--online`, which uses
+`curl`.
+
+### Editors
+
+`markdown-viewer --goto file.md:42` scrolls a running viewer to line 42, or
+opens one there. Zed tasks and a VS Code extension that use it are in
+[`editors/`](editors/): a key to show the cursor's line in Zed, and
+following the cursor in VS Code.
 
 ## Building
 

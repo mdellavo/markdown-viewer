@@ -6,6 +6,29 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Text size keys (`+`, `-`, `0`), remembered between runs.
+- `--goto FILE:LINE` scrolls a running viewer to a line (or opens one
+  there); `--if-running` only scrolls. Zed tasks and a VS Code extension in
+  `editors/` use it to show the cursor's line and follow the cursor.
+- Code block extras in the info string: `title="…"`, highlighted lines
+  (`{3-5}`), `showLineNumbers`; `--line-numbers` numbers every block; a wrap
+  button on each block.
+- Copy the page (`c`): rich text, with the Markdown as plain text.
+- `--check-links` (and `--online` for web links), plus `l` in the viewer.
+- Obsidian: `![[Note]]` and `![[Note#Heading]]` embed notes inline; a
+  Backlinks tab (`b`) lists the files linking to the page.
+- Show what changed since the last git commit (`D`).
+- `[TOC]` and `<!-- TOC -->` markers insert a table of contents.
+
+### Changed
+
+- Live updates replace only the blocks that changed, so large files stay
+  fast; source positions below an edit are updated in place.
+- In an Obsidian vault, the whole vault is watched, and pages update when a
+  note they embed or that links to them changes.
+
 ## [0.4.0] - 2026-11-25
 
 ### Added
