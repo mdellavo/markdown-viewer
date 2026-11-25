@@ -6,6 +6,17 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-25
+
+### Added
+
+- macOS Finder integration: `--install-finder` adds a "Markdown Viewer" app
+  (Open With, double-click, drag and drop) and an "Open in Markdown Viewer"
+  Quick Action for the current user; `--uninstall-finder` removes them.
+- `--exit-when-closed`: in watch mode, exit once the page has been closed for
+  5 seconds. Used by the Finder integration.
+- The Homebrew formula explains how to turn on the Finder integration.
+
 ## [0.1.0] - 2026-11-25
 
 ### Added
@@ -41,5 +52,6 @@ and this project uses [Semantic Versioning](https://semver.org/).
 - Stopping `--watch` with Ctrl-C closes the window markdown-viewer opened.
   Tabs, and pages opened by hand, stay open with a "stopped" banner.
 
-[Unreleased]: https://github.com/mdellavo/markdown-viewer/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mdellavo/markdown-viewer/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mdellavo/markdown-viewer/releases/tag/v0.1.0
