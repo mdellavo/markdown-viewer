@@ -255,14 +255,14 @@ fn run(cli: Cli) -> Result<()> {
     if let Some(shell) = cli.generate_completions {
         clap_complete::generate(
             shell,
-            &mut Cli::command(),
+            &mut docs_command(),
             "markdown-viewer",
             &mut std::io::stdout(),
         );
         return Ok(());
     }
     if cli.generate_man {
-        clap_mangen::Man::new(Cli::command()).render(&mut std::io::stdout())?;
+        clap_mangen::Man::new(docs_command()).render(&mut std::io::stdout())?;
         return Ok(());
     }
     if cli.install_finder || cli.uninstall_finder {
@@ -376,6 +376,15 @@ fn run(cli: Cli) -> Result<()> {
         browser::open(&file_url(&out), settings.browser.as_deref(), settings.open)?;
     }
     Ok(())
+}
+
+/// The command as documented in the completions and man page: the same on
+/// every platform (the macOS-only flags are hidden from `--help` elsewhere,
+/// but the generated files ship everywhere and say "macOS:").
+fn docs_command() -> clap::Command {
+    Cli::command()
+        .mut_arg("install_finder", |a| a.hide(false))
+        .mut_arg("uninstall_finder", |a| a.hide(false))
 }
 
 /// Render for a page that isn't served: Obsidian links (if on) resolve
@@ -648,12 +657,12 @@ mod tests {
             clap_complete::Shell::Fish,
         ] {
             let mut out = Vec::new();
-            clap_complete::generate(shell, &mut Cli::command(), "markdown-viewer", &mut out);
+            clap_complete::generate(shell, &mut docs_command(), "markdown-viewer", &mut out);
             let text = String::from_utf8(out).unwrap();
             assert!(text.contains("number-headings"), "{shell:?}");
         }
         let mut man = Vec::new();
-        clap_mangen::Man::new(Cli::command())
+        clap_mangen::Man::new(docs_command())
             .render(&mut man)
             .unwrap();
         assert!(

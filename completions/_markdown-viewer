@@ -41,12 +41,12 @@ hide\:"Leave it out"))' \
 '--window[Open in a normal new browser window]' \
 '--tab[Open in a tab of an existing browser window]' \
 '--exit-when-closed[With --watch\: exit once the page has been closed (used by the Finder integration, where there'\''s no terminal to press Ctrl-C in)]' \
-'--install-finder[macOS\: add "Markdown Viewer" to Finder (Open With, double-click and a right-click Quick Action) for the current user]' \
-'--uninstall-finder[macOS\: remove the Finder integration]' \
 '--number-headings[Number headings (1, 1.1, 1.2, …)]' \
 '--obsidian[Obsidian notes\: \[\[wiki links\]\], !\[\[embeds\]\], callouts, ==highlights== and %%comments%%. On by default inside a vault (a .obsidian folder)]' \
 '--no-obsidian[Turn off Obsidian notes, even inside a vault]' \
 '--generate-man[Print the man page]' \
+'--install-finder[macOS\: add "Markdown Viewer" to Finder (Open With, double-click and a right-click Quick Action) for the current user]' \
+'--uninstall-finder[macOS\: remove the Finder integration]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '-V[Print version]' \
