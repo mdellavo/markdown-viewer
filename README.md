@@ -53,7 +53,16 @@ markdown-viewer --watch examples/example.md
   diagram with errors stays visible as source, with the error on hover.
 - Raw HTML, as READMEs often use it: centered images, `<details>`, `<kbd>`,
   `<sub>`/`<sup>`.
-- YAML front matter is hidden.
+- YAML front matter shown as a table, as on GitHub (or hidden with
+  `--front-matter hide`).
+- Numbered headings (1, 1.1, 1.2, …) with `--number-headings`, in the page
+  and the contents.
+- Obsidian notes, on automatically inside a vault (a `.obsidian` folder):
+  - `[[wiki links]]`, including `[[Note|label]]` and `[[Note#Heading]]`,
+    found by name anywhere in the vault. Missing notes are marked.
+  - `![[image.png]]` embeds (with an optional width, `![[image.png|300]]`).
+  - Callouts (`> [!tip] Title`), including folded ones (`> [!faq]-`).
+  - `==highlights==`, with `%%comments%%` hidden.
 
 **Viewing**
 
@@ -71,7 +80,18 @@ markdown-viewer --watch examples/example.md
   Markdown file you open from there updates live too.
 - A sidebar with the document's contents, which follows your place as you
   scroll, and, when serving, a list of the folder's Markdown files with a
-  filter.
+  filter that also searches their text.
+- Double-click a paragraph (or press <kbd>e</kbd>) to open the source in your
+  editor at that line (see [Editor](#editor)).
+- Reopening a file takes you back to where you were reading.
+- Opening a file that's already being viewed brings its window to the front
+  instead of opening another.
+- Click an image or diagram to zoom; scroll to zoom further and drag to pan.
+- Presentation mode (<kbd>s</kbd>): the document as full-screen slides,
+  split at `---` rules (or at headings, if there are none).
+- Preview standard input (`markdown-viewer -`) or the clipboard
+  (`--clipboard`; with `--watch` the page follows the clipboard as it
+  changes).
 - Word count and reading time in the toolbar.
 - Keyboard shortcuts for everything (see [In the viewer](#in-the-viewer)).
 - Your theme and sidebar choices are remembered between runs.
@@ -106,16 +126,26 @@ markdown-viewer --watch examples/example.md
 
 ## Install
 
-With Homebrew (macOS and Linux):
+With Homebrew (macOS and Linux), including shell completions and a man page:
 
 ```sh
 brew install mdellavo/tap/markdown-viewer
 ```
 
-From source (needs Rust, see [Building](#building)):
+Debian, Ubuntu and Fedora packages (x86_64 and ARM64) are attached to each
+[release](https://github.com/mdellavo/markdown-viewer/releases):
 
 ```sh
-cargo install --git https://github.com/mdellavo/markdown-viewer
+sudo apt install ./markdown-viewer_*_amd64.deb      # Debian, Ubuntu
+sudo dnf install ./markdown-viewer-*.x86_64.rpm     # Fedora, RHEL
+```
+
+With Rust's tools (the crate is `markdown-viewer-rs`; the command is still
+`markdown-viewer`):
+
+```sh
+cargo binstall markdown-viewer-rs    # prebuilt binary
+cargo install markdown-viewer-rs     # build from source (see Building)
 ```
 
 ## Usage
@@ -127,6 +157,8 @@ markdown-viewer README.md -o out.html    # write the HTML to a file
 markdown-viewer README.md -o - | less    # ...or to stdout
 markdown-viewer README.md --pdf out.pdf  # write a PDF
 markdown-viewer docs/                    # browse a folder (live)
+git show HEAD~1:README.md | markdown-viewer -   # preview standard input
+markdown-viewer --clipboard --watch      # follow the clipboard as it changes
 ```
 
 | Option | Description |
@@ -143,6 +175,11 @@ markdown-viewer docs/                    # browse a folder (live)
 | `--theme <auto\|light\|dark>` | Colour theme (default: the one you last chose, else auto) |
 | `--style <github\|wide\|book\|compact>` | Page style (default: `github`) |
 | `--css <PATH>` | Extra CSS file, applied after the built-in styles |
+| `--number-headings` | Number headings (1, 1.1, 1.2, …) |
+| `--front-matter <table\|hide>` | Show YAML front matter as a table (default) or hide it |
+| `--obsidian`, `--no-obsidian` | Force Obsidian notes on or off (default: on inside a vault) |
+| `--editor <COMMAND>` | Editor for double-click-to-source (see [Editor](#editor)) |
+| `--clipboard` | Preview the clipboard instead of a file |
 | `--exit-when-closed` | With `--watch`: exit once the page has been closed for 5 seconds |
 | `--install-finder` | macOS: add the Finder integration for your user |
 | `--uninstall-finder` | macOS: remove the Finder integration |
@@ -154,14 +191,18 @@ reload.
 ### In the viewer
 
 The toolbar in the top-right corner shows the word count and reading time,
-and has buttons for the contents, the file list (when serving), the theme and
-help. Hovering a code block shows its copy button.
+and has buttons for the contents, the file list (when serving), editing the
+source, presenting, the theme and help. Hovering a code block shows its copy
+button.
 
 | Key | Action |
 |---|---|
 | <kbd>t</kbd> | Switch theme: auto, light, dark |
 | <kbd>o</kbd> | Show or hide the contents |
 | <kbd>f</kbd> | Find a file (when serving): type to filter, Enter to open |
+| <kbd>/</kbd> | Search the text of every file (when serving) |
+| <kbd>e</kbd> | Open the source in your editor here (or double-click a paragraph) |
+| <kbd>s</kbd> | Present as slides: arrows or space to move, <kbd>Esc</kbd> to stop |
 | <kbd>j</kbd> / <kbd>k</kbd> | Scroll down / up |
 | <kbd>d</kbd> / <kbd>u</kbd> | Half a page down / up |
 | <kbd>g</kbd> / <kbd>G</kbd> | Top / bottom |
@@ -169,9 +210,25 @@ help. Hovering a code block shows its copy button.
 | <kbd>?</kbd> | Show the shortcuts |
 | <kbd>Esc</kbd> | Close |
 
-The theme and whether the sidebar is open are remembered for next time.
-`--theme` overrides the remembered theme for that run. Pages opened without
-`--watch` remember them in the browser instead.
+The theme, whether the sidebar is open, and where you were in each file are
+remembered for next time. `--theme` overrides the remembered theme for that
+run. Pages opened without `--watch` remember them in the browser instead.
+
+### Editor
+
+Double-clicking a paragraph, or pressing <kbd>e</kbd>, opens the file in
+your editor at that line (when serving). The editor is the first of:
+
+1. `--editor`, or `editor` in the settings file, e.g. `"zed"` or
+   `"code -g {file}:{line}"`.
+2. `$MARKDOWN_VIEWER_EDITOR`.
+3. `$VISUAL` or `$EDITOR`, if it's a known graphical editor.
+4. The first one found of Zed, VS Code, Cursor, Windsurf, VSCodium, Sublime
+   Text, TextMate or IntelliJ IDEA.
+5. On macOS, the default text editor (without jumping to the line).
+
+Terminal editors such as vim can't be used, as there's no terminal to run
+them in.
 
 ### Settings file
 
@@ -187,6 +244,10 @@ css = "~/notes.css"     # extra stylesheet
 open = "window"         # app, window or tab
 browser = "Firefox"
 port = 6419
+editor = "zed"          # or "code -g {file}:{line}"
+front_matter = "table"  # table or hide
+number_headings = true
+obsidian = false        # default: on inside an Obsidian vault
 ```
 
 Unknown keys are reported as errors, so typos don't go unnoticed. Set
@@ -270,9 +331,20 @@ cargo run -- --watch examples/example.md
 ### Development
 
 ```sh
-cargo test                                  # unit and end-to-end tests
+cargo test                                  # unit, end-to-end and browser tests
 cargo clippy --all-targets -- -D warnings   # lints, as CI runs them
 cargo fmt                                   # format
+```
+
+The browser tests drive the viewer in headless Chrome. They're skipped if no
+Chrome-family browser is installed, except in CI, where they must run.
+
+The shell completions (`completions/`) and man page (`man/`) are generated
+from the command-line options, and a test fails if they're out of date.
+Regenerate them with:
+
+```sh
+UPDATE_GENERATED=1 cargo test --test cli generated_files
 ```
 
 If a change alters rendered output on purpose, the snapshot test fails.
@@ -297,6 +369,10 @@ Releases are built by GitHub Actions when a `v*` tag is pushed; see
 - **Other websites:** requests addressed to any other hostname are rejected,
   so a website can't read the files being served. Saving preferences also
   needs a custom header, which other websites can't send to it.
+- **Editor and reading positions:** the page can ask the server to open a
+  file in your editor or to remember a position, but only for Markdown files
+  inside the served folder, and only with a custom header other websites
+  can't send. The editor runs without a shell.
 - **PDF export:** runs the browser headless with a throwaway profile, so it
   never touches your own browser profile.
 

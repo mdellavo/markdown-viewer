@@ -28,6 +28,15 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   Markdown files for the sidebar.
 - `src/pdf.rs`: `--pdf` via a headless Chromium-based browser with a
   throwaway profile.
+- `src/frontmatter.rs`: YAML front matter as a GitHub-style table.
+- `src/obsidian.rs`: resolving `[[wiki links]]` and `![[embeds]]` (by name
+  anywhere in the vault, closest first). Obsidian mode turns on inside a
+  vault; the served root then becomes the vault so linked notes open.
+- `src/editor.rs`: opening a file at a line in the user's editor
+  (click-to-source). Commands run without a shell.
+- `src/instances.rs`: registry of running viewers (next to the state file),
+  so a second launch for the same target reuses the first
+  (`/__mdv/whoami`), and `browser::focus` brings its window forward.
 - `src/browser.rs`: opens the page as an app window (`--app=` for Chromium),
   a new window (`--new-window` for Chromium/Firefox, AppleScript for Safari)
   or a tab, falling back in that order. Finds the default browser via
@@ -35,7 +44,9 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   `--window-size` when already running, so window size isn't configurable.
 - `src/render.rs`: `Renderer` (comrak with GFM and math options, syntect
   highlighting via CSS classes), the ```` ```mermaid ```` fence plugin, and
-  the page template (`PageOptions`), including the CSP.
+  the page template (`PageOptions`), including the CSP. `RenderOptions`:
+  `sourcepos` (served pages only: `data-sourcepos` drives click-to-source,
+  reading positions and `#mdv-line-N` links), `obsidian`, `front_matter`.
 - `src/server.rs`: axum server: pages for any Markdown file or folder under
   the root (folders redirect to a trailing slash, then show their README or
   a listing), `/__mdv/events?doc=` live-update stream per document
@@ -75,6 +86,15 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   - `mdv:updated`: dispatched by `live.js` after a swap, with
     `detail.changed`, the first changed block. `ui.js` rebuilds the contents
     and word count, and scrolls to and highlights the change.
+- `window.mdvInitial`: promises for the page's own first render;
+  `live.js` waits for them before comparing, and never jumps on the first
+  sync after connecting.
+- Callout folding is reader state: `ui.js` records the rendered fold in
+  `data-mdv-fold-orig`, and `live.js` ignores and then restores it around
+  updates.
+- Library checks must test for the library's functions (e.g.
+  `typeof window.mermaid.initialize`), never just `window.mermaid`: an
+  element with that id also appears as a global.
 - `ui.js` loads before the enhancer scripts, so a remembered theme is set
   before diagrams are drawn. Its elements live outside `.markdown-body` (live
   updates replace that) and carry the `mdv-ui` class (hidden when printing).
@@ -86,6 +106,9 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
 - `docs/screenshot.md` and `docs/screenshots.sh`: the README screenshots.
   Run `cargo build && docs/screenshots.sh` after visible UI changes and
   check the images before committing them.
+- `packaging/package.sh`: packages a release build (tarball with
+  completions and man page; `.deb` and `.rpm` on Linux), used by both the
+  release workflow and CI.
 - `packaging/homebrew/formula.sh`: generates the Homebrew formula for a release.
 - `.github/workflows/`: `ci.yml` (fmt, clippy, tests on macOS and Linux) and
   `release.yml` (binaries, GitHub release, tap update).
@@ -113,8 +136,15 @@ cargo run -- --watch tests/fixtures/gfm.md
   file over the original. Keep it that way.
 - `server::resolve` must never serve a path outside the root; extend its
   test when touching it. The file list must not follow symlinked folders.
-- End-to-end tests must use the `mdv()` helper, so they never read or write
-  the user's settings and preferences.
+- End-to-end and browser tests must use the `mdv()` helper (tests/common),
+  so they never read or write the user's settings and preferences.
+- Browser tests (`tests/browser.rs`) cover the viewer UI; add one for any new
+  interaction. They skip without Chrome, except in CI
+  (`MARKDOWN_VIEWER_BROWSER_TESTS=required`).
+- After changing options, regenerate completions and the man page:
+  `UPDATE_GENERATED=1 cargo test --test cli generated_files`.
+- If `cargo build` stops picking up source changes ("Fresh" after edits),
+  run `cargo clean -p markdown-viewer-rs`.
 - Run fmt, clippy and tests before finishing a change.
 - Keep `README.md` up to date in the same change: every user-visible
   feature, option or behaviour change must be reflected in its **Features**
@@ -157,10 +187,18 @@ Check the tarball against the `integrity` hash from
 2. Bump `version` in `Cargo.toml`, run `cargo build` to update `Cargo.lock`.
 3. Commit, then `git tag vX.Y.Z && git push --tags`.
 
-The release workflow fails if the tag doesn't match `Cargo.toml`. Updating the
-tap automatically needs the `HOMEBREW_TAP_TOKEN` secret (a token with write
-access to `mdellavo/homebrew-tap`). Without it, the `homebrew` job only warns;
-update the tap by hand after the release is published:
+The release workflow fails if the tag doesn't match `Cargo.toml`. It then:
+
+- builds binaries, `.deb` and `.rpm` packages (`packaging/package.sh`) and
+  publishes the GitHub release;
+- updates the Homebrew tap using the `HOMEBREW_TAP_DEPLOY_KEY` secret (the
+  private half of a deploy key with write access to `mdellavo/homebrew-tap`
+  only);
+- publishes the crate to crates.io as `markdown-viewer-rs` if the
+  `CARGO_REGISTRY_TOKEN` secret is set.
+
+Each step warns and skips if its secret is missing. To update the tap by
+hand:
 
 ```sh
 gh release download vX.Y.Z --pattern '*.sha256' --dir /tmp/dist

@@ -6,6 +6,44 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Click to jump to source: double-click a paragraph (or press `e`) to open
+  the file in your editor at that line. `--editor` / `editor` setting, with
+  Zed, VS Code, Cursor, Sublime Text and others detected automatically.
+- Reading positions are remembered per file.
+- YAML front matter is shown as a table, like GitHub (`--front-matter hide`
+  to hide it, as before).
+- Search the text of every file in the Files sidebar (`/`), with results
+  linking to the matching line.
+- Image and diagram zoom: click to enlarge, scroll to zoom, drag to pan.
+- Presentation mode (`s`): full-screen slides split at `---` or headings.
+- `--number-headings`.
+- Opening a file that's already being viewed brings its window to the front
+  instead of starting another viewer.
+- Preview standard input (`markdown-viewer -`) and the clipboard
+  (`--clipboard`, following it live with `--watch`).
+- Obsidian notes, automatically inside a vault: wiki links, embeds,
+  callouts (including folded ones), highlights and comments.
+- Shell completions (bash, zsh, fish) and a man page, installed by Homebrew
+  and the Linux packages.
+- Debian and RPM packages for x86_64 and ARM64 on each release.
+- Published to crates.io as `markdown-viewer-rs`, with `cargo binstall`
+  support.
+- Releases update the Homebrew tap automatically.
+
+### Changed
+
+- Every pull request now also builds the release binaries and packages.
+- Browser tests of the viewer UI run in CI.
+
+### Fixed
+
+- Pages with many diagrams no longer jump away from the top while loading.
+- Diagrams and math failed to load on served pages that had a heading named
+  "Mermaid" or "KaTeX".
+- Alert icons were missing on served pages.
+
 ## [0.3.0] - 2026-11-25
 
 ### Added
