@@ -120,7 +120,7 @@ fn run(cli: Cli) -> Result<()> {
     let out = temp_page_path(&source)?;
     std::fs::write(&out, renderer.render_page(&markdown, &page))
         .with_context(|| format!("cannot write {}", out.display()))?;
-    println!("{}", out.display());
+    say(&out.display().to_string());
     if !cli.no_open {
         browser::open(&file_url(&out), cli.browser.as_deref(), cli.open_mode())?;
     }
@@ -149,8 +149,8 @@ fn serve(
         let server = server::Server::bind(cli.port, root, renderer, page, rx).await?;
         let url = server.url();
         let handle = server.handle();
-        println!("Serving {} at {url}", source.display());
-        println!("Watching for changes. Press Ctrl-C to stop.");
+        say(&format!("Serving {} at {url}", source.display()));
+        say("Watching for changes. Press Ctrl-C to stop.");
         let mut server = tokio::spawn(server.run());
         if !cli.no_open {
             // Set before opening: the browser may load the page before
@@ -170,6 +170,13 @@ fn serve(
             }
         }
     })
+}
+
+/// Print a status line. Unlike `println!`, this doesn't panic if stdout has
+/// been closed (e.g. `markdown-viewer --watch f.md | head -1`), which would
+/// otherwise take the server down with it.
+fn say(msg: &str) {
+    let _ = writeln!(std::io::stdout(), "{msg}");
 }
 
 fn read(path: &Path) -> Result<String> {

@@ -97,14 +97,14 @@ pub fn open(url: &str, browser: Option<&str>, mode: Mode) -> Result<Opened> {
         match window_command(url, &target, mode) {
             Some(cmd) => match spawn(cmd) {
                 Ok(()) => return Ok(Opened::Window),
-                Err(err) => eprintln!(
+                Err(err) => warn(&format!(
                     "markdown-viewer: couldn't open a separate window ({err:#}); opening in a tab"
-                ),
+                )),
             },
-            None => eprintln!(
+            None => warn(&format!(
                 "markdown-viewer: don't know how to open a separate window in {}; opening in a tab",
                 describe(&target)
-            ),
+            )),
         }
     }
     match tab_command(url, &target) {
@@ -112,6 +112,12 @@ pub fn open(url: &str, browser: Option<&str>, mode: Mode) -> Result<Opened> {
         None => opener::open_browser(url).with_context(|| format!("cannot open {url}"))?,
     }
     Ok(Opened::Tab)
+}
+
+/// Print a warning without panicking if stderr has been closed.
+fn warn(msg: &str) {
+    use std::io::Write as _;
+    let _ = writeln!(std::io::stderr(), "{msg}");
 }
 
 /// A program and its arguments.

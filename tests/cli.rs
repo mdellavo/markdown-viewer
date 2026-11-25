@@ -75,11 +75,12 @@ fn watch_serves_and_pushes_updates() {
         .stderr(Stdio::inherit())
         .spawn()
         .unwrap();
-    let stdout = child.stdout.take().unwrap();
+    // Keep our end of the pipe open for the whole test, as a terminal would.
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
     let _guard = Running(child);
 
     let mut first = String::new();
-    BufReader::new(stdout).read_line(&mut first).unwrap();
+    stdout.read_line(&mut first).unwrap();
     let url = first.split(" at ").nth(1).unwrap().trim();
     let addr = url
         .trim_start_matches("http://")
@@ -201,10 +202,9 @@ fn ctrl_c_sends_close_event_then_exits() {
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
     let mut first = String::new();
-    BufReader::new(child.stdout.take().unwrap())
-        .read_line(&mut first)
-        .unwrap();
+    stdout.read_line(&mut first).unwrap();
     let addr = first
         .split(" at http://")
         .nth(1)
@@ -244,4 +244,42 @@ fn ctrl_c_sends_close_event_then_exits() {
     }
     assert!(saw_close, "no close event before shutdown");
     assert!(child.wait().unwrap().success(), "clean exit on Ctrl-C");
+}
+
+/// Closing stdout (e.g. piping into `head -1`) must not take the server down.
+#[test]
+fn server_survives_closed_stdout() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Still here\n").unwrap();
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+
+    let mut child = Command::new(BIN)
+        .args(["--watch", "--no-open", "--port", &port.to_string()])
+        .arg(&md)
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    drop(child.stdout.take()); // close the pipe before it prints anything
+    let _guard = Running(child);
+
+    let addr = format!("127.0.0.1:{port}");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if TcpStream::connect(&addr).is_ok() {
+            break;
+        }
+        assert!(Instant::now() < deadline, "server never came up");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    std::thread::sleep(Duration::from_millis(300)); // past both status lines
+    let page = http_get(&addr, "/", &addr);
+    assert!(
+        page.contains("Still here"),
+        "server died after stdout closed"
+    );
 }
