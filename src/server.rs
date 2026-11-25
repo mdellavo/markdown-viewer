@@ -42,6 +42,8 @@ struct AppState {
     /// Whether pages should close their window on shutdown (only windows
     /// we opened ourselves, never a tab the user was already using).
     close_on_exit: Arc<AtomicBool>,
+    /// Number of pages currently connected to the event stream.
+    clients: Arc<watch::Sender<usize>>,
 }
 
 /// Lets the caller adjust a running server and announce shutdown.
@@ -49,6 +51,7 @@ struct AppState {
 pub struct ServerHandle {
     closing: watch::Sender<bool>,
     close_on_exit: Arc<AtomicBool>,
+    clients: watch::Receiver<usize>,
 }
 
 impl ServerHandle {
@@ -59,6 +62,50 @@ impl ServerHandle {
     /// Tell connected pages the server is stopping.
     pub fn announce_shutdown(&self) {
         let _ = self.closing.send(true);
+    }
+
+    /// Resolves once nobody is viewing the page any more: a page connected
+    /// and then every page has been gone for `grace` (long enough to ride
+    /// out a reload). Also resolves if no page connects within
+    /// `first_connect`, e.g. because the browser never opened.
+    pub async fn abandoned(&self, grace: Duration, first_connect: Duration) {
+        let mut clients = self.clients.clone();
+        // Each wait yields only whether the condition was met, so no borrow
+        // of the channel outlives its statement.
+        let connected = tokio::time::timeout(first_connect, clients.wait_for(|n| *n > 0))
+            .await
+            .is_ok_and(|r| r.is_ok());
+        if !connected {
+            return;
+        }
+        loop {
+            if clients.wait_for(|n| *n == 0).await.is_err() {
+                return;
+            }
+            // Gone; give a reloading page time to reconnect.
+            let back = tokio::time::timeout(grace, clients.wait_for(|n| *n > 0))
+                .await
+                .is_ok_and(|r| r.is_ok());
+            if !back {
+                return;
+            }
+        }
+    }
+}
+
+/// Counts a connected page for as long as its event stream is alive.
+struct ClientGuard(Arc<watch::Sender<usize>>);
+
+impl ClientGuard {
+    fn new(clients: Arc<watch::Sender<usize>>) -> Self {
+        clients.send_modify(|n| *n += 1);
+        Self(clients)
+    }
+}
+
+impl Drop for ClientGuard {
+    fn drop(&mut self) {
+        self.0.send_modify(|n| *n = n.saturating_sub(1));
     }
 }
 
@@ -85,9 +132,11 @@ impl Server {
         let addr = listener.local_addr()?;
         let (closing_tx, closing) = watch::channel(false);
         let close_on_exit = Arc::new(AtomicBool::new(false));
+        let (clients_tx, clients_rx) = watch::channel(0usize);
         let handle = ServerHandle {
             closing: closing_tx,
             close_on_exit: close_on_exit.clone(),
+            clients: clients_rx,
         };
         let state = AppState {
             renderer,
@@ -97,6 +146,7 @@ impl Server {
             port: addr.port(),
             closing,
             close_on_exit,
+            clients: Arc::new(clients_tx),
         };
         let router = Router::new()
             .route("/", get(index))
@@ -167,7 +217,12 @@ async fn events(
     let shutdown = WatchStream::from_changes(state.closing.clone())
         .filter(|closing| *closing)
         .map(|_| Ok(Event::default().event("close").data("bye")));
-    let stream = updates.merge(shutdown);
+    // The guard lives as long as the stream, i.e. until the page goes away.
+    let guard = ClientGuard::new(state.clients.clone());
+    let stream = updates.merge(shutdown).map(move |event| {
+        let _alive = &guard;
+        event
+    });
     Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
 }
 

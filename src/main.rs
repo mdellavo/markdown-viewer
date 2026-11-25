@@ -2,6 +2,7 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
@@ -9,6 +10,8 @@ use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use tokio::sync::watch;
 
 mod browser;
+#[cfg(target_os = "macos")]
+mod finder;
 mod render;
 mod server;
 mod watcher;
@@ -20,7 +23,8 @@ use render::{PageOptions, Renderer, Theme};
 #[command(version, about)]
 struct Cli {
     /// Markdown file to render.
-    file: PathBuf,
+    #[arg(required_unless_present_any = ["install_finder", "uninstall_finder"])]
+    file: Option<PathBuf>,
 
     /// Serve the page and live-reload it whenever the file changes.
     #[arg(short, long)]
@@ -56,6 +60,20 @@ struct Cli {
     #[arg(long, group = "open_as")]
     tab: bool,
 
+    /// With --watch: exit once the page has been closed (used by the Finder
+    /// integration, where there's no terminal to press Ctrl-C in).
+    #[arg(long, requires = "watch")]
+    exit_when_closed: bool,
+
+    /// macOS: add "Markdown Viewer" to Finder (Open With, double-click and a
+    /// right-click Quick Action) for the current user.
+    #[arg(long, exclusive = true, hide = !cfg!(target_os = "macos"))]
+    install_finder: bool,
+
+    /// macOS: remove the Finder integration.
+    #[arg(long, exclusive = true, hide = !cfg!(target_os = "macos"))]
+    uninstall_finder: bool,
+
     /// Colour theme.
     #[arg(long, value_enum, default_value_t = Theme::Auto)]
     theme: Theme,
@@ -81,12 +99,15 @@ impl Cli {
 }
 
 fn run(cli: Cli) -> Result<()> {
-    let source = cli
-        .file
+    if cli.install_finder || cli.uninstall_finder {
+        return finder_integration(cli.install_finder);
+    }
+    let file = cli.file.clone().expect("clap requires a file here");
+    let source = file
         .canonicalize()
-        .with_context(|| format!("cannot open {}", cli.file.display()))?;
+        .with_context(|| format!("cannot open {}", file.display()))?;
     if !source.is_file() {
-        bail!("{} is not a file", cli.file.display());
+        bail!("{} is not a file", file.display());
     }
     let markdown = read(&source)?;
     let renderer = Arc::new(Renderer::new());
@@ -160,16 +181,45 @@ fn serve(
             let opened = browser::open(&url, cli.browser.as_deref(), mode)?;
             handle.set_close_on_exit(opened == browser::Opened::Window);
         }
+        // With --exit-when-closed, stop once the page has been closed for a
+        // few seconds (long enough to survive a reload).
+        let abandoned = async {
+            if cli.exit_when_closed {
+                handle
+                    .abandoned(Duration::from_secs(5), Duration::from_secs(60))
+                    .await;
+            } else {
+                std::future::pending::<()>().await;
+            }
+        };
         tokio::select! {
             res = &mut server => res?,
+            _ = abandoned => {
+                say("Page closed; exiting.");
+                Ok(())
+            }
             _ = tokio::signal::ctrl_c() => {
                 // Let pages close their window (or show "stopped") before we go.
                 handle.announce_shutdown();
-                tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                tokio::time::sleep(Duration::from_millis(300)).await;
                 Ok(())
             }
         }
     })
+}
+
+#[cfg(target_os = "macos")]
+fn finder_integration(install: bool) -> Result<()> {
+    if install {
+        finder::install()
+    } else {
+        finder::uninstall()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn finder_integration(_install: bool) -> Result<()> {
+    bail!("Finder integration is only available on macOS")
 }
 
 /// Print a status line. Unlike `println!`, this doesn't panic if stdout has

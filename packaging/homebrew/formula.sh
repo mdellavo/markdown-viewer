@@ -51,6 +51,16 @@ class MarkdownViewer < Formula
     end
   end
 
+  def caveats
+    <<~EOS
+      On macOS, to open Markdown files from Finder (Open With, double-click,
+      and a right-click Quick Action), run:
+        markdown-viewer --install-finder
+      Before uninstalling, remove it with:
+        markdown-viewer --uninstall-finder
+    EOS
+  end
+
   test do
     (testpath/"test.md").write "# Hello"
     assert_match "<h1", shell_output("#{bin}/markdown-viewer #{testpath}/test.md -o -")

@@ -60,6 +60,15 @@ markdown-viewer --watch examples/example.md
 - `-o` writes a single self-contained HTML file (or `-o -` for stdout), with
   any diagrams and math included.
 
+**Finder (macOS)**
+
+- A "Markdown Viewer" app for Markdown files: Open With, double-click (once
+  set as the default), or drop files on its icon. See
+  [Finder integration](#finder-integration-macos).
+- An "Open in Markdown Viewer" Quick Action in Finder's right-click menu.
+- Each file opens in its own live-reloading window, and the viewer exits
+  when you close the window.
+
 **Offline and safe**
 
 - Everything ships inside one binary: stylesheets, fonts, KaTeX and
@@ -101,6 +110,9 @@ markdown-viewer README.md -o - | less    # ...or to stdout
 | `--tab` | Open in a tab of an existing window |
 | `--no-open` | Don't open a browser |
 | `--theme <auto\|light\|dark>` | Colour theme (default: follow the OS) |
+| `--exit-when-closed` | With `--watch`: exit once the page has been closed for 5 seconds |
+| `--install-finder` | macOS: add the Finder integration for your user |
+| `--uninstall-finder` | macOS: remove the Finder integration |
 
 Without `--watch`, the page is written to your temp directory and opened; no
 server keeps running.
@@ -126,6 +138,34 @@ stopped" banner:
 
 The window size is up to the browser. Chrome ignores size requests when it's
 already running.
+
+### Finder integration (macOS)
+
+```sh
+markdown-viewer --install-finder
+```
+
+This adds two things for your user only, with no admin rights needed:
+
+- `~/Applications/Markdown Viewer.app`, which you can use to open Markdown
+  files:
+  - **Open With:** right-click a `.md` file > Open With > Markdown Viewer.
+  - **Double-click:** to make it the default, use Get Info on a `.md` file >
+    Open with > Markdown Viewer > Change All….
+  - **Drag and drop:** drop files on the app's icon.
+  - **Launched on its own:** it asks you to choose a file.
+- A right-click > Quick Actions > **Open in Markdown Viewer** menu item. It
+  doesn't change which app opens `.md` files. If it's missing, turn it on in
+  Finder's right-click > Quick Actions > Customize…, or in System Settings >
+  Keyboard > Keyboard Shortcuts > Services.
+
+Each file opens with `--watch --exit-when-closed`, so it updates as you edit
+and quits by itself when you close its window. Output goes to
+`~/Library/Logs/markdown-viewer.log`.
+
+The app runs the `markdown-viewer` you installed it from. For Homebrew that's
+the stable `bin` link, so upgrades keep working. Remove it with
+`markdown-viewer --uninstall-finder`.
 
 ## Building
 

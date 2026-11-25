@@ -283,3 +283,67 @@ fn server_survives_closed_stdout() {
         "server died after stdout closed"
     );
 }
+
+/// --exit-when-closed keeps running while a page is connected, rides out a
+/// quick reconnect, and exits once the page has been gone for a while.
+#[test]
+fn exit_when_closed_after_page_goes_away() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Hi\n").unwrap();
+
+    let mut child = Command::new(BIN)
+        .args(["--watch", "--no-open", "--exit-when-closed"])
+        .arg(&md)
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut first = String::new();
+    stdout.read_line(&mut first).unwrap();
+    let addr = first
+        .split(" at http://")
+        .nth(1)
+        .unwrap()
+        .trim()
+        .trim_end_matches('/')
+        .to_string();
+
+    let connect = || {
+        let mut sse = TcpStream::connect(&addr).unwrap();
+        sse.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        write!(sse, "GET /__mdv/events HTTP/1.1\r\nHost: {addr}\r\n\r\n").unwrap();
+        let mut reader = BufReader::new(sse);
+        wait_for(&mut reader, "Hi");
+        reader
+    };
+
+    // A page connects, then "reloads": gone briefly, then back.
+    let page = connect();
+    drop(page);
+    std::thread::sleep(Duration::from_millis(500));
+    let page = connect();
+    std::thread::sleep(Duration::from_secs(6));
+    assert!(
+        child.try_wait().unwrap().is_none(),
+        "exited while a page was open"
+    );
+
+    // The page closes for good: the server should exit on its own.
+    drop(page);
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "still running after the page closed"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    };
+    assert!(status.success());
+    let mut rest = String::new();
+    stdout.read_to_string(&mut rest).unwrap();
+    assert!(rest.contains("Page closed; exiting."), "{rest}");
+}

@@ -28,6 +28,18 @@ updates to the page when the file changes.
   otherwise it shows a banner. The server waits 300 ms for this before
   exiting. Never kill the browser process: it may hold the user's other
   windows.
+- `src/finder.rs` (macOS only): `--install-finder` builds
+  `~/Applications/Markdown Viewer.app` with `osacompile` (an AppleScript
+  droplet that runs `markdown-viewer --watch --exit-when-closed <file>` in
+  the background), then swaps in our icon, sets Markdown document types with
+  `plutil`, re-signs ad hoc and registers it with `lsregister`. It also
+  writes a Quick Action workflow to `~/Library/Services` that calls
+  `open -a "Markdown Viewer"`. The app's icon source is
+  `assets/macos/AppIcon.svg`; `AppIcon.icns` is generated from it (render at
+  1024px, then `sips` and `iconutil`).
+- `--exit-when-closed`: the server counts connected pages
+  (`ServerHandle::abandoned`). It exits 5 s after the last one leaves, or
+  after 60 s if none ever connects.
 - `src/watcher.rs`: debounced file watcher that re-renders into a
   `tokio::sync::watch` channel read by the server.
 - `assets/`: GitHub CSS (auto/light/dark), `live.js`, `mermaid-init.js`,
