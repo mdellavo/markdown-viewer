@@ -5,12 +5,29 @@ Guidance for coding agents working in this repository.
 ## What this is
 
 `markdown-viewer` is a Rust CLI that renders a Markdown file to a GitHub-styled
-HTML page and opens it in the browser. `--watch` serves it locally and pushes
-updates to the page when the file changes.
+HTML page and opens it in the browser. `--watch` (or giving a folder) serves
+it locally and pushes updates to the page when files change. Pages carry a
+small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
 
 ## Layout
 
-- `src/main.rs`: CLI (clap), one-shot mode, `-o` output.
+- `src/main.rs`: CLI (clap), merging options with the settings file
+  (`Settings`), one-shot mode, `-o`, `--pdf` and serving.
+- `src/config.rs`: the settings file (`Config`, TOML, unknown keys are
+  errors) and remembered viewer preferences (`Prefs`: theme and sidebar,
+  JSON state file). `MARKDOWN_VIEWER_CONFIG` / `MARKDOWN_VIEWER_STATE`
+  override their paths; the tests always set both.
+- `src/theme.rs`: page CSS for all themes at once, switched by
+  `<html data-mdv-theme>` (it splits GitHub's stylesheet into shared rules
+  and per-scheme variables), the print layout, and `--style` CSS.
+- `src/github.rs`: post-processing to match GitHub's HTML: alert icons and
+  heading link icons.
+- `src/docs.rs`: `Docs`, every document being viewed (Markdown files and
+  folder listings) as a `watch` channel of rendered HTML. It watches only
+  the folders of viewed documents, non-recursively, and lists the folder's
+  Markdown files for the sidebar.
+- `src/pdf.rs`: `--pdf` via a headless Chromium-based browser with a
+  throwaway profile.
 - `src/browser.rs`: opens the page as an app window (`--app=` for Chromium),
   a new window (`--new-window` for Chromium/Firefox, AppleScript for Safari)
   or a tab, falling back in that order. Finds the default browser via
@@ -18,10 +35,13 @@ updates to the page when the file changes.
   `--window-size` when already running, so window size isn't configurable.
 - `src/render.rs`: `Renderer` (comrak with GFM and math options, syntect
   highlighting via CSS classes), the ```` ```mermaid ```` fence plugin, and
-  the page template, including the CSP.
-- `src/server.rs`: axum server: `/` page, `/__mdv/events` live-reload stream
-  (Server-Sent Events), `/__mdv/{mermaid,katex}.js` and `/__mdv/katex.css`,
-  and static files from the Markdown file's directory.
+  the page template (`PageOptions`), including the CSP.
+- `src/server.rs`: axum server: pages for any Markdown file or folder under
+  the root (folders redirect to a trailing slash, then show their README or
+  a listing), `/__mdv/events?doc=` live-update stream per document
+  (Server-Sent Events), `POST /__mdv/prefs` (needs an `X-MDV` header),
+  `/__mdv/files`, `/__mdv/{mermaid,katex}.js`, `/__mdv/katex.css`, and
+  static files.
 - Shutdown: on Ctrl-C, `main.rs` calls `ServerHandle::announce_shutdown`,
   the event stream sends a `close` event, and `live.js` closes the window if
   the page was rendered with `close_on_exit` (only for windows we opened),
@@ -40,23 +60,32 @@ updates to the page when the file changes.
 - `--exit-when-closed`: the server counts connected pages
   (`ServerHandle::abandoned`). It exits 5 s after the last one leaves, or
   after 60 s if none ever connects.
-- `src/watcher.rs`: debounced file watcher that re-renders into a
-  `tokio::sync::watch` channel read by the server.
-- `assets/`: GitHub CSS (auto/light/dark), `live.js`, `mermaid-init.js`,
-  `mermaid.min.js.gz`, `math-init.js` and `katex/` (KaTeX JS, CSS and woff2
-  fonts), embedded with `include_str!`/`include_bytes!`. Everything ships
-  inside the binary; there are no runtime files.
+- `assets/`: GitHub CSS, `ui.js` and `ui.css` (the viewer UI), `live.js`,
+  `mermaid-init.js`, `mermaid.min.js.gz`, `math-init.js`, `katex/` (KaTeX
+  JS, CSS and woff2 fonts) and `octicons/` (GitHub icons, MIT), embedded with
+  `include_str!`/`include_bytes!`. Everything ships inside the binary; there
+  are no runtime files.
 - `build.rs`: inlines KaTeX's woff2 fonts into its CSS as `data:` URIs, so one
   stylesheet works both inlined and served.
-- Page enhancers: `mermaid-init.js` and `math-init.js` each push a
-  `render(root)` function onto `window.mdvEnhancers`; `live.js` runs them all
-  on new content before swapping it in. Follow the same pattern for any new
-  client-side rendering.
+- Page scripts cooperate through a few globals and events:
+  - `window.mdvEnhancers`: `render(root)` functions (Mermaid, math, copy
+    buttons). `live.js` runs them all on new content before swapping it in.
+    Follow the same pattern for any new client-side rendering.
+  - `window.mdvRetheme`: functions to redraw for a new theme (Mermaid).
+  - `mdv:updated`: dispatched by `live.js` after a swap, with
+    `detail.changed`, the first changed block. `ui.js` rebuilds the contents
+    and word count, and scrolls to and highlights the change.
+- `ui.js` loads before the enhancer scripts, so a remembered theme is set
+  before diagrams are drawn. Its elements live outside `.markdown-body` (live
+  updates replace that) and carry the `mdv-ui` class (hidden when printing).
 - `tests/cli.rs`: end-to-end tests against the built binary, including an
   insta snapshot of `tests/fixtures/gfm.md` and a check that every feature in
   `examples/example.md` still renders.
 - `examples/example.md`: feature tour (GFM, alerts, raw HTML, math, all
   Mermaid diagram types). Add new features here and to its test.
+- `docs/screenshot.md` and `docs/screenshots.sh`: the README screenshots.
+  Run `cargo build && docs/screenshots.sh` after visible UI changes and
+  check the images before committing them.
 - `packaging/homebrew/formula.sh`: generates the Homebrew formula for a release.
 - `.github/workflows/`: `ci.yml` (fmt, clippy, tests on macOS and Linux) and
   `release.yml` (binaries, GitHub release, tap update).
@@ -75,14 +104,17 @@ cargo run -- --watch tests/fixtures/gfm.md
 ## Rules
 
 - Keep it offline: no CDN links or network fetches in generated pages.
-- The only scripts in pages are `live.js` (watch mode), Mermaid and KaTeX
-  (each an init script plus the library, only on pages that need them). Any
-  script must carry the per-page CSP nonce. Standalone pages inline the
-  libraries; served pages fetch them from `/__mdv/`.
-- The watcher watches the parent directory, not the file, because editors
-  often save by renaming a temp file over the original. Keep it that way.
-- `server::resolve` must never serve a path outside the Markdown file's
-  directory; extend its test when touching it.
+- The only scripts in pages are `ui.js` (not in `-o`/`--pdf` exports),
+  `live.js` (watch mode), Mermaid and KaTeX (each an init script plus the
+  library, only on pages that need them). Any script must carry the per-page
+  CSP nonce. Standalone pages inline the libraries; served pages fetch them
+  from `/__mdv/`.
+- Watch folders, not files, because editors often save by renaming a temp
+  file over the original. Keep it that way.
+- `server::resolve` must never serve a path outside the root; extend its
+  test when touching it. The file list must not follow symlinked folders.
+- End-to-end tests must use the `mdv()` helper, so they never read or write
+  the user's settings and preferences.
 - Run fmt, clippy and tests before finishing a change.
 - Keep `README.md` up to date in the same change: every user-visible
   feature, option or behaviour change must be reflected in its **Features**

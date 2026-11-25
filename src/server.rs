@@ -1,48 +1,74 @@
-//! Local HTTP server: the rendered page, a live-reload event stream, and
-//! static files from the Markdown file's directory (for relative images).
+//! Local HTTP server for `--watch`: rendered pages for every Markdown file
+//! and folder under the root, a live-update stream per document, the
+//! viewer's preferences and file list, and static files (for images).
 
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use axum::Router;
 use axum::body::Body;
-use axum::extract::{Request, State};
-use axum::http::{HeaderValue, StatusCode, header};
+use axum::extract::{Query, Request, State};
+use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::middleware::{self, Next};
 use axum::response::sse::{Event, KeepAlive, Sse};
-use axum::response::{Html, IntoResponse, Response};
-use axum::routing::get;
+use axum::response::{Html, IntoResponse, Redirect, Response};
+use axum::routing::{get, post};
+use axum::{Json, Router};
+use serde::Deserialize;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::WatchStream;
 
+use crate::config::Prefs;
+use crate::docs::{self, Docs};
 use crate::render::{
     KATEX_CSS, KATEX_CSS_PATH, KATEX_JS, KATEX_JS_PATH, MERMAID_JS_GZ, MERMAID_PATH, PageOptions,
     Renderer,
 };
 
 pub const EVENTS_PATH: &str = "/__mdv/events";
+const PREFS_PATH: &str = "/__mdv/prefs";
+const FILES_PATH: &str = "/__mdv/files";
+
+/// What to serve and how.
+pub struct ServeOptions {
+    pub port: u16,
+    pub docs: Arc<Docs>,
+    pub renderer: Arc<Renderer>,
+    /// The file given on the command line, shown at `/`. `None` in folder
+    /// mode, where `/` shows the folder's README or a listing.
+    pub main: Option<PathBuf>,
+    /// Template for every page (style etc.); per-page fields are filled in.
+    pub page: PageOptions,
+    /// `--css` file, re-read for each page so edits apply on reload.
+    pub custom_css: Option<PathBuf>,
+    /// The session's preferences (initial theme and sidebar).
+    pub prefs: Prefs,
+    /// Save preference changes from the page to the state file.
+    pub remember: bool,
+}
 
 #[derive(Clone)]
 struct AppState {
+    docs: Arc<Docs>,
     renderer: Arc<Renderer>,
+    main: Option<PathBuf>,
     page: PageOptions,
-    /// Canonical directory that static files are served from.
-    root: PathBuf,
-    body: watch::Receiver<String>,
+    custom_css: Option<PathBuf>,
+    prefs: Arc<Mutex<Prefs>>,
+    remember: bool,
     port: u16,
     /// Flips to true when the server is shutting down.
     closing: watch::Receiver<bool>,
     /// Whether pages should close their window on shutdown (only windows
     /// we opened ourselves, never a tab the user was already using).
     close_on_exit: Arc<AtomicBool>,
-    /// Number of pages currently connected to the event stream.
+    /// Number of pages currently connected to an event stream.
     clients: Arc<watch::Sender<usize>>,
 }
 
@@ -64,9 +90,9 @@ impl ServerHandle {
         let _ = self.closing.send(true);
     }
 
-    /// Resolves once nobody is viewing the page any more: a page connected
-    /// and then every page has been gone for `grace` (long enough to ride
-    /// out a reload). Also resolves if no page connects within
+    /// Resolves once nobody is viewing any page: one connected and then
+    /// every page has been gone for `grace` (long enough to ride out a
+    /// reload or following a link). Also resolves if no page connects within
     /// `first_connect`, e.g. because the browser never opened.
     pub async fn abandoned(&self, grace: Duration, first_connect: Duration) {
         let mut clients = self.clients.clone();
@@ -82,7 +108,6 @@ impl ServerHandle {
             if clients.wait_for(|n| *n == 0).await.is_err() {
                 return;
             }
-            // Gone; give a reloading page time to reconnect.
             let back = tokio::time::timeout(grace, clients.wait_for(|n| *n > 0))
                 .await
                 .is_ok_and(|r| r.is_ok());
@@ -119,13 +144,8 @@ pub struct Server {
 
 impl Server {
     /// Bind to `127.0.0.1:port` (`port` 0 picks a free one).
-    pub async fn bind(
-        port: u16,
-        root: &Path,
-        renderer: Arc<Renderer>,
-        page: PageOptions,
-        body: watch::Receiver<String>,
-    ) -> Result<Self> {
+    pub async fn bind(opts: ServeOptions) -> Result<Self> {
+        let port = opts.port;
         let listener = TcpListener::bind(("127.0.0.1", port))
             .await
             .with_context(|| format!("could not listen on 127.0.0.1:{port}"))?;
@@ -139,10 +159,13 @@ impl Server {
             clients: clients_rx,
         };
         let state = AppState {
-            renderer,
-            page,
-            root: root.canonicalize()?,
-            body,
+            docs: opts.docs,
+            renderer: opts.renderer,
+            main: opts.main,
+            page: opts.page,
+            custom_css: opts.custom_css,
+            prefs: Arc::new(Mutex::new(opts.prefs)),
+            remember: opts.remember,
             port: addr.port(),
             closing,
             close_on_exit,
@@ -151,10 +174,12 @@ impl Server {
         let router = Router::new()
             .route("/", get(index))
             .route(EVENTS_PATH, get(events))
+            .route(PREFS_PATH, post(save_prefs))
+            .route(FILES_PATH, get(list_files))
             .route(MERMAID_PATH, get(mermaid_js))
             .route(KATEX_JS_PATH, get(katex_js))
             .route(KATEX_CSS_PATH, get(katex_css))
-            .fallback(get(static_file))
+            .fallback(get(path_handler))
             .layer(middleware::from_fn_with_state(state.clone(), check_host))
             .with_state(state);
         Ok(Self {
@@ -199,21 +224,76 @@ async fn check_host(State(state): State<AppState>, req: Request, next: Next) -> 
 }
 
 async fn index(State(state): State<AppState>) -> Response {
-    let body = state.body.borrow().clone();
+    match state.main.clone() {
+        Some(main) => doc_page(&state, &main),
+        None => {
+            let root = state.docs.root().to_path_buf();
+            dir_page(&state, &root)
+        }
+    }
+}
+
+/// Folders show their README, or a listing if there isn't one.
+fn dir_page(state: &AppState, dir: &Path) -> Response {
+    match docs::readme(dir) {
+        Some(readme) => doc_page(state, &readme),
+        None => doc_page(state, dir),
+    }
+}
+
+/// A live page for a document (a Markdown file, or a folder listing).
+fn doc_page(state: &AppState, doc: &Path) -> Response {
+    let rx = match state.docs.subscribe(doc) {
+        Ok(rx) => rx,
+        Err(e) => return (StatusCode::NOT_FOUND, format!("{e:#}")).into_response(),
+    };
+    let body = rx.borrow().clone();
+    let prefs = state.prefs.lock().unwrap().clone();
+    let custom_css = state
+        .custom_css
+        .as_ref()
+        .and_then(|p| std::fs::read_to_string(p).ok());
     let page = PageOptions {
+        title: file_title(doc),
+        theme: prefs.theme.unwrap_or(state.page.theme),
+        sidebar: prefs.sidebar,
+        doc: Some(rel_path(state.docs.root(), doc)),
         close_on_exit: state.close_on_exit.load(Ordering::Relaxed),
+        custom_css: custom_css.or_else(|| state.page.custom_css.clone()),
         ..state.page.clone()
     };
     no_store(Html(state.renderer.wrap_page(&body, &page)).into_response())
 }
 
-async fn events(
-    State(state): State<AppState>,
-) -> Sse<impl tokio_stream::Stream<Item = Result<Event, Infallible>>> {
+#[derive(Deserialize)]
+struct EventsQuery {
+    #[serde(default)]
+    doc: String,
+}
+
+async fn events(State(state): State<AppState>, Query(q): Query<EventsQuery>) -> Response {
+    let doc = if q.doc.is_empty() {
+        match &state.main {
+            Some(main) => Some(main.clone()),
+            None => {
+                let root = state.docs.root();
+                Some(docs::readme(root).unwrap_or_else(|| root.to_path_buf()))
+            }
+        }
+    } else {
+        resolve(state.docs.root(), &q.doc, true).filter(|p| p.is_dir() || docs::is_markdown(p))
+    };
+    let Some(doc) = doc else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let rx = match state.docs.subscribe(&doc) {
+        Ok(rx) => rx,
+        Err(_) => return StatusCode::NOT_FOUND.into_response(),
+    };
     // WatchStream yields the current value first, so a reconnecting page
     // (e.g. after the laptop slept) immediately catches up.
-    let updates = WatchStream::new(state.body.clone())
-        .map(|body| Ok(Event::default().event("update").data(sse_safe(&body))));
+    let updates = WatchStream::new(rx)
+        .map(|body| Ok::<_, Infallible>(Event::default().event("update").data(sse_safe(&body))));
     let shutdown = WatchStream::from_changes(state.closing.clone())
         .filter(|closing| *closing)
         .map(|_| Ok(Event::default().event("close").data("bye")));
@@ -223,11 +303,45 @@ async fn events(
         let _alive = &guard;
         event
     });
-    Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
+    Sse::new(stream)
+        .keep_alive(KeepAlive::new().interval(Duration::from_secs(15)))
+        .into_response()
+}
+
+/// The page saves its theme and sidebar here. Requiring a custom header
+/// means other websites can't call it (that would need a CORS preflight,
+/// which we never approve).
+async fn save_prefs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(update): Json<Prefs>,
+) -> StatusCode {
+    if headers.get("x-mdv").is_none() {
+        return StatusCode::FORBIDDEN;
+    }
+    state.prefs.lock().unwrap().merge(update.clone());
+    if state.remember {
+        let _ = tokio::task::spawn_blocking(move || {
+            let mut saved = Prefs::load();
+            saved.merge(update);
+            saved.save()
+        })
+        .await;
+    }
+    StatusCode::NO_CONTENT
+}
+
+async fn list_files(State(state): State<AppState>) -> Response {
+    let docs = state.docs.clone();
+    match tokio::task::spawn_blocking(move || docs.list_files()).await {
+        Ok((files, truncated)) => no_store(
+            Json(serde_json::json!({ "files": files, "truncated": truncated })).into_response(),
+        ),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
 
 /// mermaid.min.js, sent still gzip-compressed (every browser accepts that).
-/// The URL carries the version, so it can be cached for good.
 async fn mermaid_js() -> Response {
     (
         [
@@ -266,25 +380,21 @@ fn sse_safe(body: &str) -> String {
     if s.is_empty() { " ".into() } else { s }
 }
 
-async fn static_file(State(state): State<AppState>, req: Request) -> Response {
-    let Some(path) = resolve(&state.root, req.uri().path()) else {
+/// Any other path: a folder, a Markdown page, or a static file.
+async fn path_handler(State(state): State<AppState>, req: Request) -> Response {
+    let url_path = req.uri().path();
+    let Some(path) = resolve(state.docs.root(), url_path, true) else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    let is_markdown = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|e| matches!(e.to_ascii_lowercase().as_str(), "md" | "markdown"));
-    if is_markdown {
-        // Linked Markdown files render as pages too (without live reload).
-        let Ok(text) = tokio::fs::read_to_string(&path).await else {
-            return StatusCode::NOT_FOUND.into_response();
-        };
-        let page = PageOptions {
-            title: file_title(&path),
-            live: false,
-            ..state.page.clone()
-        };
-        return no_store(Html(state.renderer.render_page(&text, &page)).into_response());
+    if path.is_dir() {
+        // Relative links on a folder's page need the trailing slash.
+        if !url_path.ends_with('/') {
+            return Redirect::permanent(&format!("{url_path}/")).into_response();
+        }
+        return dir_page(&state, &path);
+    }
+    if docs::is_markdown(&path) {
+        return doc_page(&state, &path);
     }
     match tokio::fs::read(&path).await {
         Ok(bytes) => {
@@ -299,18 +409,28 @@ async fn static_file(State(state): State<AppState>, req: Request) -> Response {
     }
 }
 
-/// Map a URL path to a file inside `root`, refusing anything that escapes it
-/// (`..`, absolute paths, or symlinks pointing outside).
-fn resolve(root: &Path, url_path: &str) -> Option<PathBuf> {
+/// Map a URL path to a file (or, with `allow_dirs`, a folder) inside
+/// `root`, refusing anything that escapes it (`..`, absolute paths, or
+/// symlinks pointing outside).
+fn resolve(root: &Path, url_path: &str, allow_dirs: bool) -> Option<PathBuf> {
     let decoded = percent_encoding::percent_decode_str(url_path)
         .decode_utf8()
         .ok()?;
     let rel = decoded.trim_start_matches('/');
-    if rel.is_empty() {
-        return None;
-    }
-    let candidate = root.join(rel).canonicalize().ok()?;
-    (candidate.starts_with(root) && candidate.is_file()).then_some(candidate)
+    let candidate = if rel.is_empty() {
+        root.to_path_buf()
+    } else {
+        root.join(rel).canonicalize().ok()?
+    };
+    let ok_kind = candidate.is_file() || (allow_dirs && candidate.is_dir());
+    (candidate.starts_with(root) && ok_kind).then_some(candidate)
+}
+
+/// `/`-separated path of `path` relative to `root` ("" for the root).
+fn rel_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_default()
 }
 
 fn no_store(mut resp: Response) -> Response {
@@ -337,16 +457,26 @@ mod tests {
         std::fs::create_dir(root.join("sub")).unwrap();
         std::fs::write(root.join("sub/b c.png"), b"x").unwrap();
 
-        assert_eq!(resolve(&root, "/a.png"), Some(root.join("a.png")));
+        assert_eq!(resolve(&root, "/a.png", false), Some(root.join("a.png")));
         assert_eq!(
-            resolve(&root, "/sub/b%20c.png"),
+            resolve(&root, "/sub/b%20c.png", false),
             Some(root.join("sub/b c.png"))
         );
-        assert_eq!(resolve(&root, "/../etc/passwd"), None);
-        assert_eq!(resolve(&root, "/sub/../../etc/passwd"), None);
-        assert_eq!(resolve(&root, "/%2e%2e/etc/passwd"), None);
-        assert_eq!(resolve(&root, "/sub"), None);
-        assert_eq!(resolve(&root, "/"), None);
+        assert_eq!(resolve(&root, "/../etc/passwd", false), None);
+        assert_eq!(resolve(&root, "/sub/../../etc/passwd", false), None);
+        assert_eq!(resolve(&root, "/%2e%2e/etc/passwd", false), None);
+        assert_eq!(resolve(&root, "/sub", false), None);
+        assert_eq!(resolve(&root, "/sub", true), Some(root.join("sub")));
+        assert_eq!(resolve(&root, "/", true), Some(root.clone()));
+        assert_eq!(resolve(&root, "/..", true), None);
+        assert_eq!(resolve(&root, "/", false), None);
+    }
+
+    #[test]
+    fn rel_paths_use_slashes() {
+        let root = Path::new("/r");
+        assert_eq!(rel_path(root, Path::new("/r/a/b.md")), "a/b.md");
+        assert_eq!(rel_path(root, Path::new("/r")), "");
     }
 
     #[test]

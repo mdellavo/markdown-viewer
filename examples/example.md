@@ -13,6 +13,9 @@ A tour of everything markdown-viewer renders. Open it with:
 markdown-viewer --watch examples/example.md
 ```
 
+In the viewer, press <kbd>?</kbd> for keyboard shortcuts, <kbd>o</kbd> for the
+contents, and <kbd>t</kbd> to switch between auto, light and dark.
+
 **Contents:** [Text](#text) · [Headings](#headings) · [Links](#links) ·
 [Images](#images) · [Lists](#lists) · [Tables](#tables) · [Code](#code) ·
 [Quotes and alerts](#quotes-and-alerts) · [Footnotes](#footnotes) ·
@@ -72,6 +75,13 @@ A relative image (served from the Markdown file's folder):
 A linked image:
 
 [![logo as a link](images/logo.svg)](https://github.com/mdellavo/markdown-viewer)
+
+Theme-aware images, as on GitHub: add `#gh-light-mode-only` or
+`#gh-dark-mode-only` to the image URL. There are two images below, but only
+the one for the current theme is shown (hover it to see which):
+
+![Light-mode image](images/logo.svg#gh-light-mode-only "light-mode image")
+![Dark-mode image](images/logo.svg#gh-dark-mode-only "dark-mode image")
 
 ## Lists
 

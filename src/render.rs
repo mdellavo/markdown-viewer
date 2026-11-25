@@ -5,17 +5,16 @@ use std::hash::{BuildHasher, Hasher};
 use std::io::Read as _;
 use std::sync::OnceLock;
 
-use clap::ValueEnum;
 use comrak::adapters::{CodefenceMeta, CodefenceRendererAdapter};
 use comrak::plugins::syntect::{SyntectAdapter, SyntectAdapterBuilder};
 use comrak::{Options, markdown_to_html_with_plugins, options::Plugins};
-use syntect::highlighting::ThemeSet;
-use syntect::html::{ClassStyle, css_for_theme_with_class_style};
 
-const CSS_AUTO: &str = include_str!("../assets/github-markdown.css");
-const CSS_LIGHT: &str = include_str!("../assets/github-markdown-light.css");
-const CSS_DARK: &str = include_str!("../assets/github-markdown-dark.css");
+use crate::theme::{HL_PREFIX, base_css};
+pub use crate::theme::{Style, Theme};
+
 const LIVE_JS: &str = include_str!("../assets/live.js");
+const UI_JS: &str = include_str!("../assets/ui.js");
+const UI_CSS: &str = include_str!("../assets/ui.css");
 const MERMAID_INIT_JS: &str = include_str!("../assets/mermaid-init.js");
 /// mermaid.min.js, gzip-compressed to keep the binary small.
 pub const MERMAID_JS_GZ: &[u8] = include_bytes!("../assets/mermaid.min.js.gz");
@@ -35,25 +34,26 @@ pub const KATEX_CSS_PATH: &str = "/__mdv/katex.css";
 /// Every math form comrak emits carries this attribute.
 const MATH_MARKER: &str = "data-math-style=";
 
-const HL_PREFIX: &str = "hl-";
-const HL_LIGHT_THEME: &str = "InspiredGitHub";
-const HL_DARK_THEME: &str = "base16-ocean.dark";
-
-/// Page colour scheme.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum, Default)]
-pub enum Theme {
-    /// Follow the operating system's light/dark setting.
-    #[default]
-    Auto,
-    Light,
-    Dark,
-}
-
 /// Options that affect the surrounding HTML page, not the Markdown itself.
 #[derive(Debug, Clone, Default)]
 pub struct PageOptions {
     pub title: String,
+    /// Initial theme; the viewer UI can switch it.
     pub theme: Theme,
+    pub style: Style,
+    /// Extra CSS appended after the built-in styles (`--css`).
+    pub custom_css: Option<String>,
+    /// Include the viewer UI: toolbar, contents/files sidebar, keyboard
+    /// shortcuts, copy buttons (everything except `-o` exports and PDFs).
+    pub ui: bool,
+    /// For served pages: the document's path relative to the served root,
+    /// used to subscribe to its live updates.
+    pub doc: Option<String>,
+    /// Sidebar to show initially: "contents", "files", or none.
+    pub sidebar: Option<String>,
+    /// The theme was given with `--theme`; a standalone page shouldn't
+    /// replace it with one remembered in the browser.
+    pub fixed_theme: bool,
     /// The page is served by our HTTP server, so it can load extra
     /// resources (mermaid.js) from it instead of inlining them.
     pub served: bool,
@@ -72,7 +72,6 @@ pub struct PageOptions {
 pub struct Renderer {
     options: Options<'static>,
     highlighter: SyntectAdapter,
-    highlight_css: HighlightCss,
     mermaid: MermaidAdapter,
 }
 
@@ -88,11 +87,6 @@ impl CodefenceRendererAdapter for MermaidAdapter {
     ) -> std::fmt::Result {
         writeln!(output, "{MERMAID_MARKER}{}</pre>", escape_text(fence.code))
     }
-}
-
-struct HighlightCss {
-    light: String,
-    dark: String,
 }
 
 impl Default for Renderer {
@@ -132,7 +126,6 @@ impl Renderer {
         Self {
             options,
             highlighter,
-            highlight_css: HighlightCss::generate(),
             mermaid: MermaidAdapter,
         }
     }
@@ -145,7 +138,11 @@ impl Renderer {
             .render
             .codefence_renderers
             .insert("mermaid".into(), &self.mermaid);
-        markdown_to_html_with_plugins(markdown, &self.options, &plugins)
+        crate::github::finish(markdown_to_html_with_plugins(
+            markdown,
+            &self.options,
+            &plugins,
+        ))
     }
 
     /// Render Markdown to a complete, self-contained HTML document.
@@ -157,14 +154,16 @@ impl Renderer {
     pub fn wrap_page(&self, body: &str, page: &PageOptions) -> String {
         let nonce = nonce();
         let mut out = String::with_capacity(body.len() + 64 * 1024);
-        let theme = match page.theme {
-            Theme::Auto => "auto",
-            Theme::Light => "light",
-            Theme::Dark => "dark",
-        };
+        let theme = page.theme.as_str();
         let _ = write!(
             out,
-            "<!DOCTYPE html>\n<html lang=\"en\" data-mdv-theme=\"{theme}\">\n<head>\n<meta charset=\"utf-8\">\n"
+            "<!DOCTYPE html>\n<html lang=\"en\" data-mdv-theme=\"{theme}\" data-mdv-sidebar=\"{}\"{}>\n<head>\n<meta charset=\"utf-8\">\n",
+            escape_attr(page.sidebar.as_deref().unwrap_or("")),
+            if page.fixed_theme {
+                " data-mdv-fixed-theme"
+            } else {
+                ""
+            }
         );
         out.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
         let _ = writeln!(
@@ -178,21 +177,35 @@ impl Renderer {
         }
         let _ = writeln!(out, "<title>{}</title>", escape_text(&page.title));
         out.push_str("<style>\n");
-        out.push_str(match page.theme {
-            Theme::Auto => CSS_AUTO,
-            Theme::Light => CSS_LIGHT,
-            Theme::Dark => CSS_DARK,
-        });
-        out.push_str(&self.highlight_css.for_theme(page.theme));
-        out.push_str(&layout_css(page.theme));
+        out.push_str(base_css());
+        out.push_str(page.style.css());
+        if page.ui {
+            out.push_str(UI_CSS);
+        }
         let has_mermaid = body.contains(MERMAID_MARKER);
         let has_math = body.contains(MATH_MARKER);
         if has_math && !page.served {
             out.push_str(KATEX_CSS);
         }
-        out.push_str("</style>\n</head>\n<body>\n<article class=\"markdown-body\">\n");
+        out.push_str("</style>\n");
+        // User CSS goes last so it wins, in its own element so a stray
+        // `</style>` in it can only end its own block.
+        if let Some(css) = &page.custom_css {
+            let _ = write!(out, "<style>\n{}\n</style>\n", css.replace("</", "<\\/"));
+        }
+        out.push_str("</head>\n<body>\n<article class=\"markdown-body\">\n");
         out.push_str(body);
         out.push_str("</article>\n");
+        // The UI goes first so a remembered theme is applied before
+        // diagrams are drawn.
+        if page.ui {
+            let doc = page.doc.as_deref().map(escape_attr).unwrap_or_default();
+            let _ = write!(
+                out,
+                "<script nonce=\"{nonce}\" data-served=\"{}\" data-doc=\"{doc}\">\n{UI_JS}</script>\n",
+                page.served
+            );
+        }
         // Math: same pattern as Mermaid below.
         if page.served {
             if page.live || has_math {
@@ -227,85 +240,16 @@ impl Renderer {
             );
         }
         if page.live {
+            let doc = page.doc.as_deref().map(escape_attr).unwrap_or_default();
             let _ = write!(
                 out,
-                "<script nonce=\"{nonce}\" data-close-on-exit=\"{}\">\n{LIVE_JS}</script>\n",
+                "<script nonce=\"{nonce}\" data-close-on-exit=\"{}\" data-doc=\"{doc}\">\n{LIVE_JS}</script>\n",
                 page.close_on_exit
             );
         }
         out.push_str("</body>\n</html>\n");
         out
     }
-}
-
-impl HighlightCss {
-    fn generate() -> Self {
-        let themes = ThemeSet::load_defaults();
-        let style = ClassStyle::SpacedPrefixed { prefix: HL_PREFIX };
-        let css = |name: &str| {
-            let raw =
-                css_for_theme_with_class_style(&themes.themes[name], style).unwrap_or_default();
-            strip_code_background(&raw)
-        };
-        Self {
-            light: css(HL_LIGHT_THEME),
-            dark: css(HL_DARK_THEME),
-        }
-    }
-
-    fn for_theme(&self, theme: Theme) -> String {
-        match theme {
-            Theme::Light => self.light.clone(),
-            Theme::Dark => self.dark.clone(),
-            Theme::Auto => format!(
-                "{}\n@media (prefers-color-scheme: dark) {{\n{}\n}}\n",
-                self.light, self.dark
-            ),
-        }
-    }
-}
-
-/// Syntect themes paint a background on the outer `.code` scope; drop it so
-/// code blocks keep GitHub's own background colour.
-fn strip_code_background(css: &str) -> String {
-    let code_sel = format!(".{HL_PREFIX}code {{");
-    let mut out = String::with_capacity(css.len());
-    let mut in_code_rule = false;
-    for line in css.lines() {
-        if line.trim_start().starts_with(&code_sel) {
-            in_code_rule = true;
-        }
-        if in_code_rule && line.trim_start().starts_with("background-color") {
-            continue;
-        }
-        if line.contains('}') {
-            in_code_rule = false;
-        }
-        out.push_str(line);
-        out.push('\n');
-    }
-    out
-}
-
-fn layout_css(theme: Theme) -> String {
-    let page_bg = match theme {
-        Theme::Light => "html { background: #ffffff; }",
-        Theme::Dark => "html { background: #0d1117; }",
-        Theme::Auto => {
-            "html { background: #ffffff; }\n\
-             @media (prefers-color-scheme: dark) { html { background: #0d1117; } }"
-        }
-    };
-    format!(
-        "\n{page_bg}\n\
-         body {{ margin: 0; }}\n\
-         .markdown-body {{ box-sizing: border-box; min-width: 200px; max-width: 980px; \
-         margin: 0 auto; padding: 45px; }}\n\
-         @media (max-width: 767px) {{ .markdown-body {{ padding: 15px; }} }}\n\
-         .markdown-body div.mermaid {{ margin-bottom: 16px; text-align: center; overflow-x: auto; }}\n\
-         .markdown-body pre.mermaid-error {{ border-left: 4px solid #d1242f; }}\n\
-         .markdown-body .math-display {{ overflow-x: auto; overflow-y: hidden; margin-bottom: 16px; }}\n"
-    )
 }
 
 /// The decompressed mermaid.js, for inlining into standalone pages.
@@ -390,7 +334,7 @@ mod tests {
             .and_then(|s| s.split('\'').next())
             .unwrap();
         assert!(page.contains(&format!(
-            "<script nonce=\"{nonce}\" data-close-on-exit=\"false\">"
+            "<script nonce=\"{nonce}\" data-close-on-exit=\"false\" data-doc=\"\">"
         )));
     }
 
@@ -498,13 +442,5 @@ mod tests {
             assert!(!lower.contains("</script") && !lower.contains("<script"));
             assert!(!lower.contains("</style"));
         }
-    }
-
-    #[test]
-    fn strips_only_code_background() {
-        let css = ".hl-code {\n color: #000;\n background-color: #fff;\n}\n.hl-x {\n background-color: #f00;\n}\n";
-        let out = strip_code_background(css);
-        assert!(!out.contains("#fff"));
-        assert!(out.contains("#f00"));
     }
 }

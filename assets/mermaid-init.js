@@ -5,6 +5,8 @@
   var nonce = document.currentScript && document.currentScript.nonce;
   var src = document.currentScript && document.currentScript.dataset.mermaidSrc;
   var cache = new Map();
+  // Each drawn diagram's source, so it can be redrawn for another theme.
+  var sources = new WeakMap();
   var seq = 0;
   var loading = null;
   var configured = null;
@@ -63,9 +65,31 @@
       var div = document.createElement("div");
       div.className = "mermaid";
       div.innerHTML = svg;
+      sources.set(div, code);
       pre.replaceWith(div);
     }
   }
+
+  // Redraw every diagram in the current theme, off-screen first so the
+  // page doesn't flicker.
+  async function retheme() {
+    var body = document.querySelector(".markdown-body");
+    var divs = Array.prototype.filter.call(body.querySelectorAll("div.mermaid"), function (d) {
+      return sources.has(d);
+    });
+    if (!divs.length) return;
+    var staging = document.createElement("div");
+    divs.forEach(function (d) {
+      var pre = document.createElement("pre");
+      pre.className = "mermaid";
+      pre.textContent = sources.get(d);
+      staging.appendChild(pre);
+    });
+    await render(staging);
+    var drawn = Array.prototype.slice.call(staging.children);
+    divs.forEach(function (d, i) { if (drawn[i]) d.replaceWith(drawn[i]); });
+  }
+  (window.mdvRetheme = window.mdvRetheme || []).push(retheme);
 
   (window.mdvEnhancers = window.mdvEnhancers || []).push(render);
   render(document.querySelector(".markdown-body")).catch(function (e) {

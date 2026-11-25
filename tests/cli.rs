@@ -7,11 +7,36 @@ use std::time::{Duration, Instant};
 
 const BIN: &str = env!("CARGO_BIN_EXE_markdown-viewer");
 
+/// This test's private folder for settings and state.
+fn test_dir() -> std::path::PathBuf {
+    let dir = std::env::temp_dir()
+        .join(format!(
+            "mdv-test-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ))
+        .to_string_lossy()
+        .replace(['(', ')'], "")
+        .into();
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+/// The binary, isolated from the user's settings file and remembered
+/// preferences (each test gets its own, empty, state).
+fn mdv() -> Command {
+    let mut cmd = Command::new(BIN);
+    let dir = test_dir();
+    cmd.env("MARKDOWN_VIEWER_CONFIG", dir.join("config.toml"))
+        .env("MARKDOWN_VIEWER_STATE", dir.join("state.json"));
+    cmd
+}
+
 /// Render the GFM fixture to stdout and snapshot the body (the page chrome
 /// is mostly embedded CSS and a random nonce, so it's excluded).
 #[test]
 fn renders_fixture_body() {
-    let out = Command::new(BIN)
+    let out = mdv()
         .args(["tests/fixtures/gfm.md", "-o", "-"])
         .output()
         .unwrap();
@@ -36,7 +61,7 @@ fn renders_fixture_body() {
 
 #[test]
 fn missing_file_is_an_error() {
-    let out = Command::new(BIN).arg("does-not-exist.md").output().unwrap();
+    let out = mdv().arg("does-not-exist.md").output().unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("cannot open"));
 }
@@ -68,7 +93,7 @@ fn watch_serves_and_pushes_updates() {
     std::fs::write(&md, "# First\n\n![img](pic.png)\n").unwrap();
     std::fs::write(dir.path().join("pic.png"), b"\x89PNG").unwrap();
 
-    let mut child = Command::new(BIN)
+    let mut child = mdv()
         .args(["--watch", "--no-open"])
         .arg(&md)
         .stdout(Stdio::piped())
@@ -136,7 +161,7 @@ fn wait_for(reader: &mut impl BufRead, needle: &str) {
 /// still renders.
 #[test]
 fn example_renders_every_feature() {
-    let out = Command::new(BIN)
+    let out = mdv()
         .args(["examples/example.md", "-o", "-"])
         .output()
         .unwrap();
@@ -172,6 +197,9 @@ fn example_renders_every_feature() {
         "<a href=\"https://github.github.com/gfm/\">",
         "<a href=\"other.md\">",
         "<img src=\"images/logo.svg\"",
+        "images/logo.svg#gh-dark-mode-only",
+        "octicon-light-bulb",
+        "class=\"octicon octicon-link\"",
         "<p>A blockquote.</p>\n<blockquote>",
         "<ol start=\"3\">",
         "<details>",
@@ -196,7 +224,7 @@ fn ctrl_c_sends_close_event_then_exits() {
     let md = dir.path().join("doc.md");
     std::fs::write(&md, "# Hi\n").unwrap();
 
-    let mut child = Command::new(BIN)
+    let mut child = mdv()
         .args(["--watch", "--no-open"])
         .arg(&md)
         .stdout(Stdio::piped())
@@ -258,7 +286,7 @@ fn server_survives_closed_stdout() {
         .unwrap()
         .port();
 
-    let mut child = Command::new(BIN)
+    let mut child = mdv()
         .args(["--watch", "--no-open", "--port", &port.to_string()])
         .arg(&md)
         .stdout(Stdio::piped())
@@ -292,7 +320,7 @@ fn exit_when_closed_after_page_goes_away() {
     let md = dir.path().join("doc.md");
     std::fs::write(&md, "# Hi\n").unwrap();
 
-    let mut child = Command::new(BIN)
+    let mut child = mdv()
         .args(["--watch", "--no-open", "--exit-when-closed"])
         .arg(&md)
         .stdout(Stdio::piped())
@@ -346,4 +374,237 @@ fn exit_when_closed_after_page_goes_away() {
     let mut rest = String::new();
     stdout.read_to_string(&mut rest).unwrap();
     assert!(rest.contains("Page closed; exiting."), "{rest}");
+}
+
+/// A running `--watch` server and its address.
+struct Served {
+    addr: String,
+    _stdout: BufReader<std::process::ChildStdout>,
+    _guard: Running,
+}
+
+fn start(mut cmd: Command) -> Served {
+    let mut child = cmd.arg("--no-open").stdout(Stdio::piped()).spawn().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut first = String::new();
+    stdout.read_line(&mut first).unwrap();
+    let addr = first
+        .split(" at http://")
+        .nth(1)
+        .unwrap_or_else(|| panic!("unexpected output: {first}"))
+        .trim()
+        .trim_end_matches('/')
+        .to_string();
+    Served {
+        addr,
+        _stdout: stdout,
+        _guard: Running(child),
+    }
+}
+
+fn http(addr: &str, request: &str) -> String {
+    let mut s = TcpStream::connect(addr).unwrap();
+    s.write_all(request.as_bytes()).unwrap();
+    let mut buf = Vec::new();
+    s.read_to_end(&mut buf).unwrap();
+    String::from_utf8_lossy(&buf).into_owned()
+}
+
+#[test]
+fn folder_mode_serves_readmes_listings_and_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("README.md"), "# Project home\n").unwrap();
+    std::fs::create_dir_all(root.join("docs/sub folder")).unwrap();
+    std::fs::write(root.join("docs/guide.md"), "# Guide v1\n").unwrap();
+    std::fs::write(root.join("docs/sub folder/deep.md"), "# Deep\n").unwrap();
+
+    let server = start({
+        let mut c = mdv();
+        c.arg(root);
+        c
+    });
+    let a = &server.addr;
+
+    let home = http_get(a, "/", a);
+    assert!(home.contains("Project home"), "README shown at /");
+    assert!(home.contains("data-doc=\"README.md\""), "{home}");
+
+    let redirect = http_get(a, "/docs", a);
+    assert!(redirect.starts_with("HTTP/1.1 308"), "{redirect}");
+    assert!(redirect.to_lowercase().contains("location: /docs/"));
+
+    let listing = http_get(a, "/docs/", a);
+    assert!(
+        listing.contains("guide.md"),
+        "folder without README lists files"
+    );
+    assert!(listing.contains("sub folder/"), "{listing}");
+
+    let files = http_get(a, "/__mdv/files", a);
+    let json = files.split("\r\n\r\n").nth(1).unwrap();
+    let json: serde_json::Value = serde_json::from_str(json).unwrap();
+    assert_eq!(
+        json["files"],
+        serde_json::json!(["README.md", "docs/guide.md", "docs/sub folder/deep.md"])
+    );
+
+    // Any linked page is live, not just the first one.
+    let mut sse = TcpStream::connect(a).unwrap();
+    sse.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    write!(
+        sse,
+        "GET /__mdv/events?doc=docs%2Fguide.md HTTP/1.1\r\nHost: {a}\r\n\r\n"
+    )
+    .unwrap();
+    let mut reader = BufReader::new(sse);
+    wait_for(&mut reader, "Guide v1");
+    std::fs::write(root.join("docs/guide.md"), "# Guide v2\n").unwrap();
+    wait_for(&mut reader, "Guide v2");
+
+    // Events for paths outside the folder are refused.
+    let bad = http_get(a, "/__mdv/events?doc=..%2F..%2Fetc%2Fpasswd", a);
+    assert!(bad.starts_with("HTTP/1.1 404"), "{bad}");
+}
+
+#[test]
+fn theme_and_sidebar_choices_are_remembered() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Hi\n").unwrap();
+    let state = test_dir().join("state.json");
+    let _ = std::fs::remove_file(&state);
+
+    let server = start({
+        let mut c = mdv();
+        c.args(["--watch"]).arg(&md);
+        c
+    });
+    let a = &server.addr;
+    assert!(http_get(a, "/", a).contains("data-mdv-theme=\"auto\""));
+
+    let body = r#"{"theme":"dark","sidebar":"contents"}"#;
+    let post = |extra: &str| {
+        http(
+            a,
+            &format!(
+                "POST /__mdv/prefs HTTP/1.1\r\nHost: {a}\r\nContent-Type: application/json\r\n{extra}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            ),
+        )
+    };
+    assert!(
+        post("").starts_with("HTTP/1.1 403"),
+        "needs the custom header"
+    );
+    assert!(post("X-MDV: 1\r\n").starts_with("HTTP/1.1 204"));
+
+    let page = http_get(a, "/", a);
+    assert!(
+        page.contains("data-mdv-theme=\"dark\""),
+        "applied this session"
+    );
+    assert!(page.contains("data-mdv-sidebar=\"contents\""));
+    let saved = std::fs::read_to_string(&state).unwrap();
+    assert!(
+        saved.contains("\"dark\"") && saved.contains("contents"),
+        "{saved}"
+    );
+    drop(server);
+
+    // A new run starts with the remembered theme, unless --theme says otherwise.
+    let again = start({
+        let mut c = mdv();
+        c.args(["--watch"]).arg(&md);
+        c
+    });
+    assert!(http_get(&again.addr, "/", &again.addr).contains("data-mdv-theme=\"dark\""));
+    let explicit = start({
+        let mut c = mdv();
+        c.args(["--watch", "--theme", "light"]).arg(&md);
+        c
+    });
+    assert!(http_get(&explicit.addr, "/", &explicit.addr).contains("data-mdv-theme=\"light\""));
+}
+
+#[test]
+fn settings_file_style_and_css_apply() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Hi\n").unwrap();
+    let css = dir.path().join("mine.css");
+    std::fs::write(&css, ".markdown-body { --my-marker: 1; }").unwrap();
+    std::fs::write(
+        test_dir().join("config.toml"),
+        format!("theme = \"dark\"\nstyle = \"book\"\ncss = {:?}\n", css),
+    )
+    .unwrap();
+
+    let out = mdv().arg(&md).args(["-o", "-"]).output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let html = String::from_utf8(out.stdout).unwrap();
+    assert!(html.contains("data-mdv-theme=\"dark\""));
+    assert!(html.contains("font-family: Charter"), "book style");
+    assert!(html.contains("--my-marker: 1"), "custom CSS");
+
+    // Command-line options win over the settings file.
+    let out = mdv()
+        .arg(&md)
+        .args(["-o", "-", "--style", "wide", "--theme", "light"])
+        .output()
+        .unwrap();
+    let html = String::from_utf8(out.stdout).unwrap();
+    assert!(html.contains("data-mdv-theme=\"light\""));
+    assert!(html.contains("max-width: none") && !html.contains("font-family: Charter"));
+
+    // Typos in the settings file are reported, not ignored.
+    std::fs::write(test_dir().join("config.toml"), "them = \"dark\"\n").unwrap();
+    let out = mdv().arg(&md).args(["-o", "-"]).output().unwrap();
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("config.toml") && err.contains("them"), "{err}");
+    std::fs::remove_file(test_dir().join("config.toml")).unwrap();
+}
+
+#[test]
+fn viewer_ui_is_in_viewed_pages_but_not_exports() {
+    let md = std::path::Path::new("tests/fixtures/gfm.md");
+    let export = mdv().arg(md).args(["-o", "-"]).output().unwrap();
+    let export = String::from_utf8(export.stdout).unwrap();
+    assert!(!export.contains("mdv-toolbar"), "exports stay clean");
+
+    let opened = mdv().arg(md).arg("--no-open").output().unwrap();
+    assert!(opened.status.success());
+    let path = String::from_utf8(opened.stdout).unwrap();
+    let page = std::fs::read_to_string(path.trim()).unwrap();
+    assert!(page.contains("mdv-toolbar"), "viewer UI included");
+    assert!(page.contains("data-served=\"false\""));
+}
+
+#[test]
+fn pdf_export() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("out.pdf");
+    let result = mdv()
+        .args(["examples/example.md", "--pdf"])
+        .arg(&out)
+        .output()
+        .unwrap();
+    let err = String::from_utf8_lossy(&result.stderr);
+    if err.contains("none was found") {
+        eprintln!("skipping: no Chromium-based browser installed");
+        return;
+    }
+    assert!(result.status.success(), "{err}");
+    let pdf = std::fs::read(&out).unwrap();
+    assert!(pdf.starts_with(b"%PDF"), "not a PDF");
+    assert!(
+        pdf.len() > 50_000,
+        "suspiciously small: {} bytes",
+        pdf.len()
+    );
 }

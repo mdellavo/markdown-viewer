@@ -1,0 +1,107 @@
+/* markdown-viewer UI: toolbar, sidebar (contents / files), help, copy
+   buttons. Uses GitHub's colour variables so it follows the theme. */
+.mdv-ui, .mdv-ui * { box-sizing: border-box; }
+.mdv-ui {
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  color: var(--fgColor-default);
+}
+.mdv-ui button {
+  font: inherit; color: inherit; background: none; border: 0; cursor: pointer;
+}
+.mdv-ui svg { width: 16px; height: 16px; fill: currentColor; display: block; }
+
+/* Toolbar */
+.mdv-toolbar {
+  position: fixed; top: 10px; right: 12px; z-index: 20;
+  display: flex; align-items: center; gap: 2px; padding: 3px;
+  background: var(--bgColor-default); border: 1px solid var(--borderColor-muted);
+  border-radius: 8px; opacity: .55; transition: opacity .15s;
+}
+.mdv-toolbar:hover, .mdv-toolbar:focus-within { opacity: 1; }
+.mdv-toolbar button { padding: 5px 6px; border-radius: 6px; color: var(--fgColor-muted); }
+.mdv-toolbar button:hover { background: var(--bgColor-neutral-muted); color: var(--fgColor-default); }
+.mdv-toolbar button[aria-pressed="true"] { color: var(--fgColor-accent); }
+.mdv-stats { padding: 0 8px 0 6px; color: var(--fgColor-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 600px) { .mdv-stats { display: none; } }
+
+/* Sidebar */
+.mdv-sidebar {
+  position: fixed; top: 0; left: 0; bottom: 0; width: 280px; z-index: 15;
+  display: flex; flex-direction: column;
+  background: var(--bgColor-muted); border-right: 1px solid var(--borderColor-muted);
+  transform: translateX(-100%); transition: transform .18s ease;
+}
+html.mdv-sidebar-open .mdv-sidebar { transform: none; box-shadow: 0 0 24px rgba(0,0,0,.08); }
+@media (min-width: 1200px) {
+  html.mdv-sidebar-open body { padding-left: 280px; }
+  html.mdv-sidebar-open .mdv-sidebar { box-shadow: none; }
+}
+.mdv-tabs { display: flex; gap: 4px; padding: 10px 10px 6px; border-bottom: 1px solid var(--borderColor-muted); }
+.mdv-tabs button { padding: 4px 10px; border-radius: 6px; color: var(--fgColor-muted); font-weight: 600; }
+.mdv-tabs button[aria-selected="true"] { background: var(--bgColor-neutral-muted); color: var(--fgColor-default); }
+.mdv-tabs .mdv-close { margin-left: auto; padding: 4px 6px; }
+.mdv-panel { flex: 1; overflow-y: auto; padding: 8px 6px 24px; }
+.mdv-panel[hidden] { display: none; }
+.mdv-panel a {
+  display: block; padding: 3px 8px; border-radius: 6px; color: var(--fgColor-default);
+  text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mdv-panel a:hover { background: var(--bgColor-neutral-muted); }
+.mdv-panel a.mdv-active { color: var(--fgColor-accent); background: var(--bgColor-neutral-muted); font-weight: 600; }
+.mdv-panel .mdv-l2 { padding-left: 20px; }
+.mdv-panel .mdv-l3 { padding-left: 32px; color: var(--fgColor-muted); }
+.mdv-panel .mdv-l4 { padding-left: 44px; color: var(--fgColor-muted); font-size: 12px; }
+.mdv-panel .mdv-dir { color: var(--fgColor-muted); font-size: 12px; padding: 8px 8px 2px; }
+.mdv-empty { padding: 8px; color: var(--fgColor-muted); }
+.mdv-filter {
+  width: 100%; margin: 2px 0 8px; padding: 5px 8px; font: inherit; color: inherit;
+  background: var(--bgColor-default); border: 1px solid var(--borderColor-default); border-radius: 6px;
+}
+
+/* Help overlay and toast */
+.mdv-overlay {
+  position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.35);
+}
+.mdv-overlay[hidden] { display: none; }
+.mdv-help {
+  min-width: 320px; max-width: 90vw; padding: 16px 20px; border-radius: 10px;
+  background: var(--bgColor-default); border: 1px solid var(--borderColor-default);
+  box-shadow: 0 12px 40px rgba(0,0,0,.25);
+}
+.mdv-help h2 { font-size: 15px; margin: 0 0 10px; }
+.mdv-help table { border-collapse: collapse; width: 100%; }
+.mdv-help td { padding: 3px 0; }
+.mdv-help td:first-child { padding-right: 16px; white-space: nowrap; }
+.mdv-help kbd {
+  display: inline-block; min-width: 20px; padding: 1px 5px; text-align: center;
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  border: 1px solid var(--borderColor-default); border-bottom-width: 2px; border-radius: 5px;
+  background: var(--bgColor-muted);
+}
+.mdv-toast {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 30;
+  padding: 6px 12px; border-radius: 6px; pointer-events: none;
+  background: var(--fgColor-default); color: var(--bgColor-default);
+  opacity: 0; transition: opacity .2s;
+}
+.mdv-toast.mdv-show { opacity: .92; }
+
+/* Copy buttons on code blocks */
+.markdown-body .mdv-code { position: relative; }
+.markdown-body .mdv-copy {
+  position: absolute; top: 8px; right: 8px; padding: 5px; line-height: 0;
+  color: var(--fgColor-muted); background: var(--bgColor-muted);
+  border: 1px solid var(--borderColor-default); border-radius: 6px; cursor: pointer;
+  opacity: 0; transition: opacity .15s;
+}
+.markdown-body .mdv-copy svg { width: 16px; height: 16px; fill: currentColor; }
+.markdown-body .mdv-code:hover .mdv-copy, .markdown-body .mdv-copy:focus { opacity: 1; }
+.markdown-body .mdv-copy.mdv-copied { color: #1a7f37; border-color: #1a7f37; }
+
+/* Jump to edit: briefly highlight the changed block */
+@keyframes mdv-flash {
+  from { background-color: var(--bgColor-attention-muted); box-shadow: 0 0 0 6px var(--bgColor-attention-muted); }
+  to { background-color: transparent; box-shadow: 0 0 0 6px transparent; }
+}
+.markdown-body .mdv-flash { animation: mdv-flash 1.6s ease-out; border-radius: 4px; }
