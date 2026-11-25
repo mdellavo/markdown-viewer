@@ -49,6 +49,10 @@ class MarkdownViewer < Formula
     else
       bin.install "markdown-viewer"
     end
+    bash_completion.install "completions/markdown-viewer.bash" => "markdown-viewer"
+    zsh_completion.install "completions/_markdown-viewer"
+    fish_completion.install "completions/markdown-viewer.fish"
+    man1.install "man/markdown-viewer.1"
   end
 
   def caveats

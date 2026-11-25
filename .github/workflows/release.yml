@@ -1,7 +1,8 @@
 name: Release
 
-# Push a tag like v0.2.0 to build binaries, publish a GitHub release, and
-# update the Homebrew formula in mdellavo/homebrew-tap.
+# Push a tag like v0.4.0 to build binaries and Linux packages, publish a
+# GitHub release, update the Homebrew formula in mdellavo/homebrew-tap, and
+# publish the crate to crates.io.
 on:
   push:
     tags: ["v*"]
@@ -32,18 +33,17 @@ jobs:
         run: |
           version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
           test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME != v$version"; exit 1; }
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb,cargo-generate-rpm
       - run: cargo build --release --locked --target ${{ matrix.target }}
-      - name: Package
-        run: |
-          name=markdown-viewer-${{ matrix.target }}
-          mkdir "$name"
-          cp target/${{ matrix.target }}/release/markdown-viewer README.md LICENSE CHANGELOG.md "$name"/
-          tar czf "$name.tar.gz" "$name"
-          shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
+      - run: packaging/package.sh ${{ matrix.target }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
-          path: markdown-viewer-*.tar.gz*
+          path: dist/*
 
   release:
     needs: build
@@ -76,16 +76,22 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      # HOMEBREW_TAP_DEPLOY_KEY is the private half of a deploy key with
+      # write access to the tap repository only.
       - name: Update formula in tap
         env:
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
         run: |
-          if [ -z "$TAP_TOKEN" ]; then
-            echo "::warning::HOMEBREW_TAP_TOKEN not set; skipping tap update"
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "::warning::HOMEBREW_TAP_DEPLOY_KEY not set; skipping tap update"
             exit 0
           fi
+          key="$RUNNER_TEMP/tap_key"
+          printf '%s\n' "$DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
           packaging/homebrew/formula.sh "${GITHUB_REF_NAME#v}" dist > markdown-viewer.rb
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
+          git clone "git@github.com:${TAP_REPO}.git" tap
           mkdir -p tap/Formula
           cp markdown-viewer.rb tap/Formula/markdown-viewer.rb
           cd tap
@@ -94,3 +100,21 @@ jobs:
           git add Formula/markdown-viewer.rb
           git commit -m "markdown-viewer ${GITHUB_REF_NAME}"
           git push
+          rm -f "$key"
+
+  crates-io:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # CARGO_REGISTRY_TOKEN: a crates.io API token with publish rights.
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "::warning::CARGO_REGISTRY_TOKEN not set; skipping crates.io"
+            exit 0
+          fi
+          cargo publish --locked

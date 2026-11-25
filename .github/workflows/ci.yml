@@ -15,6 +15,9 @@ jobs:
       matrix:
         os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      # Both runners have Chrome; fail rather than skip the browser tests.
+      MARKDOWN_VIEWER_BROWSER_TESTS: required
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -24,3 +27,48 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets --locked -- -D warnings
       - run: cargo test --locked
+
+  # The same builds and packages as a release, so problems (a retired
+  # runner image, a broken package) show up before tagging.
+  release-build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: aarch64-apple-darwin, os: macos-latest }
+          - { target: x86_64-apple-darwin, os: macos-latest }
+          - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
+          - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb,cargo-generate-rpm
+      - run: cargo build --release --locked --target ${{ matrix.target }}
+      - run: packaging/package.sh ${{ matrix.target }}
+      - name: Install the .deb and run it
+        if: runner.os == 'Linux'
+        run: |
+          sudo dpkg -i dist/markdown-viewer_*.deb
+          markdown-viewer --version
+          test -f /usr/share/man/man1/markdown-viewer.1.gz
+          test -f /usr/share/bash-completion/completions/markdown-viewer
+          printf '# Hello\n' | markdown-viewer - -o - | grep -q '<h1'
+      - name: Check the Homebrew formula generator
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          mkdir -p fake
+          for t in aarch64-apple-darwin x86_64-apple-darwin x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+            echo "0000  markdown-viewer-$t.tar.gz" > fake/markdown-viewer-$t.tar.gz.sha256
+          done
+          packaging/homebrew/formula.sh 0.0.0 fake > formula.rb
+          ruby -c formula.rb
