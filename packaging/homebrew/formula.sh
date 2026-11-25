@@ -14,8 +14,12 @@ cat <<RUBY
 class MarkdownViewer < Formula
   desc "Render a Markdown file with GitHub styling and live-reload it in your browser"
   homepage "$repo"
-  version "$version"
   license "MIT"
+
+  head do
+    url "$repo.git", branch: "main"
+    depends_on "rust" => :build
+  end
 
   on_macos do
     on_arm do
@@ -37,11 +41,6 @@ class MarkdownViewer < Formula
       url "$(url x86_64-unknown-linux-gnu)"
       sha256 "$(sha x86_64-unknown-linux-gnu)"
     end
-  end
-
-  head do
-    url "$repo.git", branch: "main"
-    depends_on "rust" => :build
   end
 
   def install

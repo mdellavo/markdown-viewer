@@ -114,5 +114,13 @@ Check the tarball against the `integrity` hash from
 3. Commit, then `git tag vX.Y.Z && git push --tags`.
 
 The release workflow fails if the tag doesn't match `Cargo.toml`. Updating the
-tap needs the `HOMEBREW_TAP_TOKEN` secret (a token with write access to
-`mdellavo/homebrew-tap`).
+tap automatically needs the `HOMEBREW_TAP_TOKEN` secret (a token with write
+access to `mdellavo/homebrew-tap`). Without it, the `homebrew` job only warns;
+update the tap by hand after the release is published:
+
+```sh
+gh release download vX.Y.Z --pattern '*.sha256' --dir /tmp/dist
+packaging/homebrew/formula.sh X.Y.Z /tmp/dist > ../homebrew-tap/Formula/markdown-viewer.rb
+# commit and push in homebrew-tap, then check:
+brew update && brew upgrade markdown-viewer && brew audit --strict markdown-viewer
+```
