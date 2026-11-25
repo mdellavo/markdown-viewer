@@ -156,6 +156,10 @@ fn example_renders_every_feature() {
         "🚀",
         "👍",
         "lang=\"rust\"",
+        "<nav class=\"mdv-toc\"",
+        "<figcaption class=\"mdv-code-title\">geometry.py</figcaption>",
+        "mdv-line mdv-hl",
+        "mdv-numbered",
         "hl-",
     ] {
         assert!(body.contains(needle), "missing {needle:?}");
@@ -726,7 +730,10 @@ fn search_positions_and_click_to_source() {
     // Click-to-source runs the editor at the right file and line.
     assert!(post(a, "/__mdv/open", r#"{"doc":"guide.md","line":7}"#).starts_with("HTTP/1.1 204"));
     let deadline = Instant::now() + Duration::from_secs(5);
-    while !log.exists() && Instant::now() < deadline {
+    // The script creates the file before writing to it: wait for content.
+    while std::fs::read_to_string(&log).map_or(true, |t| t.trim().is_empty())
+        && Instant::now() < deadline
+    {
         std::thread::sleep(Duration::from_millis(50));
     }
     let opened = std::fs::read_to_string(&log).unwrap();
@@ -741,4 +748,189 @@ fn search_positions_and_click_to_source() {
         post(a, "/__mdv/position", r#"{"doc":"guide.md","line":5}"#).starts_with("HTTP/1.1 204")
     );
     assert!(http_get(a, "/guide.md", a).contains("data-mdv-resume=\"5\""));
+}
+
+#[test]
+fn check_links_reports_broken_ones() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("a.md"),
+        "# A\n\n## Part\n\n[ok](b.md) [self](#part)\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("b.md"),
+        "# B\n\n[gone](missing.md)\n\n[bad anchor](a.md#nope) [web](https://example.com)\n",
+    )
+    .unwrap();
+
+    let out = mdv().arg("--check-links").arg(root).output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(1), "{text}");
+    assert!(
+        text.contains("b.md:3: missing.md (file not found)"),
+        "{text}"
+    );
+    assert!(
+        text.contains("b.md:5: a.md#nope (no heading or anchor #nope)"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Checked 5 links in 2 files: 2 broken. 1 web links not checked"),
+        "{text}"
+    );
+
+    let ok = mdv()
+        .arg("--check-links")
+        .arg(root.join("a.md"))
+        .output()
+        .unwrap();
+    assert!(
+        ok.status.success(),
+        "{}",
+        String::from_utf8_lossy(&ok.stdout)
+    );
+}
+
+#[test]
+fn goto_scrolls_a_running_viewer() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Hi\n\nOne.\n\nTwo.\n").unwrap();
+    let server = start({
+        let mut c = mdv();
+        c.arg("--watch").arg(&md);
+        c
+    });
+    let a = &server.addr;
+    let mut sse = TcpStream::connect(a).unwrap();
+    sse.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    write!(sse, "GET /__mdv/events HTTP/1.1\r\nHost: {a}\r\n\r\n").unwrap();
+    let mut reader = BufReader::new(sse);
+    wait_for(&mut reader, "Hi");
+
+    let out = mdv()
+        .arg("--goto")
+        .arg(format!("{}:5", md.display()))
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(String::from_utf8_lossy(&out.stdout).contains(&format!("at http://{a}/")));
+    wait_for(&mut reader, "\"line\":5");
+}
+
+#[test]
+fn toc_and_code_block_extras_render() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(
+        &md,
+        "# Doc\n\n[TOC]\n\n## First\n\n```rust title=\"main.rs\" {2}\nfn a() {}\nfn b() {}\n```\n\n## Second\n\n```\nplain\n```\n",
+    )
+    .unwrap();
+    let render = |args: &[&str]| {
+        let out = mdv()
+            .arg(&md)
+            .args(["-o", "-"])
+            .args(args)
+            .output()
+            .unwrap();
+        let page = String::from_utf8(out.stdout).unwrap();
+        page[page.find("<article").unwrap()..].to_string()
+    };
+    let html = render(&[]);
+    assert!(html.contains("<nav class=\"mdv-toc\""), "{html}");
+    assert!(
+        html.contains("<a href=\"#first\">First</a>")
+            && html.contains("<a href=\"#second\">Second</a>")
+    );
+    assert!(html.contains("<figcaption class=\"mdv-code-title\">main.rs</figcaption>"));
+    assert!(html.contains("mdv-line mdv-hl"), "line 2 highlighted");
+    assert!(!html.contains("mdv-numbered"), "numbers are opt-in");
+    let numbered = render(&["--line-numbers"]);
+    assert_eq!(numbered.matches("mdv-numbered").count(), 2, "every block");
+}
+
+#[test]
+fn vault_embeds_backlinks_git_source_and_text_size() {
+    let dir = tempfile::tempdir().unwrap();
+    let vault = dir.path();
+    std::fs::create_dir_all(vault.join(".obsidian")).unwrap();
+    std::fs::write(
+        vault.join("Home.md"),
+        "# Home\n\n![[Other]]\n\nSee [[Other#Two|part two]].\n",
+    )
+    .unwrap();
+    std::fs::write(
+        vault.join("Other.md"),
+        "---\ntags: [x]\n---\n# Other\n\nEmbedded text.\n\n## Two\n\nSecond part.\n",
+    )
+    .unwrap();
+    let git_ok = Command::new("git")
+        .arg("-C")
+        .arg(vault)
+        .args(["init", "-q"])
+        .status()
+        .is_ok_and(|s| s.success());
+    if git_ok {
+        for args in [
+            &["config", "user.email", "t@example.com"][..],
+            &["config", "user.name", "T"],
+            &["add", "."],
+            &["commit", "-q", "-m", "x"],
+        ] {
+            Command::new("git")
+                .arg("-C")
+                .arg(vault)
+                .args(args)
+                .status()
+                .unwrap();
+        }
+        std::fs::write(
+            vault.join("Home.md"),
+            "# Home\n\n![[Other]]\n\nSee [[Other#Two|part two]].\n\nNew line.\n",
+        )
+        .unwrap();
+    }
+
+    let server = start({
+        let mut c = mdv();
+        c.arg("--watch").arg(vault.join("Home.md"));
+        c
+    });
+    let a = &server.addr;
+    let page = http_get(a, "/", a);
+    assert!(
+        page.contains("<div class=\"mdv-embed-note\">"),
+        "note embedded"
+    );
+    assert!(page.contains("Embedded text."));
+    assert!(
+        !page.contains("<th>tags</th>"),
+        "embedded front matter left out"
+    );
+
+    let body = |resp: String| resp.split("\r\n\r\n").nth(1).unwrap_or("").to_string();
+    let links: serde_json::Value =
+        serde_json::from_str(&body(http_get(a, "/__mdv/backlinks?doc=Other.md", a))).unwrap();
+    assert_eq!(links["hits"][0]["file"], "Home.md", "{links}");
+
+    let source = body(http_get(a, "/__mdv/source?doc=Home.md", a));
+    assert!(source.starts_with("# Home\n"), "{source}");
+
+    if git_ok {
+        let diff: serde_json::Value =
+            serde_json::from_str(&body(http_get(a, "/__mdv/gitdiff?doc=Home.md", a))).unwrap();
+        assert_eq!(diff["status"], "ok", "{diff}");
+        assert_eq!(diff["changes"][0]["kind"], "added", "{diff}");
+        assert_eq!(diff["changes"][0]["start"], 6, "{diff}");
+    }
+
+    assert!(post(a, "/__mdv/prefs", r#"{"font_scale":1.25}"#).starts_with("HTTP/1.1 204"));
+    assert!(http_get(a, "/", a).contains("style=\"--mdv-scale: 1.25\""));
 }

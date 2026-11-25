@@ -6,6 +6,7 @@ mod common;
 
 use std::ffi::OsStr;
 use std::path::Path;
+use std::process::Command;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -283,7 +284,10 @@ fn double_click_opens_the_source_in_the_editor() {
          return 0;",
     );
     let deadline = Instant::now() + Duration::from_secs(10);
-    while !log.exists() && Instant::now() < deadline {
+    // The script creates the file before writing to it: wait for content.
+    while std::fs::read_to_string(&log).map_or(true, |t| t.trim().is_empty())
+        && Instant::now() < deadline
+    {
         std::thread::sleep(Duration::from_millis(50));
     }
     let opened = std::fs::read_to_string(&log).expect("editor was run");
@@ -410,5 +414,209 @@ fn folded_callouts_open_for_search_hits_and_stay_open() {
         js(&tab, &format!("return {open_fold};")),
         true,
         "still open after an edit"
+    );
+}
+
+#[test]
+fn text_size_is_remembered() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Hi\n\nText.\n").unwrap();
+    let server = serve(&md, &[]);
+    let url = format!("http://{}/", server.addr);
+    let tab = open(&browser, &url);
+    press(&tab, "+");
+    press(&tab, "+");
+    until(
+        &tab,
+        "document.documentElement.style.getPropertyValue('--mdv-scale') === '1.25'",
+        "larger text",
+    );
+    std::thread::sleep(Duration::from_millis(300));
+    let again = open(&browser, &url);
+    let kept = js(
+        &again,
+        "return document.documentElement.style.getPropertyValue('--mdv-scale');",
+    );
+    assert_eq!(kept, "1.25", "remembered after reopening");
+    press(&again, "0");
+    until(
+        &again,
+        "!document.documentElement.style.getPropertyValue('--mdv-scale')",
+        "reset",
+    );
+}
+
+#[test]
+fn goto_from_the_command_line_scrolls_the_page() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    let mut text = String::from("# Top\n\n");
+    for i in 0..80 {
+        text.push_str(&format!("Paragraph {i}.\n\n"));
+    }
+    std::fs::write(&md, &text).unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    std::thread::sleep(Duration::from_millis(500));
+    // "Paragraph 70." is on line 143.
+    let out = mdv()
+        .arg("--goto")
+        .arg(format!("{}:143", md.display()))
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    until(
+        &tab,
+        "(document.querySelector('.mdv-flash')?.textContent || '').includes('Paragraph 70.')",
+        "line 143 highlighted",
+    );
+    assert!(js(&tab, "return window.scrollY;").as_f64().unwrap() > 1000.0);
+}
+
+#[test]
+fn large_files_update_only_what_changed() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("big.md");
+    let mut text = String::from("# Big\n\n");
+    for i in 0..3000 {
+        text.push_str(&format!("Paragraph {i} with $x_{i}$ and some text.\n\n"));
+    }
+    std::fs::write(&md, &text).unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    until(
+        &tab,
+        "document.querySelectorAll('.katex').length === 3000",
+        "the math",
+    );
+    std::thread::sleep(Duration::from_millis(800));
+    // Remember some blocks, above and below the edit.
+    js(
+        &tab,
+        "const b = document.querySelector('.markdown-body').children;
+         window.__above = b[10]; window.__below = b[2900]; window.__t = performance.now(); return 0;",
+    );
+    // Insert a line above paragraph 1500: blocks below shift by two lines.
+    std::fs::write(
+        &md,
+        text.replace("Paragraph 1500 with", "Inserted.\n\nParagraph 1500 with"),
+    )
+    .unwrap();
+    until(
+        &tab,
+        "document.body.textContent.includes('Inserted.')",
+        "the update",
+    );
+    let kept = js(
+        &tab,
+        "const b = document.querySelector('.markdown-body').children;
+         return JSON.stringify([b[10] === window.__above, b[2901] === window.__below,
+                 b[2901].getAttribute('data-sourcepos'), document.querySelectorAll('.katex').length]);",
+    );
+    let kept: serde_json::Value = serde_json::from_str(kept.as_str().unwrap()).unwrap();
+    assert_eq!(kept[0], true, "blocks above the edit weren't replaced");
+    assert_eq!(kept[1], true, "blocks below the edit weren't replaced");
+    // Paragraph 2899 was on line 2*2899+3 = 5801; two lines later now.
+    assert!(
+        kept[2].as_str().unwrap().starts_with("5803:"),
+        "positions below the edit were updated: {}",
+        kept[2]
+    );
+    assert_eq!(kept[3], 3000);
+}
+
+#[test]
+fn git_changes_backlinks_links_and_wrapping() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("README.md"),
+        "# Readme\n\nSee [the guide](guide.md).\n",
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("guide.md"),
+        "# Guide\n\nFirst.\n\n[broken](nowhere.md)\n\n```\na very long line\n```\n",
+    )
+    .unwrap();
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .status()
+            .is_ok_and(|s| s.success())
+    };
+    let has_git = git(&["init", "-q"]);
+    if has_git {
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "T"]);
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "x"]);
+        std::fs::write(
+            root.join("guide.md"),
+            "# Guide\n\nFirst, edited.\n\n[broken](nowhere.md)\n\n```\na very long line\n```\n",
+        )
+        .unwrap();
+    }
+    let mut cmd = mdv();
+    cmd.arg(root);
+    let server = start(cmd);
+    let tab = open(&browser, &format!("http://{}/guide.md", server.addr));
+
+    if has_git {
+        press(&tab, "D");
+        until(
+            &tab,
+            "document.querySelector('.mdv-git-modified')?.textContent === 'First, edited.'",
+            "the changed paragraph marked",
+        );
+    }
+    press(&tab, "b");
+    until(
+        &tab,
+        "document.querySelector('.mdv-panel:not([hidden]) a.mdv-hit')",
+        "a backlink",
+    );
+    assert_eq!(
+        js(
+            &tab,
+            "return document.querySelector('.mdv-panel:not([hidden]) a.mdv-hit').title;"
+        ),
+        "README.md:3"
+    );
+    press(&tab, "l");
+    until(
+        &tab,
+        "document.querySelector('.mdv-broken-item')",
+        "the broken-link list",
+    );
+    assert!(
+        js(
+            &tab,
+            "return document.querySelector('.mdv-broken').textContent;"
+        )
+        .as_str()
+        .unwrap()
+        .contains("nowhere.md")
+    );
+    press(&tab, "Escape");
+    js(
+        &tab,
+        "document.querySelector('.mdv-wrap-btn').click(); return 0;",
+    );
+    until(
+        &tab,
+        "document.querySelector('pre.mdv-wrapped')",
+        "wrapping",
     );
 }

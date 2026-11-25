@@ -11,6 +11,10 @@ use crate::browser::Mode;
 use crate::render::FrontMatter;
 use crate::theme::{Style, Theme};
 
+/// Text size limits.
+pub const MIN_SCALE: f32 = 0.5;
+pub const MAX_SCALE: f32 = 3.0;
+
 /// How many files' reading positions to remember.
 const MAX_POSITIONS: usize = 300;
 
@@ -33,6 +37,8 @@ pub struct Config {
     pub front_matter: Option<FrontMatter>,
     /// Number headings.
     pub number_headings: Option<bool>,
+    /// Number the lines of every code block.
+    pub line_numbers: Option<bool>,
     /// Obsidian notes; by default, on inside a vault (a `.obsidian` folder).
     pub obsidian: Option<bool>,
 }
@@ -79,9 +85,15 @@ fn open_mode(s: &str) -> Result<Mode> {
 pub struct Prefs {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<Theme>,
-    /// "contents", "files", or empty for closed.
+    /// "contents", "files", "links", or empty for closed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sidebar: Option<String>,
+    /// Text size, as a multiple of normal (the + and - keys).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_scale: Option<f32>,
+    /// Show what changed since the last git commit (the D key).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub git: Option<bool>,
     /// Where you were reading, per file (absolute path → position).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub positions: BTreeMap<String, Position>,
@@ -110,9 +122,17 @@ impl Prefs {
             self.theme = update.theme;
         }
         if let Some(sidebar) = update.sidebar
-            && matches!(sidebar.as_str(), "" | "contents" | "files")
+            && matches!(sidebar.as_str(), "" | "contents" | "files" | "links")
         {
             self.sidebar = Some(sidebar);
+        }
+        if let Some(scale) = update.font_scale
+            && scale.is_finite()
+        {
+            self.font_scale = Some(scale.clamp(MIN_SCALE, MAX_SCALE));
+        }
+        if update.git.is_some() {
+            self.git = update.git;
         }
         for (file, pos) in update.positions {
             self.positions.insert(file, pos);

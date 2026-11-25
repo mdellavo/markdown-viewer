@@ -53,6 +53,10 @@ pub struct PageOptions {
     pub sidebar: Option<String>,
     /// Source line to scroll back to (the remembered reading position).
     pub resume_line: Option<u32>,
+    /// Remembered text size (multiple of normal).
+    pub font_scale: Option<f32>,
+    /// Show what changed since the last git commit.
+    pub git_changes: bool,
     /// The theme was given with `--theme`; a standalone page shouldn't
     /// replace it with one remembered in the browser.
     pub fixed_theme: bool,
@@ -100,6 +104,8 @@ pub struct RenderOptions {
     /// Obsidian notes: wiki links, embeds, callouts, highlights, comments.
     pub obsidian: bool,
     pub front_matter: FrontMatter,
+    /// Number the lines of every code block (`--line-numbers`).
+    pub line_numbers: bool,
 }
 
 /// Turns ```mermaid fences into `<pre class="mermaid">` blocks for
@@ -160,6 +166,8 @@ impl Renderer {
         // Scripts are neutralised by the page's Content-Security-Policy instead.
         options.render.r#unsafe = true;
         options.render.sourcepos = render.sourcepos;
+        // Keep the whole info string (`rust title="a.rs" {2}`) for codeblocks.rs.
+        options.render.full_info_string = true;
         if render.obsidian {
             let ext = &mut options.extension;
             ext.ofm_callouts = true;
@@ -188,6 +196,37 @@ impl Renderer {
         &self.render
     }
 
+    /// An Obsidian `![[Note]]` (or `![[Note#Heading]]`) rendered for
+    /// embedding: without its front matter or source positions, and only up
+    /// to MAX_EMBED_DEPTH notes deep.
+    fn embed_note(
+        &self,
+        ctx: &crate::obsidian::LinkContext,
+        rel: &str,
+        heading: Option<&str>,
+    ) -> Option<String> {
+        if ctx.depth >= crate::obsidian::MAX_EMBED_DEPTH {
+            return None;
+        }
+        let path = ctx.root.join(rel);
+        let text = std::fs::read_to_string(&path).ok()?;
+        let mut text = match crate::frontmatter::extract(&text) {
+            Some((_, end)) => text.lines().skip(end).collect::<Vec<_>>().join("\n"),
+            None => text,
+        };
+        if let Some(h) = heading {
+            text = crate::obsidian::section(&text, h)?;
+        }
+        let child = crate::obsidian::LinkContext {
+            dir: path.parent()?,
+            depth: ctx.depth + 1,
+            ..*ctx
+        };
+        Some(crate::obsidian::strip_sourcepos(
+            &self.render_doc(&text, Some(&child)),
+        ))
+    }
+
     /// Render Markdown to an HTML fragment (the contents of `.markdown-body`).
     pub fn render_body(&self, markdown: &str) -> String {
         self.render_doc(markdown, None)
@@ -210,10 +249,13 @@ impl Renderer {
             &self.options,
             &plugins,
         ));
+        html = crate::codeblocks::finish(html, self.render.line_numbers);
+        html = crate::toc::finish(html);
         if self.render.obsidian
             && let Some(ctx) = links
         {
-            html = crate::obsidian::finish(html, ctx);
+            let embed = |rel: &str, heading: Option<&str>| self.embed_note(ctx, rel, heading);
+            html = crate::obsidian::finish(html, ctx, &embed);
         }
         if self.render.front_matter == FrontMatter::Table
             && let Some((yaml, end)) = crate::frontmatter::extract(markdown)
@@ -247,6 +289,16 @@ impl Renderer {
             .resume_line
             .map(|l| format!(" data-mdv-resume=\"{l}\""))
             .unwrap_or_default();
+        let scale = page
+            .font_scale
+            .filter(|s| s.is_finite() && (*s - 1.0).abs() > 0.001)
+            .map(|s| format!(" style=\"--mdv-scale: {:.2}\"", s.clamp(0.5, 3.0)))
+            .unwrap_or_default();
+        let git = if page.git_changes {
+            " data-mdv-git"
+        } else {
+            ""
+        };
         let numbering = match (page.number_headings, body.matches("<h1").count()) {
             (false, _) => "",
             // A single h1 is the title; number from h2 down.
@@ -255,7 +307,7 @@ impl Renderer {
         };
         let _ = write!(
             out,
-            "<!DOCTYPE html>\n<html lang=\"en\" data-mdv-theme=\"{theme}\" data-mdv-sidebar=\"{sidebar}\"{fixed}{resume}{numbering}>\n<head>\n<meta charset=\"utf-8\">\n"
+            "<!DOCTYPE html>\n<html lang=\"en\" data-mdv-theme=\"{theme}\" data-mdv-sidebar=\"{sidebar}\"{fixed}{resume}{numbering}{scale}{git}>\n<head>\n<meta charset=\"utf-8\">\n"
         );
         out.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
         let _ = writeln!(

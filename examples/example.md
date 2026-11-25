@@ -16,11 +16,9 @@ markdown-viewer --watch examples/example.md
 In the viewer, press <kbd>?</kbd> for keyboard shortcuts, <kbd>o</kbd> for the
 contents, and <kbd>t</kbd> to switch between auto, light and dark.
 
-**Contents:** [Text](#text) · [Headings](#headings) · [Links](#links) ·
-[Images](#images) · [Lists](#lists) · [Tables](#tables) · [Code](#code) ·
-[Quotes and alerts](#quotes-and-alerts) · [Footnotes](#footnotes) ·
-[Emoji](#emoji) · [Raw HTML](#raw-html) · [Math](#math) ·
-[Mermaid diagrams](#mermaid-diagrams)
+**Contents** (generated from the headings by a `[TOC]` line):
+
+[TOC]
 
 ---
 
@@ -185,6 +183,18 @@ An indented code block:
 
     four spaces of indent
     makes a code block
+
+A title, highlighted lines and line numbers, set after the language
+(GitHub ignores these, so the file still looks right there):
+
+```python title="geometry.py" {3-4} showLineNumbers
+import math
+
+def hypotenuse(a: float, b: float) -> float:
+    return math.sqrt(a * a + b * b)
+
+print(hypotenuse(3, 4))
+```
 
 ## Quotes and alerts
 

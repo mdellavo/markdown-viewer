@@ -80,7 +80,8 @@
   toolbar.append(stats, contentsBtn);
   if (served) toolbar.append(filesBtn);
   if (canEdit) toolbar.append(editBtn);
-  toolbar.append(presentBtn, themeBtn, helpBtn);
+  var copyPageBtn = el("button", { type: "button", title: "Copy the page (c)", "aria-label": "Copy the page" }, icon("copy"));
+  toolbar.append(copyPageBtn, presentBtn, themeBtn, helpBtn);
 
   var sidebar = el("nav", { "class": "mdv-ui mdv-sidebar", "aria-label": "Document" });
   var tabs = el("div", { "class": "mdv-tabs", role: "tablist" });
@@ -88,7 +89,8 @@
   var filesTab = el("button", { type: "button", role: "tab", "aria-selected": "false" }, "Files");
   var closeBtn = el("button", { type: "button", "class": "mdv-close", title: "Close (Esc)", "aria-label": "Close sidebar" }, icon("x"));
   tabs.append(contentsTab);
-  if (served) tabs.append(filesTab);
+  var linksTab = el("button", { type: "button", role: "tab", "aria-selected": "false" }, "Backlinks");
+  if (served) tabs.append(filesTab, linksTab);
   tabs.append(closeBtn);
   var contentsPanel = el("div", { "class": "mdv-panel", role: "tabpanel" });
   var filesPanel = el("div", { "class": "mdv-panel", role: "tabpanel", hidden: "" });
@@ -96,7 +98,8 @@
   var fileList = el("div");
   var hitList = el("div");
   filesPanel.append(filter, fileList, hitList);
-  sidebar.append(tabs, contentsPanel, filesPanel);
+  var linksPanel = el("div", { "class": "mdv-panel", role: "tabpanel", hidden: "" });
+  sidebar.append(tabs, contentsPanel, filesPanel, linksPanel);
 
   var KEYS = [
     ["t", "Switch theme: auto, light, dark"],
@@ -105,6 +108,11 @@
     served ? ["/", "Search the text of every file"] : null,
     canEdit ? ["e", "Edit the source here (or double-click a paragraph)"] : null,
     ["s", "Present as slides (arrows to move, Esc to stop)"],
+    ["+ / -", "Larger / smaller text (0 resets)"],
+    ["c", "Copy the page (rich text, and Markdown as plain text)"],
+    served ? ["b", "Show backlinks: other files linking here"] : null,
+    served ? ["l", "Check this page's links"] : null,
+    served ? ["D", "Show what changed since the last git commit"] : null,
     ["j / k", "Scroll down / up"],
     ["d / u", "Half a page down / up"],
     ["g / G", "Top / bottom"],
@@ -159,15 +167,19 @@
 
   // ---- Sidebar -----------------------------------------------------------
   function sidebarOpen() { return root.classList.contains("mdv-sidebar-open"); }
+  var currentTab = "contents";
   function selectTab(name) {
-    var files = name === "files" && served;
-    contentsTab.setAttribute("aria-selected", String(!files));
-    filesTab.setAttribute("aria-selected", String(files));
-    contentsPanel.hidden = files;
-    filesPanel.hidden = !files;
-    contentsBtn.setAttribute("aria-pressed", String(sidebarOpen() && !files));
-    filesBtn.setAttribute("aria-pressed", String(sidebarOpen() && files));
-    if (files) loadFiles();
+    if (!served || ["contents", "files", "links"].indexOf(name) === -1) name = "contents";
+    currentTab = name;
+    var panels = { contents: [contentsPanel, contentsTab], files: [filesPanel, filesTab], links: [linksPanel, linksTab] };
+    for (var n in panels) {
+      panels[n][0].hidden = n !== name;
+      panels[n][1].setAttribute("aria-selected", String(n === name));
+    }
+    contentsBtn.setAttribute("aria-pressed", String(sidebarOpen() && name === "contents"));
+    filesBtn.setAttribute("aria-pressed", String(sidebarOpen() && name === "files"));
+    if (name === "files") loadFiles();
+    if (name === "links") loadBacklinks();
   }
   function openSidebar(name, focusFilter) {
     root.classList.add("mdv-sidebar-open");
@@ -178,11 +190,11 @@
   }
   function closeSidebar() {
     root.classList.remove("mdv-sidebar-open");
-    selectTab(contentsPanel.hidden ? "files" : "contents");
+    selectTab(currentTab);
     savePrefs({ sidebar: "" });
   }
   function toggleSidebar(name, focusFilter) {
-    var showing = sidebarOpen() && (name === "files" ? !filesPanel.hidden : !contentsPanel.hidden);
+    var showing = sidebarOpen() && currentTab === name;
     if (showing) closeSidebar(); else openSidebar(name, focusFilter);
   }
   function overlaying() { return window.innerWidth < 1200; }
@@ -351,8 +363,8 @@
 
   // Restore the sidebar the way it was last left.
   var initialSidebar = root.getAttribute("data-mdv-sidebar");
-  if (initialSidebar === "files" && !served) initialSidebar = "contents";
-  if (initialSidebar === "contents" || initialSidebar === "files") {
+  if ((initialSidebar === "files" || initialSidebar === "links") && !served) initialSidebar = "contents";
+  if (initialSidebar === "contents" || initialSidebar === "files" || initialSidebar === "links") {
     root.classList.add("mdv-sidebar-open");
     selectTab(initialSidebar);
   } else {
@@ -367,11 +379,21 @@
       var wrap = el("div", { "class": "mdv-code" });
       pre.parentNode.insertBefore(wrap, pre);
       wrap.append(pre, el("button", {
+        type: "button", "class": "mdv-wrap-btn mdv-ui", title: "Wrap long lines", "aria-label": "Wrap long lines",
+        "aria-pressed": "false",
+      }, "\u21a9"), el("button", {
         type: "button", "class": "mdv-copy mdv-ui", title: "Copy", "aria-label": "Copy code",
       }, icon("copy")));
     });
   }
   document.addEventListener("click", function (e) {
+    var wrapBtn = e.target.closest && e.target.closest(".mdv-wrap-btn");
+    if (wrapBtn) {
+      var pre = wrapBtn.parentElement.querySelector("pre");
+      var on = pre.classList.toggle("mdv-wrapped");
+      wrapBtn.setAttribute("aria-pressed", String(on));
+      return;
+    }
     var button = e.target.closest && e.target.closest(".mdv-copy");
     if (!button) return;
     var text = button.parentElement.querySelector("pre").innerText;
@@ -448,6 +470,13 @@
       case "/": if (!served) return; openSidebar("files", true); break;
       case "e": if (!canEdit) return; editAt(blockAtTop()); break;
       case "s": startPresenting(); break;
+      case "+": case "=": stepScale(1); break;
+      case "-": case "_": stepScale(-1); break;
+      case "0": setScale(1); break;
+      case "c": copyPage(); break;
+      case "b": if (!served) return; openSidebar("links"); break;
+      case "l": if (!served) return; checkLinks(); break;
+      case "D": if (!served) return; toggleGit(); break;
       case "j": window.scrollBy(0, 80); break;
       case "k": window.scrollBy(0, -80); break;
       case "d": window.scrollBy({ top: page / 2, behavior: "smooth" }); break;
@@ -459,6 +488,7 @@
       case "?": overlay.hidden = !overlay.hidden; break;
       case "Escape":
         if (!overlay.hidden) overlay.hidden = true;
+        else if (!linksOverlay.hidden) linksOverlay.hidden = true;
         else if (sidebarOpen() && overlaying()) closeSidebar();
         else return;
         break;
@@ -471,6 +501,7 @@
   document.addEventListener("mdv:updated", function (e) {
     buildContents();
     updateStats();
+    if (gitOn) refreshGitSoon();
     if (presenting()) { buildSlides(); showSlide(slideIndex); return; }
     var changed = e.detail && e.detail.changed;
     if (!changed) return;
@@ -571,16 +602,7 @@
   function restorePosition() {
     var hash = /^#mdv-line-(\d+)$/.exec(location.hash);
     if (hash) {
-      var target = blockForLine(+hash[1]);
-      if (target) {
-        // Unfold any folded callout around it, or it would stay hidden.
-        for (var c = target.closest(".callout"); c; c = c.parentElement && c.parentElement.closest(".callout")) {
-          if (c.getAttribute("data-callout-fold") === "collapsed") setFold(c, "expanded");
-        }
-        target.scrollIntoView({ block: "center" });
-        target.classList.add("mdv-flash");
-        setTimeout(function () { target.classList.remove("mdv-flash"); }, 1700);
-      }
+      revealLine(+hash[1]);
       return;
     }
     if (location.hash) return;
@@ -765,6 +787,230 @@
     }
     callout.setAttribute("data-callout-fold", value);
   }
+
+  // ---- Going to a line (search results, --goto, broken-link list) ---------
+  function revealLine(line) {
+    var target = blockForLine(line);
+    if (!target) return;
+    // Unfold any folded callout around it, or it would stay hidden.
+    for (var c = target.closest(".callout"); c; c = c.parentElement && c.parentElement.closest(".callout")) {
+      if (c.getAttribute("data-callout-fold") === "collapsed") setFold(c, "expanded");
+    }
+    target.scrollIntoView({ block: "center" });
+    target.classList.add("mdv-flash");
+    setTimeout(function () { target.classList.remove("mdv-flash"); }, 1700);
+  }
+  document.addEventListener("mdv:goto", function (e) { revealLine(e.detail.line); });
+
+  // ---- Text size ----------------------------------------------------------
+  // Served pages get a new port each run, so the browser's own zoom isn't
+  // remembered; this is.
+  var SCALES = [0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8, 2, 2.4, 3];
+  function scale() {
+    return parseFloat(root.style.getPropertyValue("--mdv-scale")) || 1;
+  }
+  function setScale(s) {
+    if (s === 1) root.style.removeProperty("--mdv-scale");
+    else root.style.setProperty("--mdv-scale", String(s));
+    savePrefs({ font_scale: s });
+    showToast("Text size " + Math.round(s * 100) + "%");
+  }
+  function stepScale(dir) {
+    var cur = scale();
+    var next = dir > 0
+      ? SCALES.filter(function (v) { return v > cur + 0.001; })[0]
+      : SCALES.filter(function (v) { return v < cur - 0.001; }).pop();
+    if (next) setScale(next);
+  }
+  if (!served) {
+    var localScale = loadLocal().font_scale;
+    if (localScale && localScale !== 1) root.style.setProperty("--mdv-scale", String(localScale));
+  }
+
+  // ---- Copy the page --------------------------------------------------------
+  // Rich text (for Docs, Slack, email) plus the Markdown as plain text.
+  var PASTE_STYLES = {
+    pre: "background:#f6f8fa;padding:12px;border-radius:6px;font-family:ui-monospace,Menlo,monospace;font-size:13px;white-space:pre-wrap",
+    code: "background:#f6f8fa;padding:1px 4px;border-radius:4px;font-family:ui-monospace,Menlo,monospace",
+    table: "border-collapse:collapse",
+    th: "border:1px solid #d0d7de;padding:6px 12px;background:#f6f8fa",
+    td: "border:1px solid #d0d7de;padding:6px 12px",
+    blockquote: "border-left:4px solid #d0d7de;margin-left:0;padding-left:12px;color:#59636e",
+  };
+  function pageHtml() {
+    var clone = body.cloneNode(true);
+    var pres = body.querySelectorAll("pre");
+    clone.querySelectorAll("pre").forEach(function (pre, i) {
+      // Plain code text, with line breaks (rendered lines are blocks).
+      pre.textContent = pres[i] ? pres[i].innerText : pre.textContent;
+    });
+    clone.querySelectorAll(".mdv-ui, .anchor, .mdv-copy, .mdv-wrap-btn").forEach(function (n) { n.remove(); });
+    // Math as its TeX source, which pastes everywhere.
+    clone.querySelectorAll(".math").forEach(function (m) {
+      var tex = m.querySelector("annotation");
+      var code = document.createElement("code");
+      code.textContent = tex ? (m.classList.contains("math-display") ? "$$" + tex.textContent + "$$" : "$" + tex.textContent + "$") : m.textContent;
+      m.replaceWith(code);
+    });
+    clone.querySelectorAll("[data-sourcepos]").forEach(function (n) { n.removeAttribute("data-sourcepos"); });
+    clone.querySelectorAll("img").forEach(function (img) { img.setAttribute("src", img.src); });
+    clone.querySelectorAll("a[href]").forEach(function (a) { a.setAttribute("href", a.href); });
+    Object.keys(PASTE_STYLES).forEach(function (tag) {
+      clone.querySelectorAll(tag).forEach(function (n) {
+        if (tag === "code" && n.parentElement && n.parentElement.tagName === "PRE") return;
+        n.setAttribute("style", PASTE_STYLES[tag]);
+      });
+    });
+    return clone.innerHTML;
+  }
+  function copyPage() {
+    var html = pageHtml();
+    var text = served
+      ? fetch("/__mdv/source?doc=" + encodeURIComponent(currentDoc))
+          .then(function (r) { return r.ok ? r.text() : body.innerText; })
+          .catch(function () { return body.innerText; })
+      : Promise.resolve(body.innerText);
+    text.then(function (plain) {
+      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+        return navigator.clipboard.write([new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([plain], { type: "text/plain" }),
+        })]);
+      }
+      return navigator.clipboard.writeText(plain);
+    }).then(function () {
+      showToast("Copied the page");
+    }, function () {
+      showToast("Couldn't copy (the browser refused)");
+    });
+  }
+  copyPageBtn.addEventListener("click", copyPage);
+
+  // ---- Checking links ---------------------------------------------------------
+  var linksOverlay = el("div", { "class": "mdv-ui mdv-overlay", hidden: "" });
+  var linksBox = el("div", { "class": "mdv-help mdv-broken", role: "dialog", "aria-label": "Broken links" });
+  linksOverlay.append(linksBox);
+  document.body.append(linksOverlay);
+  linksOverlay.addEventListener("click", function (e) { if (e.target === linksOverlay) linksOverlay.hidden = true; });
+  function checkLinks() {
+    showToast("Checking links…");
+    fetch("/__mdv/check?doc=" + encodeURIComponent(currentDoc)).then(function (r) { return r.json(); }).then(function (data) {
+      var broken = data.broken || [];
+      var web = data.external ? " (" + data.external + " web links not checked)" : "";
+      if (!broken.length) { showToast("No broken links" + web); return; }
+      linksBox.textContent = "";
+      var h = el("h2");
+      h.textContent = broken.length + (broken.length === 1 ? " broken link" : " broken links");
+      linksBox.append(h);
+      broken.forEach(function (b) {
+        var item = el("button", { type: "button", "class": "mdv-broken-item" });
+        var where = el("span", { "class": "mdv-hit-file" });
+        where.textContent = "Line " + b.line + ": " + b.reason;
+        var what = el("span", { "class": "mdv-hit-text" });
+        what.textContent = b.target;
+        item.append(where, what);
+        item.addEventListener("click", function () { linksOverlay.hidden = true; revealLine(b.line); });
+        linksBox.append(item);
+      });
+      if (web) {
+        var note = el("p", { "class": "mdv-hit-file" });
+        note.textContent = web.trim() + "; markdown-viewer --check-links --online checks them.";
+        linksBox.append(note);
+      }
+      linksOverlay.hidden = false;
+    }).catch(function () { showToast("Couldn't check links"); });
+  }
+
+  // ---- Changes since the last git commit -------------------------------------
+  var gitOn = root.hasAttribute("data-mdv-git");
+  var INLINE = /^(A|ABBR|B|CODE|DEL|EM|I|IMG|INPUT|KBD|MARK|S|SPAN|STRONG|SUB|SUP|U)$/;
+  function clearGit() {
+    body.querySelectorAll(".mdv-git-added, .mdv-git-modified, .mdv-git-deleted").forEach(function (n) {
+      n.classList.remove("mdv-git-added", "mdv-git-modified", "mdv-git-deleted");
+      if (!n.getAttribute("class")) n.removeAttribute("class");
+    });
+  }
+  function applyGit(announce) {
+    return fetch("/__mdv/gitdiff?doc=" + encodeURIComponent(currentDoc)).then(function (r) { return r.json(); }).then(function (d) {
+      clearGit();
+      if (!gitOn) return;
+      if (d.status === "not-a-repo") { if (announce) showToast("Not in a git repository"); return; }
+      if (announce) {
+        showToast(d.status === "untracked" ? "Not committed yet: everything is new"
+          : d.changes.length ? "Showing changes since the last commit" : "No changes since the last commit");
+      }
+      var blocks = Array.prototype.filter.call(body.querySelectorAll("[data-sourcepos]"), function (n) {
+        return !INLINE.test(n.tagName) && range(n);
+      });
+      d.changes.forEach(function (ch) {
+        if (ch.kind === "deleted") {
+          var next = Array.prototype.filter.call(body.children, function (n) {
+            var r = range(n);
+            return r && r[0] > ch.start;
+          })[0];
+          if (next) next.classList.add("mdv-git-deleted");
+          return;
+        }
+        var hits = blocks.filter(function (n) {
+          var r = range(n);
+          return r[0] <= ch.end && r[1] >= ch.start;
+        });
+        // Mark the innermost blocks only (a list item, not the whole list).
+        hits.filter(function (n) {
+          return !hits.some(function (m) { return m !== n && n.contains(m); });
+        }).forEach(function (n) {
+          // Code blocks clip anything outside their edges (they scroll
+          // sideways), so mark the wrapper around them.
+          var target = n.tagName === "PRE"
+            ? n.closest(".mdv-code-figure") || n.closest(".mdv-code") || n
+            : n;
+          target.classList.add(ch.kind === "added" ? "mdv-git-added" : "mdv-git-modified");
+        });
+      });
+    }).catch(function () {});
+  }
+  var gitTimer;
+  function refreshGitSoon() {
+    clearTimeout(gitTimer);
+    gitTimer = setTimeout(function () { applyGit(false); }, 300);
+  }
+  function toggleGit() {
+    gitOn = !gitOn;
+    savePrefs({ git: gitOn });
+    if (gitOn) applyGit(true);
+    else { clearGit(); showToast("Not showing git changes"); }
+  }
+  if (gitOn && served) setTimeout(function () { applyGit(false); }, 300);
+
+  // ---- Backlinks ----------------------------------------------------------------
+  function loadBacklinks() {
+    linksPanel.textContent = "";
+    linksPanel.append(el("div", { "class": "mdv-empty" }, "Loading…"));
+    fetch("/__mdv/backlinks?doc=" + encodeURIComponent(currentDoc)).then(function (r) { return r.json(); }).then(function (data) {
+      linksPanel.textContent = "";
+      var hits = data.hits || [];
+      var heading = el("div", { "class": "mdv-dir" });
+      heading.textContent = hits.length ? "Linked from" : "No other files link here";
+      linksPanel.append(heading);
+      hits.forEach(function (h) {
+        var a = el("a", {
+          "class": "mdv-hit",
+          href: "/" + h.file.split("/").map(encodeURIComponent).join("/") + "#mdv-line-" + h.line,
+          title: h.file + ":" + h.line,
+        });
+        var where = el("span", { "class": "mdv-hit-file" });
+        where.textContent = h.file + ":" + h.line;
+        var what = el("span", { "class": "mdv-hit-text" });
+        what.textContent = h.text;
+        a.append(where, what);
+        linksPanel.append(a);
+      });
+    }).catch(function () {
+      linksPanel.textContent = "";
+      linksPanel.append(el("div", { "class": "mdv-empty" }, "Couldn't load backlinks"));
+    });
+  }
+  linksTab.addEventListener("click", function () { openSidebar("links"); });
 
   addCopyButtons(body);
   buildContents();

@@ -101,6 +101,7 @@ fn build_base_css() -> String {
     css.push_str(&themed(&light, &dark));
     css.push_str(LAYOUT);
     css.push_str(CALLOUTS);
+    css.push_str(CODE_AND_TOC);
     css.push_str(&numbering_css());
     // Print (and PDF) always in light colours, whatever the screen theme.
     css.push_str("@media print {\n");
@@ -154,6 +155,25 @@ const CALLOUTS: &str = "\
 .markdown-body .mdv-front-matter { margin-bottom: 16px; overflow-x: auto; }\n\
 .markdown-body .mdv-front-matter table { margin-bottom: 0; }\n\
 .markdown-body .mdv-front-matter-error pre { border-left: 4px solid #d1242f; }\n";
+
+/// Code block extras (codeblocks.rs) and the `[TOC]` contents (toc.rs).
+const CODE_AND_TOC: &str = "\
+.markdown-body .mdv-code-figure { margin: 0 0 16px; }\n\
+.markdown-body .mdv-code-title { font: 12px var(--fontStack-monospace, monospace); \
+  color: var(--fgColor-muted); padding: 6px 16px; background: var(--bgColor-muted); \
+  border: 1px solid var(--borderColor-muted); border-bottom: none; border-radius: 6px 6px 0 0; }\n\
+.markdown-body .mdv-code-figure pre { border-top-left-radius: 0; border-top-right-radius: 0; margin-bottom: 0; }\n\
+.markdown-body pre.mdv-lines .mdv-line { display: block; min-height: 1.45em; }\n\
+.markdown-body pre.mdv-lines { counter-reset: mdv-line; }\n\
+.markdown-body pre.mdv-numbered .mdv-line::before { counter-increment: mdv-line; content: counter(mdv-line); \
+  display: inline-block; width: 2.5em; margin-right: 1em; text-align: right; color: var(--fgColor-muted); \
+  opacity: .7; user-select: none; }\n\
+.markdown-body pre.mdv-lines .mdv-hl { background: var(--bgColor-attention-muted); \
+  margin: 0 -16px; padding: 0 16px; }\n\
+.markdown-body pre.mdv-wrapped, .markdown-body pre.mdv-wrapped code { white-space: pre-wrap; word-break: break-word; }\n\
+.markdown-body .mdv-toc { margin-bottom: 16px; padding: 8px 16px; border-left: 3px solid var(--borderColor-default); }\n\
+.markdown-body .mdv-toc ul { margin: 0; padding-left: 1.4em; }\n\
+.markdown-body .mdv-toc > ul { padding-left: 0; list-style: none; }\n";
 
 /// CSS counters for `data-mdv-number="h1"` (number from h1) or `"h2"`
 /// (a single h1 is the title). Four levels deep.

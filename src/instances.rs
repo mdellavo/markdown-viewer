@@ -80,6 +80,41 @@ pub fn find(target: &Path) -> Option<String> {
     }
 }
 
+/// The URL of a live viewer showing `file`: one started for the file
+/// itself, or for a folder containing it.
+pub fn find_serving(file: &Path) -> Option<String> {
+    file.ancestors().find_map(find)
+}
+
+/// Ask the viewer at `url` to scroll its pages to `file` at `line`.
+pub fn send_goto(url: &str, file: &Path, line: u32) -> bool {
+    let Some(port) = url
+        .trim_end_matches('/')
+        .rsplit(':')
+        .next()
+        .and_then(|p| p.parse::<u16>().ok())
+    else {
+        return false;
+    };
+    let body = serde_json::json!({ "file": file, "line": line }).to_string();
+    let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    let Ok(mut s) = TcpStream::connect_timeout(&addr, Duration::from_millis(800)) else {
+        return false;
+    };
+    let _ = s.set_read_timeout(Some(Duration::from_secs(2)));
+    let request = format!(
+        "POST /__mdv/goto HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/json\r\n\
+         X-MDV: 1\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    );
+    if s.write_all(request.as_bytes()).is_err() {
+        return false;
+    }
+    let mut response = String::new();
+    let _ = s.read_to_string(&mut response);
+    response.starts_with("HTTP/1.1 204")
+}
+
 /// Ask the server on `port` what it serves.
 fn whoami(port: u16) -> Option<String> {
     let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));

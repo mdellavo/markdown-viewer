@@ -1,5 +1,6 @@
 complete -c markdown-viewer -s o -l output -d 'Write the rendered HTML to this file ("-" for stdout) instead of opening it' -r -F
 complete -c markdown-viewer -l pdf -d 'Write a PDF to this file instead of opening it (needs Chrome, Chromium, Edge, Brave or Vivaldi)' -r -F
+complete -c markdown-viewer -l goto -d 'Scroll a running viewer to FILE:LINE, starting one if needed. For editor commands (see editors/ in the repository)' -r
 complete -c markdown-viewer -s p -l port -d 'Port for --watch (default: any free port)' -r
 complete -c markdown-viewer -l browser -d 'Browser to open instead of the default (e.g. "Google Chrome", "firefox")' -r
 complete -c markdown-viewer -l theme -d 'Colour theme (default: the one you last chose in the viewer, else auto). Press t in the viewer to switch' -r -f -a "auto\t'Follow the operating system\'s light/dark setting'
@@ -20,12 +21,16 @@ powershell\t''
 zsh\t''"
 complete -c markdown-viewer -s w -l watch -d 'Serve the page and live-reload it whenever the file changes'
 complete -c markdown-viewer -l clipboard -d 'Preview the clipboard instead of a file. With --watch, the page follows the clipboard as it changes'
+complete -c markdown-viewer -l if-running -d 'With --goto: do nothing if no viewer is showing the file (for editors following the cursor, so a closed preview stays closed)'
+complete -c markdown-viewer -l check-links -d 'Check links and images in FILE (or every Markdown file in a folder) and report broken ones; exits with status 1 if any are'
+complete -c markdown-viewer -l online -d 'With --check-links: also check web links (needs curl)'
 complete -c markdown-viewer -l no-open -d 'Don\'t open a browser'
 complete -c markdown-viewer -l app -d 'Open as a minimal app window with no tabs or address bar (default). Chrome, Edge, Brave, Chromium and Vivaldi only; other browsers get a new window'
 complete -c markdown-viewer -l window -d 'Open in a normal new browser window'
 complete -c markdown-viewer -l tab -d 'Open in a tab of an existing browser window'
 complete -c markdown-viewer -l exit-when-closed -d 'With --watch: exit once the page has been closed (used by the Finder integration, where there\'s no terminal to press Ctrl-C in)'
 complete -c markdown-viewer -l number-headings -d 'Number headings (1, 1.1, 1.2, …)'
+complete -c markdown-viewer -l line-numbers -d 'Number the lines of every code block (or per block, with `showLineNumbers` in its info string)'
 complete -c markdown-viewer -l obsidian -d 'Obsidian notes: [[wiki links]], ![[embeds]], callouts, ==highlights== and %%comments%%. On by default inside a vault (a .obsidian folder)'
 complete -c markdown-viewer -l no-obsidian -d 'Turn off Obsidian notes, even inside a vault'
 complete -c markdown-viewer -l generate-man -d 'Print the man page'

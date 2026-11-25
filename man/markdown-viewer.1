@@ -4,7 +4,7 @@
 .SH NAME
 markdown\-viewer \- Render a Markdown file with GitHub styling and live\-reload it in your browser
 .SH SYNOPSIS
-\fBmarkdown\-viewer\fR [\fB\-w\fR|\fB\-\-watch\fR] [\fB\-o\fR|\fB\-\-output\fR] [\fB\-\-pdf\fR] [\fB\-\-clipboard\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-\-no\-open\fR] [\fB\-\-browser\fR] [\fB\-\-app\fR] [\fB\-\-window\fR] [\fB\-\-tab\fR] [\fB\-\-exit\-when\-closed\fR] [\fB\-\-install\-finder\fR] [\fB\-\-uninstall\-finder\fR] [\fB\-\-theme\fR] [\fB\-\-style\fR] [\fB\-\-css\fR] [\fB\-\-number\-headings\fR] [\fB\-\-front\-matter\fR] [\fB\-\-obsidian\fR] [\fB\-\-no\-obsidian\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIFILE\fR] 
+\fBmarkdown\-viewer\fR [\fB\-w\fR|\fB\-\-watch\fR] [\fB\-o\fR|\fB\-\-output\fR] [\fB\-\-pdf\fR] [\fB\-\-clipboard\fR] [\fB\-\-goto\fR] [\fB\-\-if\-running\fR] [\fB\-\-check\-links\fR] [\fB\-\-online\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-\-no\-open\fR] [\fB\-\-browser\fR] [\fB\-\-app\fR] [\fB\-\-window\fR] [\fB\-\-tab\fR] [\fB\-\-exit\-when\-closed\fR] [\fB\-\-install\-finder\fR] [\fB\-\-uninstall\-finder\fR] [\fB\-\-theme\fR] [\fB\-\-style\fR] [\fB\-\-css\fR] [\fB\-\-number\-headings\fR] [\fB\-\-line\-numbers\fR] [\fB\-\-front\-matter\fR] [\fB\-\-obsidian\fR] [\fB\-\-no\-obsidian\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIFILE\fR] 
 .SH DESCRIPTION
 Render a Markdown file with GitHub styling and live\-reload it in your browser
 .SH OPTIONS
@@ -20,6 +20,18 @@ Write a PDF to this file instead of opening it (needs Chrome, Chromium, Edge, Br
 .TP
 \fB\-\-clipboard\fR
 Preview the clipboard instead of a file. With \-\-watch, the page follows the clipboard as it changes
+.TP
+\fB\-\-goto\fR \fI<FILE:LINE>\fR
+Scroll a running viewer to FILE:LINE, starting one if needed. For editor commands (see editors/ in the repository)
+.TP
+\fB\-\-if\-running\fR
+With \-\-goto: do nothing if no viewer is showing the file (for editors following the cursor, so a closed preview stays closed)
+.TP
+\fB\-\-check\-links\fR
+Check links and images in FILE (or every Markdown file in a folder) and report broken ones; exits with status 1 if any are
+.TP
+\fB\-\-online\fR
+With \-\-check\-links: also check web links (needs curl)
 .TP
 \fB\-p\fR, \fB\-\-port\fR \fI<PORT>\fR
 Port for \-\-watch (default: any free port)
@@ -85,6 +97,9 @@ Extra CSS file, applied after the built\-in styles
 .TP
 \fB\-\-number\-headings\fR
 Number headings (1, 1.1, 1.2, …)
+.TP
+\fB\-\-line\-numbers\fR
+Number the lines of every code block (or per block, with `showLineNumbers` in its info string)
 .TP
 \fB\-\-front\-matter\fR \fI<HOW>\fR
 YAML front matter: shown as a table, like GitHub (default), or hidden

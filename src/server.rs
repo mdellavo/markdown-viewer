@@ -37,6 +37,11 @@ const FILES_PATH: &str = "/__mdv/files";
 const SEARCH_PATH: &str = "/__mdv/search";
 const OPEN_PATH: &str = "/__mdv/open";
 const POSITION_PATH: &str = "/__mdv/position";
+const GOTO_PATH: &str = "/__mdv/goto";
+const SOURCE_PATH: &str = "/__mdv/source";
+const GITDIFF_PATH: &str = "/__mdv/gitdiff";
+const CHECK_PATH: &str = "/__mdv/check";
+const BACKLINKS_PATH: &str = "/__mdv/backlinks";
 
 /// What to serve and how.
 pub struct ServeOptions {
@@ -72,6 +77,8 @@ struct AppState {
     remember: bool,
     editor: Option<String>,
     identity: Arc<String>,
+    /// "Go to this line" requests (`--goto`), as (root-relative doc, line).
+    goto: tokio::sync::broadcast::Sender<(String, u32)>,
     port: u16,
     /// Flips to true when the server is shutting down.
     closing: watch::Receiver<bool>,
@@ -178,6 +185,7 @@ impl Server {
             remember: opts.remember,
             editor: opts.editor,
             identity: Arc::new(opts.identity),
+            goto: tokio::sync::broadcast::channel(16).0,
             port: addr.port(),
             closing,
             close_on_exit,
@@ -192,6 +200,11 @@ impl Server {
             .route(OPEN_PATH, post(open_in_editor))
             .route(POSITION_PATH, post(save_position))
             .route(crate::instances::WHOAMI_PATH, get(whoami))
+            .route(GOTO_PATH, post(goto))
+            .route(SOURCE_PATH, get(source))
+            .route(GITDIFF_PATH, get(gitdiff))
+            .route(CHECK_PATH, get(check_links))
+            .route(BACKLINKS_PATH, get(backlinks))
             .route(MERMAID_PATH, get(mermaid_js))
             .route(KATEX_JS_PATH, get(katex_js))
             .route(KATEX_CSS_PATH, get(katex_css))
@@ -278,6 +291,8 @@ fn doc_page(state: &AppState, doc: &Path) -> Response {
         theme: prefs.theme.unwrap_or(state.page.theme),
         sidebar: prefs.sidebar,
         resume_line,
+        font_scale: prefs.font_scale,
+        git_changes: prefs.git.unwrap_or(false),
         doc: Some(rel_path(state.docs.root(), doc)),
         close_on_exit: state.close_on_exit.load(Ordering::Relaxed),
         custom_css: custom_css.or_else(|| state.page.custom_css.clone()),
@@ -320,7 +335,16 @@ async fn events(State(state): State<AppState>, Query(q): Query<EventsQuery>) -> 
         .map(|_| Ok(Event::default().event("close").data("bye")));
     // The guard lives as long as the stream, i.e. until the page goes away.
     let guard = ClientGuard::new(state.clients.clone());
-    let stream = updates.merge(shutdown).map(move |event| {
+    // `--goto` requests, for every page (a folder-mode page showing another
+    // document navigates to it).
+    let gotos = tokio_stream::wrappers::BroadcastStream::new(state.goto.subscribe())
+        .filter_map(|r| r.ok())
+        .map(|(doc, line)| {
+            Ok(Event::default()
+                .event("goto")
+                .data(serde_json::json!({ "doc": doc, "line": line }).to_string()))
+        });
+    let stream = updates.merge(shutdown).merge(gotos).map(move |event| {
         let _alive = &guard;
         event
     });
@@ -439,6 +463,93 @@ struct SearchQuery {
 async fn search(State(state): State<AppState>, Query(q): Query<SearchQuery>) -> Response {
     let docs = state.docs.clone();
     match tokio::task::spawn_blocking(move || docs.search(&q.q)).await {
+        Ok(hits) => no_store(Json(serde_json::json!({ "hits": hits })).into_response()),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct GotoRequest {
+    /// Absolute path of the file, as the editor knows it.
+    file: PathBuf,
+    line: u32,
+}
+
+/// `markdown-viewer --goto file:line`: scroll pages to a line.
+async fn goto(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<GotoRequest>,
+) -> StatusCode {
+    if headers.get("x-mdv").is_none() {
+        return StatusCode::FORBIDDEN;
+    }
+    let root = state.docs.root();
+    let Ok(file) = req.file.canonicalize() else {
+        return StatusCode::NOT_FOUND;
+    };
+    if !file.starts_with(root) || !docs::is_markdown(&file) {
+        return StatusCode::NOT_FOUND;
+    }
+    // Pages compare this with their own document (data-doc).
+    let _ = state.goto.send((rel_path(root, &file), req.line.max(1)));
+    StatusCode::NO_CONTENT
+}
+
+/// The document's Markdown (for copying the page).
+async fn source(State(state): State<AppState>, Query(q): Query<EventsQuery>) -> Response {
+    let text = match doc_file(&state, &q.doc) {
+        Some(file) => tokio::fs::read_to_string(&file).await.ok(),
+        // Standard input and the clipboard have no file.
+        None => None,
+    };
+    match text {
+        Some(text) => {
+            no_store(([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], text).into_response())
+        }
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+/// Lines changed since the last git commit.
+async fn gitdiff(State(state): State<AppState>, Query(q): Query<EventsQuery>) -> Response {
+    let Some(file) = doc_file(&state, &q.doc) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    match tokio::task::spawn_blocking(move || crate::gitdiff::diff(&file)).await {
+        Ok(diff) => no_store(Json(diff).into_response()),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// Broken links in a document (offline checks only).
+async fn check_links(State(state): State<AppState>, Query(q): Query<EventsQuery>) -> Response {
+    let Some(file) = doc_file(&state, &q.doc) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let renderer = state.renderer.clone();
+    let root = state.docs.root().to_path_buf();
+    let result = tokio::task::spawn_blocking(move || {
+        let checker = crate::links::Checker::new(renderer, root);
+        let (broken, external, _) = checker.check(&file);
+        (broken, external.len())
+    })
+    .await;
+    match result {
+        Ok((broken, external)) => no_store(
+            Json(serde_json::json!({ "broken": broken, "external": external })).into_response(),
+        ),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// Lines in other files that link to this document.
+async fn backlinks(State(state): State<AppState>, Query(q): Query<EventsQuery>) -> Response {
+    let Some(file) = doc_file(&state, &q.doc) else {
+        return no_store(Json(serde_json::json!({ "hits": [] })).into_response());
+    };
+    let docs = state.docs.clone();
+    match tokio::task::spawn_blocking(move || docs.backlinks(&file)).await {
         Ok(hits) => no_store(Json(serde_json::json!({ "hits": hits })).into_response()),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }

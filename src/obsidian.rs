@@ -24,7 +24,11 @@ const SEGMENT: &AsciiSet = &CONTROLS
     .add(b'}')
     .add(b'/');
 
+/// Renders an embedded note: (root-relative path, optional heading) → HTML.
+pub type EmbedFn<'a> = dyn Fn(&str, Option<&str>) -> Option<String> + 'a;
+
 /// Where a document is, for resolving its links.
+#[derive(Clone, Copy)]
 pub struct LinkContext<'a> {
     /// The vault (or served folder) root.
     pub root: &'a Path,
@@ -35,7 +39,12 @@ pub struct LinkContext<'a> {
     /// Served pages link root-relative (`/notes/a.md`); standalone pages
     /// link relative to the document's folder.
     pub served: bool,
+    /// How many notes deep we are in `![[embeds]]` (the page itself is 0).
+    pub depth: usize,
 }
+
+/// Embedded notes go at most this deep (so notes embedding each other stop).
+pub const MAX_EMBED_DEPTH: usize = 2;
 
 /// Is this inside an Obsidian vault (a `.obsidian` folder here or above)?
 pub fn in_vault(path: &Path) -> bool {
@@ -49,15 +58,144 @@ pub fn vault_root(path: &Path) -> Option<PathBuf> {
         .map(Path::to_path_buf)
 }
 
+/// The Markdown of `text` under the heading `heading` (up to the next
+/// heading of the same or a higher level), for `![[Note#Heading]]`.
+pub fn section(text: &str, heading: &str) -> Option<String> {
+    let wanted = comrak::Anchorizer::new().anchorize(heading);
+    let mut out = Vec::new();
+    let mut level = None;
+    for line in text.lines() {
+        let hashes = line.chars().take_while(|c| *c == '#').count();
+        let is_heading = (1..=6).contains(&hashes) && line[hashes..].starts_with(' ');
+        if let Some(l) = level {
+            if is_heading && hashes <= l {
+                break;
+            }
+            out.push(line);
+        } else if is_heading && comrak::Anchorizer::new().anchorize(line[hashes..].trim()) == wanted
+        {
+            level = Some(hashes);
+            out.push(line);
+        }
+    }
+    level.map(|_| out.join("\n"))
+}
+
+/// Drop `data-sourcepos` attributes (an embedded note's line numbers would
+/// point into the wrong file).
+pub fn strip_sourcepos(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    while let Some(at) = rest.find(" data-sourcepos=\"") {
+        out.push_str(&rest[..at]);
+        let after = &rest[at + " data-sourcepos=\"".len()..];
+        rest = after.find('"').map_or("", |end| &after[end + 1..]);
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Backlinks: lines in other notes that link to `target` (root-relative),
+/// by `[[wiki link]]` or a Markdown link.
+pub fn backlinks(root: &Path, files: &[String], target: &str) -> Vec<(String, usize, String)> {
+    let mut hits = Vec::new();
+    for file in files {
+        if file == target {
+            continue;
+        }
+        let path = root.join(file);
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            continue;
+        };
+        let dir = path.parent().unwrap_or(root);
+        let ctx = LinkContext {
+            root,
+            dir,
+            files,
+            served: true,
+            depth: 0,
+        };
+        for (i, line) in text.lines().enumerate() {
+            if links_in(line).iter().any(|l| links_to(l, &ctx, target)) {
+                hits.push((file.clone(), i + 1, line.trim().chars().take(160).collect()));
+            }
+        }
+    }
+    hits
+}
+
+/// Link targets on a line: `[[target|…]]` (true) and `](target)` (false).
+fn links_in(line: &str) -> Vec<(bool, String)> {
+    let mut found = Vec::new();
+    let mut rest = line;
+    while let Some(at) = rest.find("[[") {
+        let after = &rest[at + 2..];
+        let Some(end) = after.find("]]") else { break };
+        let target = after[..end].split(['|', '#']).next().unwrap_or("").trim();
+        if !target.is_empty() {
+            found.push((true, target.to_string()));
+        }
+        rest = &after[end + 2..];
+    }
+    let mut rest = line;
+    while let Some(at) = rest.find("](") {
+        let after = &rest[at + 2..];
+        let Some(end) = after.find(')') else { break };
+        let target = after[..end].split_whitespace().next().unwrap_or("");
+        let target = target
+            .trim_matches(['<', '>'])
+            .split('#')
+            .next()
+            .unwrap_or("");
+        if !target.is_empty() && !target.contains("://") && !target.starts_with("mailto:") {
+            found.push((
+                false,
+                percent_decode_str(target).decode_utf8_lossy().into_owned(),
+            ));
+        }
+        rest = &after[end + 1..];
+    }
+    found
+}
+
+fn links_to((wiki, target): &(bool, String), ctx: &LinkContext, wanted: &str) -> bool {
+    if *wiki {
+        return find_note(target, ctx).as_deref() == Some(wanted);
+    }
+    let path = if target.starts_with('/') {
+        ctx.root.join(target.trim_start_matches('/'))
+    } else {
+        ctx.dir.join(target)
+    };
+    normalize(&path)
+        .strip_prefix(ctx.root)
+        .is_ok_and(|rel| rel.to_string_lossy().replace('\\', "/") == wanted)
+}
+
+/// Resolve `.` and `..` without touching the filesystem.
+fn normalize(path: &Path) -> PathBuf {
+    let mut out = PathBuf::new();
+    for c in path.components() {
+        match c {
+            Component::ParentDir => {
+                out.pop();
+            }
+            Component::CurDir => {}
+            other => out.push(other),
+        }
+    }
+    out
+}
+
 /// Resolve wiki links and embeds in rendered HTML.
-pub fn finish(html: String, ctx: &LinkContext) -> String {
+pub fn finish(html: String, ctx: &LinkContext, embed: &EmbedFn) -> String {
     let html = if html.contains("data-wikilink=\"true\"") {
         resolve_links(&html, ctx)
     } else {
         html
     };
     if html.contains("![[") {
-        resolve_embeds(&html, ctx)
+        resolve_embeds(&html, ctx, embed)
     } else {
         html
     }
@@ -98,7 +236,7 @@ fn resolve_links(html: &str, ctx: &LinkContext) -> String {
 }
 
 /// Turn `![[name]]` / `![[name|300]]` text into images (or links, for notes).
-fn resolve_embeds(html: &str, ctx: &LinkContext) -> String {
+fn resolve_embeds(html: &str, ctx: &LinkContext, embed: &EmbedFn) -> String {
     let mut out = String::with_capacity(html.len());
     let mut rest = html;
     while let Some(start) = rest.find("![[") {
@@ -118,6 +256,38 @@ fn resolve_embeds(html: &str, ctx: &LinkContext) -> String {
         };
         let target = html_unescape(target);
         let url = resolve(&target, ctx);
+        // A note: show it inline. If the embed is a paragraph of its own,
+        // replace the paragraph, since a block can't sit inside one.
+        let (note_path, heading) = match target.split_once('#') {
+            Some((p, h)) => (p.trim(), Some(h.trim())),
+            None => (target.trim(), None),
+        };
+        let note = (!note_path.is_empty())
+            .then(|| find_note(note_path, ctx))
+            .flatten()
+            .and_then(|rel| embed(&rel, heading));
+        if let (Some(note_html), Some(url)) = (&note, &url) {
+            let embed_html = format!(
+                "<div class=\"mdv-embed-note\"><div class=\"mdv-embed-title\"><a href=\"{}\">{}</a></div>{}</div>",
+                escape_attr(url),
+                escape_text(&target),
+                note_html
+            );
+            let p_open = out.rfind("<p").filter(|&p| {
+                let tail = &out[p..];
+                tail.ends_with('>') && tail.matches('<').count() == 1
+            });
+            let after = &rest[start + 3 + len + 2..];
+            if let (Some(p), Some(stripped)) = (p_open, after.strip_prefix("</p>")) {
+                out.truncate(p);
+                out.push_str(&embed_html);
+                rest = stripped;
+            } else {
+                out.push_str(&embed_html);
+                rest = after;
+            }
+            continue;
+        }
         let is_image = Path::new(target.split('#').next().unwrap_or(""))
             .extension()
             .and_then(|e| e.to_str())
@@ -184,7 +354,7 @@ fn resolve(target: &str, ctx: &LinkContext) -> Option<String> {
 /// A Markdown note by name or partial path, Obsidian-style: an exact
 /// root-relative path wins, then notes in the current folder, then the
 /// shortest path anywhere.
-fn find_note(path: &str, ctx: &LinkContext) -> Option<String> {
+pub fn find_note(path: &str, ctx: &LinkContext) -> Option<String> {
     let wanted = if crate::docs::is_markdown(Path::new(path)) {
         path.to_string()
     } else {
@@ -293,7 +463,12 @@ mod tests {
             dir,
             files,
             served,
+            depth: 0,
         }
+    }
+
+    fn no_embed(_: &str, _: Option<&str>) -> Option<String> {
+        None
     }
 
     fn files() -> Vec<String> {
@@ -350,7 +525,7 @@ mod tests {
         let c = ctx(Path::new("/vault"), Path::new("/vault"), &f, true);
         let html = "<p><a href=\"My%20Note\" data-wikilink=\"true\">My Note</a> \
                     <a data-sourcepos=\"1:1-1:2\" href=\"Nope\" data-wikilink=\"true\">Nope</a></p>";
-        let out = finish(html.into(), &c);
+        let out = finish(html.into(), &c, &no_embed);
         assert!(
             out.contains("href=\"/notes/My%20Note.md\" data-wikilink"),
             "{out}"
@@ -367,6 +542,7 @@ mod tests {
         let out = finish(
             "<p>![[pic.png|300]] and ![[Home]] and ![[gone.png]]</p>".into(),
             &c,
+            &no_embed,
         );
         assert!(
             out.contains("<img src=\"/pic.png\" alt=\"pic.png\" width=\"300\">"),
@@ -388,11 +564,65 @@ mod tests {
         let f = files();
         let notes = dir.path().join("notes");
         let c = ctx(dir.path(), &notes, &f, true);
-        let out = finish("<p>![[pic.png]]</p>".into(), &c);
+        let out = finish("<p>![[pic.png]]</p>".into(), &c, &no_embed);
         assert!(
             out.contains("<img src=\"/attachments/img/Pic.PNG\""),
             "{out}"
         );
+    }
+
+    #[test]
+    fn embeds_notes_in_place_of_their_paragraph() {
+        let f = files();
+        let c = ctx(Path::new("/vault"), Path::new("/vault"), &f, true);
+        let embed =
+            |rel: &str, heading: Option<&str>| Some(format!("<p>BODY of {rel} {heading:?}</p>"));
+        let out = finish(
+            "<p data-sourcepos=\"1:1-1:9\">![[Home]]</p>\n<p>Inline ![[Home#Intro]] here</p>"
+                .into(),
+            &c,
+            &embed,
+        );
+        assert!(out.starts_with("<div class=\"mdv-embed-note\"><div class=\"mdv-embed-title\"><a href=\"/Home.md\">Home</a></div><p>BODY of Home.md None</p></div>\n"), "{out}");
+        assert!(
+            out.contains("<p>Inline <div class=\"mdv-embed-note\">"),
+            "inline embeds stay put: {out}"
+        );
+        assert!(out.contains("Some(\"Intro\")"));
+    }
+
+    #[test]
+    fn extracts_sections() {
+        let text = "# A\nintro\n## B\nb text\n### B1\nmore\n## C\nc text";
+        assert_eq!(section(text, "B").unwrap(), "## B\nb text\n### B1\nmore");
+        assert_eq!(section(text, "missing"), None);
+    }
+
+    #[test]
+    fn strips_source_positions() {
+        assert_eq!(
+            strip_sourcepos(
+                "<p data-sourcepos=\"1:1-2:3\">x <a data-sourcepos=\"1:3-1:4\" href=\"y\">y</a></p>"
+            ),
+            "<p>x <a href=\"y\">y</a></p>"
+        );
+    }
+
+    #[test]
+    fn finds_backlinks_from_wiki_and_markdown_links() {
+        let dir = tempfile::tempdir().unwrap();
+        let r = dir.path();
+        std::fs::create_dir_all(r.join("notes/sub")).unwrap();
+        std::fs::write(r.join("notes/Target.md"), "# Target").unwrap();
+        std::fs::write(r.join("notes/a.md"), "intro\nsee [[Target|it]] here").unwrap();
+        std::fs::write(r.join("notes/sub/b.md"), "[link](../Target.md#x)").unwrap();
+        std::fs::write(r.join("c.md"), "[[Other]] and [web](https://x/Target.md)").unwrap();
+        let files: Vec<String> = ["c.md", "notes/Target.md", "notes/a.md", "notes/sub/b.md"]
+            .map(String::from)
+            .to_vec();
+        let hits = backlinks(r, &files, "notes/Target.md");
+        let found: Vec<_> = hits.iter().map(|(f, l, _)| (f.as_str(), *l)).collect();
+        assert_eq!(found, [("notes/a.md", 2), ("notes/sub/b.md", 1)]);
     }
 
     #[test]

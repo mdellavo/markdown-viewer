@@ -138,3 +138,47 @@ html.mdv-sidebar-open .mdv-sidebar { transform: none; box-shadow: 0 0 24px rgba(
 .mdv-present .mdv-slide-inner { flex-shrink: 0; }
 .mdv-present .mdv-slide h1, .mdv-present .mdv-slide h2 { border-bottom: none; }
 .mdv-present-bar { padding: 8px 18px; text-align: right; color: var(--fgColor-muted); font-variant-numeric: tabular-nums; }
+
+/* Text size (+ / -), remembered between runs */
+.markdown-body { zoom: var(--mdv-scale, 1); }
+
+/* Wrap toggle next to each code block's copy button */
+.markdown-body .mdv-wrap-btn {
+  position: absolute; top: 8px; right: 44px; padding: 3px 8px; line-height: 1.2;
+  font: 14px -apple-system, BlinkMacSystemFont, sans-serif;
+  color: var(--fgColor-muted); background: var(--bgColor-muted);
+  border: 1px solid var(--borderColor-default); border-radius: 6px; cursor: pointer;
+  opacity: 0; transition: opacity .15s;
+}
+.markdown-body .mdv-code:hover .mdv-wrap-btn, .markdown-body .mdv-wrap-btn:focus { opacity: 1; }
+.markdown-body .mdv-wrap-btn[aria-pressed="true"] { color: var(--fgColor-accent); border-color: var(--fgColor-accent); opacity: 1; }
+.markdown-body .mdv-code-figure .mdv-code .mdv-copy, .markdown-body .mdv-code-figure .mdv-code .mdv-wrap-btn { top: 6px; }
+
+/* Changes since the last git commit (D) */
+/* A bar in the left margin, the full height of the block (like an
+   editor's gutter), without moving anything. */
+.markdown-body .mdv-git-added, .markdown-body .mdv-git-modified { position: relative; }
+.markdown-body .mdv-git-added::after, .markdown-body .mdv-git-modified::after {
+  content: ""; position: absolute; left: -14px; top: 0; bottom: 0; width: 3px; border-radius: 2px;
+  pointer-events: none;
+}
+.markdown-body .mdv-git-added::after { background: #1a7f37; }
+.markdown-body .mdv-git-modified::after { background: #bf8700; }
+/* Table rows can't hold a positioned bar; mark their first cell instead. */
+.markdown-body tr.mdv-git-added::after, .markdown-body tr.mdv-git-modified::after { content: none; }
+.markdown-body tr.mdv-git-added > :first-child { box-shadow: inset 3px 0 0 #1a7f37; }
+.markdown-body tr.mdv-git-modified > :first-child { box-shadow: inset 3px 0 0 #bf8700; }
+/* Removed lines: a red line above the block that follows them. */
+.markdown-body .mdv-git-deleted { box-shadow: 0 -3px 0 -1px #cf222e; }
+@media print {
+  .markdown-body .mdv-git-added::after, .markdown-body .mdv-git-modified::after { content: none; }
+  .markdown-body .mdv-git-deleted, .markdown-body tr > :first-child { box-shadow: none; }
+}
+
+/* Broken links (l) */
+.mdv-broken { max-height: 70vh; overflow-y: auto; width: min(560px, 90vw); }
+.mdv-broken-item {
+  display: block; width: 100%; text-align: left; padding: 6px 8px; border-radius: 6px;
+}
+.mdv-broken-item:hover { background: var(--bgColor-neutral-muted); }
+.mdv-broken .mdv-hit-text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }

@@ -9,19 +9,23 @@ use clap::{CommandFactory, Parser};
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 
 mod browser;
+mod codeblocks;
 mod config;
 mod docs;
 mod editor;
 #[cfg(target_os = "macos")]
 mod finder;
 mod frontmatter;
+mod gitdiff;
 mod github;
 mod instances;
+mod links;
 mod obsidian;
 mod pdf;
 mod render;
 mod server;
 mod theme;
+mod toc;
 
 use config::{Config, Prefs};
 use render::{FrontMatter, PageOptions, RenderOptions, Renderer, Style, Theme};
@@ -52,6 +56,25 @@ struct Cli {
     /// follows the clipboard as it changes.
     #[arg(long, conflicts_with = "file")]
     clipboard: bool,
+
+    /// Scroll a running viewer to FILE:LINE, starting one if needed. For
+    /// editor commands (see editors/ in the repository).
+    #[arg(long, value_name = "FILE:LINE", conflicts_with_all = ["file", "clipboard", "output", "pdf"])]
+    goto: Option<String>,
+
+    /// With --goto: do nothing if no viewer is showing the file (for
+    /// editors following the cursor, so a closed preview stays closed).
+    #[arg(long, requires = "goto")]
+    if_running: bool,
+
+    /// Check links and images in FILE (or every Markdown file in a folder)
+    /// and report broken ones; exits with status 1 if any are.
+    #[arg(long, conflicts_with_all = ["watch", "output", "pdf", "clipboard", "goto"])]
+    check_links: bool,
+
+    /// With --check-links: also check web links (needs curl).
+    #[arg(long, requires = "check_links")]
+    online: bool,
 
     /// Port for --watch (default: any free port).
     #[arg(short, long)]
@@ -110,6 +133,11 @@ struct Cli {
     #[arg(long)]
     number_headings: bool,
 
+    /// Number the lines of every code block (or per block, with
+    /// `showLineNumbers` in its info string).
+    #[arg(long)]
+    line_numbers: bool,
+
     /// YAML front matter: shown as a table, like GitHub (default), or hidden.
     #[arg(long, value_enum, value_name = "HOW")]
     front_matter: Option<FrontMatter>,
@@ -157,6 +185,7 @@ struct Settings {
     theme_flag: Option<Theme>,
     config_theme: Option<Theme>,
     number_headings: bool,
+    line_numbers: bool,
     front_matter: FrontMatter,
     /// `None`: decide by whether the file is in an Obsidian vault.
     obsidian: Option<bool>,
@@ -199,6 +228,7 @@ impl Settings {
             theme_flag: cli.theme,
             config_theme: config.theme,
             number_headings: cli.number_headings || config.number_headings.unwrap_or(false),
+            line_numbers: cli.line_numbers || config.line_numbers.unwrap_or(false),
             front_matter: cli.front_matter.or(config.front_matter).unwrap_or_default(),
             obsidian,
             editor: cli.editor.clone().or(config.editor),
@@ -224,6 +254,7 @@ impl Settings {
             sourcepos,
             obsidian: self.obsidian.unwrap_or_else(|| obsidian::in_vault(at)),
             front_matter: self.front_matter,
+            line_numbers: self.line_numbers,
         }
     }
 
@@ -271,7 +302,31 @@ fn run(cli: Cli) -> Result<()> {
     let settings = Settings::new(&cli, Config::load()?)?;
     let cwd = std::env::current_dir()?.canonicalize()?;
 
-    let source = if cli.clipboard {
+    // --goto: scroll a viewer that's already showing the file, else start
+    // one (below) opened at that line.
+    let goto = cli.goto.as_deref().map(parse_goto).transpose()?;
+    if let Some((file, line)) = &goto
+        && let Some(url) = instances::find_serving(file)
+    {
+        if !instances::send_goto(&url, file, *line) {
+            bail!("couldn't reach the viewer at {url}");
+        }
+        say(&format!("Showing {}:{line} at {url}", file.display()));
+        return Ok(());
+    }
+    if goto.is_some() && cli.if_running {
+        return Ok(());
+    }
+    let watch = cli.watch || goto.is_some();
+
+    if cli.check_links {
+        let target = cli.file.clone().unwrap_or_else(|| cwd.clone());
+        return check_links(&settings, &target, cli.online);
+    }
+
+    let source = if let Some((file, _)) = &goto {
+        Source::File(file.clone())
+    } else if cli.clipboard {
         Source::Text {
             name: "Clipboard",
             text: read_clipboard()?,
@@ -312,7 +367,7 @@ fn run(cli: Cli) -> Result<()> {
                     path.display()
                 );
             }
-            return serve(&cli, &settings, &source);
+            return serve(&cli, &settings, &source, None);
         }
         Source::File(path) => (
             read(path)?,
@@ -323,7 +378,7 @@ fn run(cli: Cli) -> Result<()> {
         ),
         Source::Text { name, text } => (text.clone(), cwd.clone(), name.to_string()),
     };
-    if !cli.watch && (cli.exit_when_closed || cli.port.is_some()) {
+    if !watch && (cli.exit_when_closed || cli.port.is_some()) {
         bail!("--port and --exit-when-closed need --watch");
     }
 
@@ -352,8 +407,8 @@ fn run(cli: Cli) -> Result<()> {
         return Ok(());
     }
 
-    if cli.watch {
-        return serve(&cli, &settings, &source);
+    if watch {
+        return serve(&cli, &settings, &source, goto.map(|(_, line)| line));
     }
 
     // One-shot: write a self-contained page to the temp dir and open it.
@@ -400,6 +455,7 @@ fn render_standalone(settings: &Settings, markdown: &str, dir: &Path) -> (Render
             dir,
             files: &files,
             served: false,
+            depth: 0,
         };
         renderer.render_doc(markdown, Some(&ctx))
     } else {
@@ -408,8 +464,89 @@ fn render_standalone(settings: &Settings, markdown: &str, dir: &Path) -> (Render
     (renderer, body)
 }
 
-/// Serve with live reload.
-fn serve(cli: &Cli, settings: &Settings, source: &Source) -> Result<()> {
+/// `path/to/file.md:42` → (canonical file, 42). Without a line, line 1.
+fn parse_goto(spec: &str) -> Result<(PathBuf, u32)> {
+    let (path, line) = match spec.rsplit_once(':') {
+        Some((p, l)) if !p.is_empty() && l.chars().all(|c| c.is_ascii_digit()) && !l.is_empty() => {
+            (p, l.parse().unwrap_or(1))
+        }
+        _ => (spec, 1),
+    };
+    let file = Path::new(path)
+        .canonicalize()
+        .with_context(|| format!("cannot open {path}"))?;
+    if !file.is_file() {
+        bail!("{path} is not a file");
+    }
+    Ok((file, line.max(1)))
+}
+
+/// --check-links: report broken links; fail if there are any.
+fn check_links(settings: &Settings, target: &Path, online: bool) -> Result<()> {
+    let target = target
+        .canonicalize()
+        .with_context(|| format!("cannot open {}", target.display()))?;
+    let (root, files) = if target.is_dir() {
+        let (files, _) = docs::markdown_files(&target);
+        let files = files.iter().map(|f| target.join(f)).collect();
+        (target.clone(), files)
+    } else {
+        let parent = target.parent().context("file has no parent folder")?;
+        let root = obsidian::vault_root(parent).unwrap_or_else(|| parent.to_path_buf());
+        (root, vec![target.clone()])
+    };
+    let renderer = Arc::new(Renderer::with_options(settings.render_options(true, &root)));
+    let checker = links::Checker::new(renderer, root.clone());
+    let shown = |f: &Path| -> String {
+        let base = if target.is_dir() { &target } else { &root };
+        f.strip_prefix(base)
+            .map(|p| p.display().to_string())
+            .unwrap_or_else(|_| f.display().to_string())
+    };
+
+    let mut problems: Vec<(String, u32, String, String)> = Vec::new();
+    let mut web: Vec<(String, links::Link)> = Vec::new();
+    let mut total = 0;
+    for file in &files {
+        let (broken, external, count) = checker.check(file);
+        total += count;
+        for b in broken {
+            problems.push((shown(file), b.line, b.target, b.reason));
+        }
+        web.extend(external.into_iter().map(|l| (shown(file), l)));
+    }
+    if online && !web.is_empty() {
+        let urls = web.iter().map(|(_, l)| l.target.clone()).collect();
+        let failures = links::check_online(&urls).map_err(anyhow::Error::msg)?;
+        for (file, link) in &web {
+            if let Some(reason) = failures.get(&link.target) {
+                problems.push((file.clone(), link.line, link.target.clone(), reason.clone()));
+            }
+        }
+    }
+    problems.sort();
+    for (file, line, target, reason) in &problems {
+        say(&format!("{file}:{line}: {target} ({reason})"));
+    }
+    let not_checked = if online || web.is_empty() {
+        String::new()
+    } else {
+        format!(" {} web links not checked (add --online).", web.len())
+    };
+    let files_word = if files.len() == 1 { "file" } else { "files" };
+    say(&format!(
+        "Checked {total} links in {} {files_word}: {} broken.{not_checked}",
+        files.len(),
+        problems.len()
+    ));
+    if !problems.is_empty() {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+/// Serve with live reload. `start_line` opens the page at that line.
+fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32>) -> Result<()> {
     // What we serve from, what `/` shows, and who we are (for reuse).
     let cwd = std::env::current_dir()?.canonicalize()?;
     let (root, main, identity) = match source {
@@ -455,8 +592,7 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source) -> Result<()> {
         let saved = Prefs::load();
         let prefs = Prefs {
             theme: Some(settings.viewing_theme(&saved)),
-            sidebar: saved.sidebar,
-            positions: saved.positions,
+            ..saved
         };
         let page = PageOptions {
             served: true,
@@ -504,7 +640,11 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source) -> Result<()> {
             // Set before opening: the browser may load the page before
             // `open` returns. Corrected if we could only open a tab.
             handle.set_close_on_exit(settings.open != browser::Mode::Tab);
-            let opened = browser::open(&url, settings.browser.as_deref(), settings.open)?;
+            let page_url = match start_line {
+                Some(line) => format!("{url}#mdv-line-{line}"),
+                None => url.clone(),
+            };
+            let opened = browser::open(&page_url, settings.browser.as_deref(), settings.open)?;
             handle.set_close_on_exit(opened == browser::Opened::Window);
         }
         // With --exit-when-closed, stop once the page has been closed for a

@@ -18,6 +18,7 @@ _markdown-viewer() {
 '(-w --watch --pdf)-o+[Write the rendered HTML to this file ("-" for stdout) instead of opening it]:PATH:_files' \
 '(-w --watch --pdf)--output=[Write the rendered HTML to this file ("-" for stdout) instead of opening it]:PATH:_files' \
 '(-w --watch)--pdf=[Write a PDF to this file instead of opening it (needs Chrome, Chromium, Edge, Brave or Vivaldi)]:PATH:_files' \
+'(--clipboard -o --output --pdf)--goto=[Scroll a running viewer to FILE\:LINE, starting one if needed. For editor commands (see editors/ in the repository)]:FILE:LINE:_default' \
 '-p+[Port for --watch (default\: any free port)]:PORT:_default' \
 '--port=[Port for --watch (default\: any free port)]:PORT:_default' \
 '--browser=[Browser to open instead of the default (e.g. "Google Chrome", "firefox")]:NAME:_default' \
@@ -36,12 +37,16 @@ hide\:"Leave it out"))' \
 '-w[Serve the page and live-reload it whenever the file changes]' \
 '--watch[Serve the page and live-reload it whenever the file changes]' \
 '()--clipboard[Preview the clipboard instead of a file. With --watch, the page follows the clipboard as it changes]' \
+'--if-running[With --goto\: do nothing if no viewer is showing the file (for editors following the cursor, so a closed preview stays closed)]' \
+'(-w --watch -o --output --pdf --clipboard --goto)--check-links[Check links and images in FILE (or every Markdown file in a folder) and report broken ones; exits with status 1 if any are]' \
+'--online[With --check-links\: also check web links (needs curl)]' \
 '--no-open[Don'\''t open a browser]' \
 '--app[Open as a minimal app window with no tabs or address bar (default). Chrome, Edge, Brave, Chromium and Vivaldi only; other browsers get a new window]' \
 '--window[Open in a normal new browser window]' \
 '--tab[Open in a tab of an existing browser window]' \
 '--exit-when-closed[With --watch\: exit once the page has been closed (used by the Finder integration, where there'\''s no terminal to press Ctrl-C in)]' \
 '--number-headings[Number headings (1, 1.1, 1.2, …)]' \
+'--line-numbers[Number the lines of every code block (or per block, with \`showLineNumbers\` in its info string)]' \
 '--obsidian[Obsidian notes\: \[\[wiki links\]\], !\[\[embeds\]\], callouts, ==highlights== and %%comments%%. On by default inside a vault (a .obsidian folder)]' \
 '--no-obsidian[Turn off Obsidian notes, even inside a vault]' \
 '--generate-man[Print the man page]' \

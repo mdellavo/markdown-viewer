@@ -1,37 +1,41 @@
-// markdown-viewer live reload: swaps in freshly rendered content when the
-// source file changes, keeping the current scroll position, and tells the
-// UI which block changed first (`mdv:updated`). When the server stops it
-// closes the window (if markdown-viewer opened it) or says so.
+// markdown-viewer live reload. When the source changes, the server sends
+// the new HTML; this replaces only the top-level blocks that changed
+// (matching unchanged blocks from both ends), draws diagrams and math for
+// just those, and tells the UI which block changed first (`mdv:updated`).
+// It also follows `--goto` requests, and when the server stops it closes the
+// window (if markdown-viewer opened it) or says so.
 (function () {
   var script = document.currentScript;
   var closeOnExit = script && script.dataset.closeOnExit === "true";
   var doc = (script && script.dataset.doc) || "";
   var body = document.querySelector(".markdown-body");
   var latest = 0;
-  // The first update just syncs with the server (the page already shows
-  // that content), so it never jumps to a "change".
-  var synced = false;
+  // Comparison keys for the blocks on the page, as last sent by the server
+  // (before diagrams and math were drawn). null until the first update.
+  var lastKeys = null;
   var events = new EventSource("/__mdv/events?doc=" + encodeURIComponent(doc));
 
-  // Index of the first top-level block that differs, or -1 if none.
-  function firstChange(oldParent, newParent) {
-    var a = oldParent.children, b = newParent.children;
-    var n = Math.min(a.length, b.length);
-    for (var i = 0; i < n; i++) if (!a[i].isEqualNode(b[i])) return i;
-    if (a.length === b.length) return -1;
-    return Math.max(0, Math.min(n, b.length - 1));
+  // A block's markup without source positions, which shift whenever lines
+  // are inserted or removed above it.
+  function key(el) {
+    return el.outerHTML.replace(/ data-sourcepos="[^"]*"/g, "");
   }
 
-  // Undo transient UI decoration so it doesn't count as a change.
-  function clean(container) {
-    container.querySelectorAll(".mdv-flash").forEach(function (n) {
-      n.classList.remove("mdv-flash");
-      if (!n.getAttribute("class")) n.removeAttribute("class");
-    });
+  function parse(html) {
+    var tpl = document.createElement("template");
+    tpl.innerHTML = html;
+    return Array.prototype.slice.call(tpl.content.children);
   }
 
-  // Folding a callout is the reader's choice, not a change to the document:
-  // compare with the folds as rendered, then put the reader's back.
+  // Draw diagrams and math (and add copy buttons) in new content.
+  function enhance(container) {
+    return Promise.all((window.mdvEnhancers || []).map(function (render) {
+      return render(container);
+    }));
+  }
+
+  // Folding a callout is the reader's choice, not a change to the
+  // document: keep it across updates (see ui.js setFold).
   function saveFolds(container) {
     var saved = [];
     container.querySelectorAll(".callout").forEach(function (c, i) {
@@ -53,33 +57,97 @@
     });
   }
 
-  events.addEventListener("update", function (e) {
-    var version = ++latest;
+  // Undo transient UI decoration so it doesn't count as a change.
+  function clean(container) {
+    container.querySelectorAll(".mdv-flash, [class*='mdv-git-']").forEach(function (n) {
+      n.classList.remove("mdv-flash", "mdv-git-added", "mdv-git-modified", "mdv-git-deleted");
+      if (!n.getAttribute("class")) n.removeAttribute("class");
+    });
+  }
+
+  // Copy source positions from fresh markup onto an unchanged block (and
+  // its descendants), so click-to-source stays accurate below an edit.
+  function syncPositions(onPage, fresh) {
+    var a = [onPage].concat(Array.prototype.slice.call(onPage.querySelectorAll("[data-sourcepos]")))
+      .filter(function (n) { return n.hasAttribute("data-sourcepos"); });
+    var b = [fresh].concat(Array.prototype.slice.call(fresh.querySelectorAll("[data-sourcepos]")))
+      .filter(function (n) { return n.hasAttribute("data-sourcepos"); });
+    if (a.length !== b.length) return;
+    for (var i = 0; i < a.length; i++) a[i].setAttribute("data-sourcepos", b[i].getAttribute("data-sourcepos"));
+  }
+
+  // The first update after connecting: the page already shows this content
+  // (unless the file changed in between), so just remember it, replacing
+  // the page only if it differs, and never jump to a "change".
+  function firstSync(blocks, version) {
     var next = document.createElement("div");
-    next.innerHTML = e.data;
-    // Draw diagrams and math off-screen first; only the newest update is applied.
-    var ready = Promise.all((window.mdvEnhancers || []).map(function (render) {
-      return render(next);
-    }));
-    // Also wait for the page's own first render (diagrams, math), or a
+    blocks.forEach(function (b) { next.appendChild(b.cloneNode(true)); });
+    // Wait for the page's own first render (diagrams, math) too, or a
     // half-drawn page would compare as changed.
-    var initial = Promise.all(window.mdvInitial || []);
-    Promise.all([ready, initial]).catch(function (err) { console.error("markdown-viewer:", err); }).then(function () {
+    return Promise.all([enhance(next), Promise.all(window.mdvInitial || [])]).then(function () {
       if (version !== latest) return;
-      var firstSync = !synced;
-      synced = true;
+      lastKeys = blocks.map(key);
       var folds = saveFolds(body);
       clean(body);
-      var changedAt = firstChange(body, next);
-      if (changedAt === -1) { restoreFolds(body, folds); return; }
+      var same = body.children.length === next.children.length &&
+        Array.prototype.every.call(body.children, function (c, i) { return c.isEqualNode(next.children[i]); });
+      if (!same) body.replaceChildren.apply(body, Array.prototype.slice.call(next.childNodes));
+      restoreFolds(body, folds);
+      document.dispatchEvent(new CustomEvent("mdv:updated", { detail: { changed: null } }));
+    });
+  }
+
+  function update(blocks, version) {
+    var keys = blocks.map(key);
+    var oldN = lastKeys.length, newN = keys.length;
+    var head = 0;
+    while (head < oldN && head < newN && lastKeys[head] === keys[head]) head++;
+    var tail = 0;
+    while (tail < oldN - head && tail < newN - head && lastKeys[oldN - 1 - tail] === keys[newN - 1 - tail]) tail++;
+    var fresh = document.createElement("div");
+    blocks.slice(head, newN - tail).forEach(function (b) { fresh.appendChild(b); });
+    return enhance(fresh).then(function () {
+      if (version !== latest) return;
+      if (body.children.length !== oldN) {
+        // The page and our record disagree (shouldn't happen): resync.
+        lastKeys = null;
+        return firstSync(blocks, version);
+      }
+      var folds = saveFolds(body);
       var x = window.scrollX, y = window.scrollY;
-      body.replaceChildren.apply(body, Array.prototype.slice.call(next.childNodes));
+      var after = body.children[oldN - tail] || null;
+      for (var i = oldN - tail - 1; i >= head; i--) body.children[i].remove();
+      Array.prototype.slice.call(fresh.children).forEach(function (n) { body.insertBefore(n, after); });
+      // Unchanged blocks below the edit: refresh their source positions.
+      for (var t = 0; t < tail; t++) {
+        syncPositions(body.children[newN - tail + t], blocks[newN - tail + t]);
+      }
       restoreFolds(body, folds);
       window.scrollTo(x, y);
+      lastKeys = keys;
+      var moved = head === oldN && head === newN;
       document.dispatchEvent(new CustomEvent("mdv:updated", {
-        detail: { changed: firstSync ? null : body.children[changedAt] || null },
+        detail: { changed: moved ? null : body.children[head] || body.lastElementChild },
       }));
     });
+  }
+
+  events.addEventListener("update", function (e) {
+    var version = ++latest;
+    var blocks = parse(e.data);
+    var run = lastKeys === null ? firstSync(blocks, version) : update(blocks, version);
+    run.catch(function (err) { console.error("markdown-viewer:", err); });
+  });
+
+  // `markdown-viewer --goto file:line`: show that line, opening the
+  // document first if this page shows another one.
+  events.addEventListener("goto", function (e) {
+    var msg = JSON.parse(e.data);
+    if (msg.doc === doc) {
+      document.dispatchEvent(new CustomEvent("mdv:goto", { detail: { line: msg.line } }));
+    } else {
+      location.href = "/" + msg.doc.split("/").map(encodeURIComponent).join("/") + "#mdv-line-" + msg.line;
+    }
   });
 
   events.addEventListener("close", function () {

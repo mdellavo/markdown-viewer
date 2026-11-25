@@ -60,6 +60,7 @@ impl Docs {
             }
         })
         .context("failed to start file watcher")?;
+        let vault = renderer.options().obsidian;
         let docs = Arc::new(Self {
             root,
             renderer,
@@ -67,6 +68,15 @@ impl Docs {
             watched: Mutex::default(),
             debouncer: Mutex::new(debouncer),
         });
+        // In a vault, pages depend on other notes (embeds, backlinks), so
+        // watch all of it.
+        if vault {
+            docs.debouncer
+                .lock()
+                .unwrap()
+                .watch(&docs.root, RecursiveMode::Recursive)
+                .with_context(|| format!("failed to watch {}", docs.root.display()))?;
+        }
         let weak = Arc::downgrade(&docs);
         tokio::spawn(async move {
             while let Some(paths) = rx.recv().await {
@@ -116,6 +126,11 @@ impl Docs {
     /// Re-render every tracked document affected by these changed paths: a
     /// file itself, or the folder it's in (for listings).
     fn changed(&self, paths: &[PathBuf]) {
+        // In a vault, any note can change what another page shows.
+        if self.renderer.options().obsidian && paths.iter().any(|p| is_markdown(p)) {
+            let all: Vec<PathBuf> = self.channels.lock().unwrap().keys().cloned().collect();
+            return self.refresh(all);
+        }
         let mut affected = HashSet::new();
         for path in paths {
             let Some(parent) = path.parent().and_then(|p| p.canonicalize().ok()) else {
@@ -126,8 +141,13 @@ impl Docs {
             }
             affected.insert(parent);
         }
+        self.refresh(affected);
+    }
+
+    /// Re-render these documents (those being viewed) and push changes.
+    fn refresh(&self, docs: impl IntoIterator<Item = PathBuf>) {
         let channels = self.channels.lock().unwrap();
-        for doc in affected {
+        for doc in docs {
             let Some(tx) = channels.get(&doc) else {
                 continue;
             };
@@ -167,6 +187,7 @@ impl Docs {
             dir,
             files: &files,
             served: true,
+            depth: 0,
         };
         self.renderer.render_doc(text, Some(&ctx))
     }
@@ -188,6 +209,19 @@ impl Docs {
                 changed
             });
         }
+    }
+
+    /// Lines in other files that link to `doc` (wiki or Markdown links).
+    pub fn backlinks(&self, doc: &Path) -> Vec<Hit> {
+        let Ok(rel) = doc.strip_prefix(&self.root) else {
+            return Vec::new();
+        };
+        let rel = rel.to_string_lossy().replace('\\', "/");
+        let (files, _) = self.list_files();
+        crate::obsidian::backlinks(&self.root, &files, &rel)
+            .into_iter()
+            .map(|(file, line, text)| Hit { file, line, text })
+            .collect()
     }
 
     /// Case-insensitive text search across the Markdown files.
