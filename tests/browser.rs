@@ -92,19 +92,29 @@ fn theme_contents_help_and_copy_buttons() {
         "the diagram",
     );
 
-    let before = js(
-        &tab,
-        "return document.querySelector('div.mermaid svg').outerHTML.length;",
-    );
+    // auto -> light, then light -> dark: the second switch must redraw the
+    // diagram whatever the machine's own light/dark setting is (auto may
+    // already look like light).
     press(&tab, "t");
     until(
         &tab,
         "document.documentElement.dataset.mdvTheme === 'light'",
         "light theme",
     );
+    std::thread::sleep(Duration::from_millis(500));
+    let light = js(
+        &tab,
+        "return document.querySelector('div.mermaid svg').outerHTML.length;",
+    );
+    press(&tab, "t");
     until(
         &tab,
-        &format!("document.querySelector('div.mermaid svg').outerHTML.length !== {before}"),
+        "document.documentElement.dataset.mdvTheme === 'dark'",
+        "dark theme",
+    );
+    until(
+        &tab,
+        &format!("document.querySelector('div.mermaid svg').outerHTML.length !== {light}"),
         "the diagram to redraw",
     );
 
@@ -192,7 +202,12 @@ fn file_finder_and_text_search() {
         "document.querySelector('.mdv-filter').value = ''; return 0;",
     );
     tab.type_str("frobnicator").unwrap();
-    until(&tab, "document.querySelector('a.mdv-hit')", "a text match");
+    // Wait for this query's results, not the previous query's.
+    until(
+        &tab,
+        "[...document.querySelectorAll('a.mdv-hit')].some(a => a.textContent.includes('frobnicator'))",
+        "a text match",
+    );
     let href = js(
         &tab,
         "return document.querySelector('a.mdv-hit').getAttribute('href');",
