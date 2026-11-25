@@ -6,6 +6,34 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-25
+
+### Added
+
+- Viewer toolbar and keyboard shortcuts (press `?`): switch theme with `t`
+  (auto, light, dark) without reloading. Diagrams redraw to match.
+- Keyboard navigation: `j`/`k`, `d`/`u`, `g`/`G`, and `n`/`p` for headings.
+- Contents sidebar (`o`) that follows your place as you scroll.
+- Folder mode: `markdown-viewer folder/` (or no argument) shows the folder's
+  README or a file listing, and every Markdown file opened from it is live.
+  A file list with a filter (`f`) in the sidebar.
+- Live updates scroll to the first change and briefly highlight it.
+- GitHub details: alert icons, the heading link icon, a copy button on code
+  blocks, and `#gh-dark-mode-only` / `#gh-light-mode-only` images.
+- Word count and reading time in the toolbar.
+- `--pdf PATH` writes a PDF through a Chromium-based browser, and a print
+  layout for printing from the browser.
+- `--style github|wide|book|compact` and `--css PATH`.
+- A settings file, `~/.config/markdown-viewer/config.toml`, for default
+  options.
+- The theme and sidebar you choose in the viewer are remembered between runs.
+- README screenshots, in light and dark.
+
+### Changed
+
+- `--port` and `--exit-when-closed` no longer require `--watch` when serving
+  a folder.
+
 ## [0.2.0] - 2026-11-25
 
 ### Added
@@ -52,6 +80,7 @@ and this project uses [Semantic Versioning](https://semver.org/).
 - Stopping `--watch` with Ctrl-C closes the window markdown-viewer opened.
   Tabs, and pages opened by hand, stay open with a "stopped" banner.
 
-[Unreleased]: https://github.com/mdellavo/markdown-viewer/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mdellavo/markdown-viewer/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mdellavo/markdown-viewer/releases/tag/v0.1.0
