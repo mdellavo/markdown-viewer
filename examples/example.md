@@ -1,6 +1,6 @@
 ---
 title: markdown-viewer feature tour
-description: YAML front matter like this is hidden from the rendered page.
+description: YAML front matter is shown as a table, like on GitHub.
 ---
 
 <p align="center"><img src="images/logo.svg" alt="Markdown logo" width="120"></p>

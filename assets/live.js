@@ -8,6 +8,9 @@
   var doc = (script && script.dataset.doc) || "";
   var body = document.querySelector(".markdown-body");
   var latest = 0;
+  // The first update just syncs with the server (the page already shows
+  // that content), so it never jumps to a "change".
+  var synced = false;
   var events = new EventSource("/__mdv/events?doc=" + encodeURIComponent(doc));
 
   // Index of the first top-level block that differs, or -1 if none.
@@ -27,6 +30,29 @@
     });
   }
 
+  // Folding a callout is the reader's choice, not a change to the document:
+  // compare with the folds as rendered, then put the reader's back.
+  function saveFolds(container) {
+    var saved = [];
+    container.querySelectorAll(".callout").forEach(function (c, i) {
+      var orig = c.getAttribute("data-mdv-fold-orig");
+      if (orig === null) return;
+      saved.push([i, c.getAttribute("data-callout-fold")]);
+      c.setAttribute("data-callout-fold", orig);
+      c.removeAttribute("data-mdv-fold-orig");
+    });
+    return saved;
+  }
+  function restoreFolds(container, saved) {
+    var callouts = container.querySelectorAll(".callout");
+    saved.forEach(function (s) {
+      var c = callouts[s[0]];
+      if (!c) return;
+      c.setAttribute("data-mdv-fold-orig", c.getAttribute("data-callout-fold"));
+      c.setAttribute("data-callout-fold", s[1]);
+    });
+  }
+
   events.addEventListener("update", function (e) {
     var version = ++latest;
     var next = document.createElement("div");
@@ -35,16 +61,23 @@
     var ready = Promise.all((window.mdvEnhancers || []).map(function (render) {
       return render(next);
     }));
-    ready.catch(function (err) { console.error("markdown-viewer:", err); }).then(function () {
+    // Also wait for the page's own first render (diagrams, math), or a
+    // half-drawn page would compare as changed.
+    var initial = Promise.all(window.mdvInitial || []);
+    Promise.all([ready, initial]).catch(function (err) { console.error("markdown-viewer:", err); }).then(function () {
       if (version !== latest) return;
+      var firstSync = !synced;
+      synced = true;
+      var folds = saveFolds(body);
       clean(body);
       var changedAt = firstChange(body, next);
-      if (changedAt === -1) return;
+      if (changedAt === -1) { restoreFolds(body, folds); return; }
       var x = window.scrollX, y = window.scrollY;
       body.replaceChildren.apply(body, Array.prototype.slice.call(next.childNodes));
+      restoreFolds(body, folds);
       window.scrollTo(x, y);
       document.dispatchEvent(new CustomEvent("mdv:updated", {
-        detail: { changed: body.children[changedAt] || null },
+        detail: { changed: firstSync ? null : body.children[changedAt] || null },
       }));
     });
   });

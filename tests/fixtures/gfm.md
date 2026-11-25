@@ -1,5 +1,5 @@
 ---
-title: front matter is hidden
+title: front matter is shown as a table
 ---
 # GitHub Flavored Markdown sample
 

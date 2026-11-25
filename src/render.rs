@@ -22,7 +22,7 @@ pub const MERMAID_VERSION: &str = include_str!("../assets/MERMAID_VERSION");
 /// Where the server exposes mermaid.min.js.
 pub const MERMAID_PATH: &str = "/__mdv/mermaid.js";
 /// What a rendered ```mermaid block starts with.
-const MERMAID_MARKER: &str = "<pre class=\"mermaid\">";
+const MERMAID_MARKER: &str = "<pre class=\"mermaid\"";
 
 const MATH_INIT_JS: &str = include_str!("../assets/math-init.js");
 pub const KATEX_JS: &str = include_str!("../assets/katex/katex.min.js");
@@ -51,9 +51,13 @@ pub struct PageOptions {
     pub doc: Option<String>,
     /// Sidebar to show initially: "contents", "files", or none.
     pub sidebar: Option<String>,
+    /// Source line to scroll back to (the remembered reading position).
+    pub resume_line: Option<u32>,
     /// The theme was given with `--theme`; a standalone page shouldn't
     /// replace it with one remembered in the browser.
     pub fixed_theme: bool,
+    /// Number headings (1, 1.1, 1.2, …).
+    pub number_headings: bool,
     /// The page is served by our HTTP server, so it can load extra
     /// resources (mermaid.js) from it instead of inlining them.
     pub served: bool,
@@ -71,13 +75,38 @@ pub struct PageOptions {
 /// expensive, so create one and keep it around.
 pub struct Renderer {
     options: Options<'static>,
+    render: RenderOptions,
     highlighter: SyntectAdapter,
     mermaid: MermaidAdapter,
 }
 
+/// How to treat YAML front matter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, clap::ValueEnum, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FrontMatter {
+    /// Show it as a table, like GitHub.
+    #[default]
+    Table,
+    /// Leave it out.
+    Hide,
+}
+
+/// Options that change the rendered HTML itself.
+#[derive(Debug, Clone, Default)]
+pub struct RenderOptions {
+    /// Tag elements with their source lines (`data-sourcepos`), for
+    /// click-to-source and reading positions. Served pages only.
+    pub sourcepos: bool,
+    /// Obsidian notes: wiki links, embeds, callouts, highlights, comments.
+    pub obsidian: bool,
+    pub front_matter: FrontMatter,
+}
+
 /// Turns ```mermaid fences into `<pre class="mermaid">` blocks for
 /// mermaid.js to draw in the browser (as GitHub does).
-struct MermaidAdapter;
+struct MermaidAdapter {
+    sourcepos: bool,
+}
 
 impl CodefenceRendererAdapter for MermaidAdapter {
     fn write(
@@ -85,7 +114,15 @@ impl CodefenceRendererAdapter for MermaidAdapter {
         output: &mut dyn std::fmt::Write,
         fence: &CodefenceMeta<'_>,
     ) -> std::fmt::Result {
-        writeln!(output, "{MERMAID_MARKER}{}</pre>", escape_text(fence.code))
+        let pos = match (self.sourcepos, fence.sourcepos) {
+            (true, Some(sp)) => format!(" data-sourcepos=\"{sp}\""),
+            _ => String::new(),
+        };
+        writeln!(
+            output,
+            "<pre class=\"mermaid\"{pos}>{}</pre>",
+            escape_text(fence.code)
+        )
     }
 }
 
@@ -97,6 +134,10 @@ impl Default for Renderer {
 
 impl Renderer {
     pub fn new() -> Self {
+        Self::with_options(RenderOptions::default())
+    }
+
+    pub fn with_options(render: RenderOptions) -> Self {
         let mut options = Options::default();
         let ext = &mut options.extension;
         ext.strikethrough = true;
@@ -118,6 +159,16 @@ impl Renderer {
         // Raw HTML (e.g. `<p align="center"><img …></p>`) is common in READMEs.
         // Scripts are neutralised by the page's Content-Security-Policy instead.
         options.render.r#unsafe = true;
+        options.render.sourcepos = render.sourcepos;
+        if render.obsidian {
+            let ext = &mut options.extension;
+            ext.ofm_callouts = true;
+            ext.wikilinks_title_after_pipe = true;
+            // Embeds stay as text; obsidian.rs turns them into images.
+            ext.wikilinks_ignore_embeds = true;
+            ext.ofm_comments = true;
+            ext.highlight = true;
+        }
 
         let highlighter = SyntectAdapterBuilder::new()
             .css_with_class_prefix(HL_PREFIX)
@@ -125,27 +176,58 @@ impl Renderer {
 
         Self {
             options,
+            mermaid: MermaidAdapter {
+                sourcepos: render.sourcepos,
+            },
+            render,
             highlighter,
-            mermaid: MermaidAdapter,
         }
+    }
+
+    pub fn options(&self) -> &RenderOptions {
+        &self.render
     }
 
     /// Render Markdown to an HTML fragment (the contents of `.markdown-body`).
     pub fn render_body(&self, markdown: &str) -> String {
+        self.render_doc(markdown, None)
+    }
+
+    /// Render a document, resolving Obsidian links relative to `links`.
+    pub fn render_doc(
+        &self,
+        markdown: &str,
+        links: Option<&crate::obsidian::LinkContext>,
+    ) -> String {
         let mut plugins = Plugins::default();
         plugins.render.codefence_syntax_highlighter = Some(&self.highlighter);
         plugins
             .render
             .codefence_renderers
             .insert("mermaid".into(), &self.mermaid);
-        crate::github::finish(markdown_to_html_with_plugins(
+        let mut html = crate::github::finish(markdown_to_html_with_plugins(
             markdown,
             &self.options,
             &plugins,
-        ))
+        ));
+        if self.render.obsidian
+            && let Some(ctx) = links
+        {
+            html = crate::obsidian::finish(html, ctx);
+        }
+        if self.render.front_matter == FrontMatter::Table
+            && let Some((yaml, end)) = crate::frontmatter::extract(markdown)
+        {
+            html.insert_str(
+                0,
+                &crate::frontmatter::table(yaml, end, self.render.sourcepos),
+            );
+        }
+        html
     }
 
     /// Render Markdown to a complete, self-contained HTML document.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn render_page(&self, markdown: &str, page: &PageOptions) -> String {
         self.wrap_page(&self.render_body(markdown), page)
     }
@@ -155,15 +237,25 @@ impl Renderer {
         let nonce = nonce();
         let mut out = String::with_capacity(body.len() + 64 * 1024);
         let theme = page.theme.as_str();
+        let sidebar = escape_attr(page.sidebar.as_deref().unwrap_or(""));
+        let fixed = if page.fixed_theme {
+            " data-mdv-fixed-theme"
+        } else {
+            ""
+        };
+        let resume = page
+            .resume_line
+            .map(|l| format!(" data-mdv-resume=\"{l}\""))
+            .unwrap_or_default();
+        let numbering = match (page.number_headings, body.matches("<h1").count()) {
+            (false, _) => "",
+            // A single h1 is the title; number from h2 down.
+            (true, 0 | 1) => " data-mdv-number=\"h2\"",
+            (true, _) => " data-mdv-number=\"h1\"",
+        };
         let _ = write!(
             out,
-            "<!DOCTYPE html>\n<html lang=\"en\" data-mdv-theme=\"{theme}\" data-mdv-sidebar=\"{}\"{}>\n<head>\n<meta charset=\"utf-8\">\n",
-            escape_attr(page.sidebar.as_deref().unwrap_or("")),
-            if page.fixed_theme {
-                " data-mdv-fixed-theme"
-            } else {
-                ""
-            }
+            "<!DOCTYPE html>\n<html lang=\"en\" data-mdv-theme=\"{theme}\" data-mdv-sidebar=\"{sidebar}\"{fixed}{resume}{numbering}>\n<head>\n<meta charset=\"utf-8\">\n"
         );
         out.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
         let _ = writeln!(

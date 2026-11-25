@@ -100,6 +100,8 @@ fn build_base_css() -> String {
     let dark = format!("html, .markdown-body {{\n{dark_vars}\n}}\n{hl_dark}{DARK_EXTRAS}");
     css.push_str(&themed(&light, &dark));
     css.push_str(LAYOUT);
+    css.push_str(CALLOUTS);
+    css.push_str(&numbering_css());
     // Print (and PDF) always in light colours, whatever the screen theme.
     css.push_str("@media print {\n");
     css.push_str(&scope_rules(&light, ":root[data-mdv-theme]"));
@@ -124,6 +126,62 @@ const LAYOUT: &str = "\nbody { margin: 0; }\n\
     .markdown-body pre.mermaid-error { border-left: 4px solid #d1242f; }\n\
     .markdown-body .math-display { overflow-x: auto; overflow-y: hidden; margin-bottom: 16px; }\n\
     .markdown-body .markdown-alert-title .octicon { margin-right: 8px; }\n";
+
+/// Obsidian callouts, styled like GitHub alerts. Folded ones start closed.
+const CALLOUTS: &str = "\
+.markdown-body .callout { --mdv-callout: var(--borderColor-accent-emphasis); \
+  padding: 8px 16px; margin-bottom: 16px; border-left: .25em solid var(--mdv-callout); }\n\
+.markdown-body .callout-title { color: var(--mdv-callout); font-weight: 500; margin-bottom: 4px; }\n\
+.markdown-body .callout[data-callout-fold=\"collapsed\"] .callout-content { display: none; }\n\
+.markdown-body .callout:not([data-callout-fold=\"none\"]) .callout-title { cursor: pointer; }\n\
+.markdown-body .callout:not([data-callout-fold=\"none\"]) .callout-title::after { content: \" ▾\"; }\n\
+.markdown-body .callout[data-callout-fold=\"collapsed\"] .callout-title::after { content: \" ▸\"; }\n\
+.markdown-body .callout-content > :last-child { margin-bottom: 0; }\n\
+.markdown-body .callout:is([data-callout=\"tip\"], [data-callout=\"hint\"], [data-callout=\"success\"], \
+  [data-callout=\"check\"], [data-callout=\"done\"]) { --mdv-callout: var(--borderColor-success-emphasis); }\n\
+.markdown-body .callout:is([data-callout=\"important\"], [data-callout=\"example\"], \
+  [data-callout=\"abstract\"], [data-callout=\"summary\"], [data-callout=\"tldr\"]) \
+  { --mdv-callout: var(--borderColor-done-emphasis); }\n\
+.markdown-body .callout:is([data-callout=\"warning\"], [data-callout=\"caution\"], \
+  [data-callout=\"attention\"], [data-callout=\"question\"], [data-callout=\"help\"], \
+  [data-callout=\"faq\"]) { --mdv-callout: var(--borderColor-attention-emphasis); }\n\
+.markdown-body .callout:is([data-callout=\"failure\"], [data-callout=\"fail\"], [data-callout=\"missing\"], \
+  [data-callout=\"danger\"], [data-callout=\"error\"], [data-callout=\"bug\"]) \
+  { --mdv-callout: var(--borderColor-danger-emphasis); }\n\
+.markdown-body .callout:is([data-callout=\"quote\"], [data-callout=\"cite\"]) \
+  { --mdv-callout: var(--borderColor-default); }\n\
+.markdown-body .mdv-wikilink-missing { opacity: .65; text-decoration: underline dashed; }\n\
+.markdown-body .mdv-front-matter { margin-bottom: 16px; overflow-x: auto; }\n\
+.markdown-body .mdv-front-matter table { margin-bottom: 0; }\n\
+.markdown-body .mdv-front-matter-error pre { border-left: 4px solid #d1242f; }\n";
+
+/// CSS counters for `data-mdv-number="h1"` (number from h1) or `"h2"`
+/// (a single h1 is the title). Four levels deep.
+fn numbering_css() -> String {
+    let mut css = String::new();
+    for top in [1usize, 2] {
+        let root = format!(":root[data-mdv-number=\"h{top}\"] .markdown-body");
+        css.push_str(&format!("{root} {{ counter-reset: mdv-h{top}; }}\n"));
+        let levels: Vec<usize> = (top..top + 4).filter(|l| *l <= 6).collect();
+        for (i, level) in levels.iter().enumerate() {
+            let next = levels.get(i + 1);
+            let reset = next
+                .map(|n| format!(" counter-reset: mdv-h{n};"))
+                .unwrap_or_default();
+            let content: Vec<String> = levels[..=i]
+                .iter()
+                .map(|l| format!("counter(mdv-h{l})"))
+                .collect();
+            css.push_str(&format!(
+                "{root} h{level} {{{reset} }}\n\
+                 {root} h{level}::before {{ counter-increment: mdv-h{level}; \
+                 content: {} \". \"; }}\n",
+                content.join(" \".\" ")
+            ));
+        }
+    }
+    css
+}
 
 /// Print layout: full width, no UI, and no page breaks inside blocks.
 const PRINT: &str = "@page { margin: 16mm 14mm; }\n\
@@ -291,6 +349,20 @@ mod tests {
         }
         assert!(css.contains(":root[data-mdv-theme=\"dark\"] { background: #0d1117; }"));
         assert!(css.contains("img[src$=\"#gh-dark-mode-only\"] { display: none; }"));
+    }
+
+    #[test]
+    fn numbering_counts_four_levels() {
+        let css = numbering_css();
+        assert!(css.contains(":root[data-mdv-number=\"h2\"] .markdown-body h2::before"));
+        assert!(
+            css.contains("content: counter(mdv-h2) \".\" counter(mdv-h3) \". \""),
+            "{css}"
+        );
+        assert!(
+            !css.contains("h2\"] .markdown-body h6::before"),
+            "only four levels"
+        );
     }
 
     #[test]

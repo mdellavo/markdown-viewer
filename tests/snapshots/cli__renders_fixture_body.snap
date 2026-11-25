@@ -1,9 +1,9 @@
 ---
 source: tests/cli.rs
-assertion_line: 26
 expression: "&html[start..end]"
 ---
 <article class="markdown-body">
+<div class="mdv-front-matter" ><table><thead><tr><th>title</th></tr></thead><tbody><tr><td><div>front matter is shown as a table</div></td></tr></tbody></table></div>
 <h1 id="github-flavored-markdown-sample">GitHub Flavored Markdown sample<a href="#github-flavored-markdown-sample" aria-label="Link to heading 'GitHub Flavored Markdown sample'" data-heading-content="GitHub Flavored Markdown sample" class="anchor"><span class="octicon octicon-link" aria-hidden="true"></span></a></h1>
 <p>Text with <strong>bold</strong>, <em>italic</em>, <del>strikethrough</del>, <code>code</code>, and a link to
 <a href="https://github.com">https://github.com</a> plus an emoji 🚀.</p>

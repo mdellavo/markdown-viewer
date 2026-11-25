@@ -1,5 +1,5 @@
 [package]
-name = "markdown-viewer"
+name = "markdown-viewer-rs"
 version = "0.3.0"
 edition = "2024"
 rust-version = "1.91"
@@ -11,10 +11,51 @@ keywords = ["markdown", "preview", "github", "live-reload", "viewer"]
 categories = ["command-line-utilities", "text-processing"]
 exclude = ["/.github", "/packaging", "/tests", "/docs"]
 
+# The crate is markdown-viewer-rs on crates.io (markdown-viewer was taken);
+# the command it installs is markdown-viewer.
+[[bin]]
+name = "markdown-viewer"
+path = "src/main.rs"
+
+# Linux packages, built by the release workflow (cargo-deb, cargo-generate-rpm).
+[package.metadata.deb]
+name = "markdown-viewer"
+maintainer = "Marc DellaVolpe"
+section = "text"
+extended-description = "Renders Markdown with GitHub styling (including Mermaid diagrams and math) and shows it in your browser, live-reloading as you edit."
+assets = [
+    ["target/release/markdown-viewer", "usr/bin/", "755"],
+    ["README.md", "usr/share/doc/markdown-viewer/", "644"],
+    ["CHANGELOG.md", "usr/share/doc/markdown-viewer/", "644"],
+    ["completions/markdown-viewer.bash", "usr/share/bash-completion/completions/markdown-viewer", "644"],
+    ["completions/_markdown-viewer", "usr/share/zsh/vendor-completions/", "644"],
+    ["completions/markdown-viewer.fish", "usr/share/fish/vendor_completions.d/", "644"],
+    ["man/markdown-viewer.1", "usr/share/man/man1/", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "markdown-viewer"
+assets = [
+    { source = "target/release/markdown-viewer", dest = "/usr/bin/markdown-viewer", mode = "755" },
+    { source = "README.md", dest = "/usr/share/doc/markdown-viewer/README.md", mode = "644", doc = true },
+    { source = "LICENSE", dest = "/usr/share/licenses/markdown-viewer/LICENSE", mode = "644" },
+    { source = "completions/markdown-viewer.bash", dest = "/usr/share/bash-completion/completions/markdown-viewer", mode = "644" },
+    { source = "completions/_markdown-viewer", dest = "/usr/share/zsh/site-functions/_markdown-viewer", mode = "644" },
+    { source = "completions/markdown-viewer.fish", dest = "/usr/share/fish/vendor_completions.d/markdown-viewer.fish", mode = "644" },
+    { source = "man/markdown-viewer.1", dest = "/usr/share/man/man1/markdown-viewer.1", mode = "644" },
+]
+
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/markdown-viewer-{ target }.tar.gz"
+bin-dir = "markdown-viewer-{ target }/{ bin }{ binary-ext }"
+pkg-fmt = "tgz"
+
 [dependencies]
 anyhow = "1.0.105"
 axum = "0.8.9"
 clap = { version = "4.6.10", features = ["derive"] }
+clap_complete = "4.6.12"
+clap_mangen = "0.3.4"
 comrak = { version = "1.2.0", default-features = false, features = ["shortcodes", "syntect-fancy"] }
 flate2 = "1.1.11"
 mime_guess = "2.0.5"
@@ -28,8 +69,10 @@ tempfile = "3.27.0"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "sync", "net", "signal", "fs", "time"] }
 tokio-stream = { version = "0.1.19", features = ["sync"] }
 toml = "1.2.3"
+yaml-rust2 = "0.13.2"
 
 [dev-dependencies]
+headless_chrome = "1.0.22"
 insta = "1.49.0"
 serde_json = "1.0.154"
 tempfile = "3.27.0"

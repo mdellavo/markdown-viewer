@@ -32,26 +32,51 @@ const ALERT_ICONS: [(&str, &str, &str); 5] = [
     ),
 ];
 
-/// `(opening tags to find, replacement with the icon)` for each alert type.
-fn alert_replacements() -> &'static [(String, String)] {
+/// `(class marking an alert of this kind, its icon's SVG)` for each type.
+fn alert_icons() -> &'static [(String, String)] {
     static R: OnceLock<Vec<(String, String)>> = OnceLock::new();
     R.get_or_init(|| {
         ALERT_ICONS
             .iter()
             .map(|(kind, icon, svg)| {
                 let path = svg_path(svg);
-                let find = format!(
-                    "<div class=\"markdown-alert markdown-alert-{kind}\">\n<p class=\"markdown-alert-title\">"
-                );
-                let replace = format!(
-                    "<div class=\"markdown-alert markdown-alert-{kind}\">\n<p class=\"markdown-alert-title\">\
-                     <svg class=\"octicon octicon-{icon}\" viewBox=\"0 0 16 16\" width=\"16\" height=\"16\" \
-                     aria-hidden=\"true\"><path d=\"{path}\"></path></svg>"
-                );
-                (find, replace)
+                (
+                    format!("\"markdown-alert markdown-alert-{kind}\""),
+                    format!(
+                        "<svg class=\"octicon octicon-{icon}\" viewBox=\"0 0 16 16\" width=\"16\" \
+                         height=\"16\" aria-hidden=\"true\"><path d=\"{path}\"></path></svg>"
+                    ),
+                )
             })
             .collect()
     })
+}
+
+/// Put each alert's icon at the start of its title. The alert's tags may
+/// carry extra attributes (e.g. source positions), so find the title
+/// paragraph after each alert rather than matching exact text.
+fn add_alert_icons(html: &str) -> String {
+    let mut out = String::with_capacity(html.len() + 4096);
+    let mut rest = html;
+    loop {
+        let next = alert_icons()
+            .iter()
+            .filter_map(|(marker, svg)| rest.find(marker.as_str()).map(|at| (at, svg)))
+            .min_by_key(|(at, _)| *at);
+        let Some((at, svg)) = next else { break };
+        let Some(title) = rest[at..].find("class=\"markdown-alert-title\"") else {
+            break;
+        };
+        let Some(close) = rest[at + title..].find('>') else {
+            break;
+        };
+        let insert_at = at + title + close + 1;
+        out.push_str(&rest[..insert_at]);
+        out.push_str(svg);
+        rest = &rest[insert_at..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// The `d` attribute of a single-path octicon SVG.
@@ -65,11 +90,7 @@ fn svg_path(svg: &str) -> &str {
 pub fn finish(html: String) -> String {
     let mut html = html;
     if html.contains("markdown-alert-title") {
-        for (find, replace) in alert_replacements() {
-            if html.contains(find.as_str()) {
-                html = html.replace(find.as_str(), replace);
-            }
-        }
+        html = add_alert_icons(&html);
     }
     // GitHub's CSS draws the hover link icon on an `.octicon-link` inside
     // the heading's anchor; comrak's anchor is empty.
@@ -96,6 +117,23 @@ mod tests {
             assert!(out.contains(&format!("octicon-{icon}")), "{kind}: {out}");
             assert!(out.contains("<path d=\"M"), "{kind}: {out}");
         }
+    }
+
+    #[test]
+    fn alert_icons_survive_extra_attributes() {
+        let html = "<div class=\"markdown-alert markdown-alert-tip\" data-sourcepos=\"1:1-2:3\">\n\
+                    <p class=\"markdown-alert-title\">Tip</p>\n</div>\n\
+                    <div class=\"markdown-alert markdown-alert-note\">\n<p class=\"markdown-alert-title\">Note</p>\n</div>";
+        let out = finish(html.into());
+        assert!(
+            out.contains("markdown-alert-title\"><svg class=\"octicon octicon-light-bulb\""),
+            "{out}"
+        );
+        assert!(
+            out.contains("markdown-alert-title\"><svg class=\"octicon octicon-info\""),
+            "{out}"
+        );
+        assert_eq!(out.matches("<svg").count(), 2);
     }
 
     #[test]

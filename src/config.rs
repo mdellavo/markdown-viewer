@@ -1,13 +1,18 @@
 //! User settings (a TOML file of defaults for command-line options) and
 //! remembered viewer preferences (theme and sidebar, saved by the page).
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 
 use crate::browser::Mode;
+use crate::render::FrontMatter;
 use crate::theme::{Style, Theme};
+
+/// How many files' reading positions to remember.
+const MAX_POSITIONS: usize = 300;
 
 /// `~/.config/markdown-viewer/config.toml`. Every key is optional; command
 /// line options override them.
@@ -22,6 +27,14 @@ pub struct Config {
     pub open: Option<String>,
     pub browser: Option<String>,
     pub port: Option<u16>,
+    /// Editor for click-to-source, e.g. "zed" or "code -g {file}:{line}".
+    pub editor: Option<String>,
+    /// Front matter: "table" (like GitHub) or "hide".
+    pub front_matter: Option<FrontMatter>,
+    /// Number headings.
+    pub number_headings: Option<bool>,
+    /// Obsidian notes; by default, on inside a vault (a `.obsidian` folder).
+    pub obsidian: Option<bool>,
 }
 
 impl Config {
@@ -69,6 +82,17 @@ pub struct Prefs {
     /// "contents", "files", or empty for closed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sidebar: Option<String>,
+    /// Where you were reading, per file (absolute path → position).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub positions: BTreeMap<String, Position>,
+}
+
+/// A reading position: the source line of the block at the top of the
+/// window (robust to edits elsewhere), and when it was saved.
+#[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq)]
+pub struct Position {
+    pub line: u32,
+    pub at: u64,
 }
 
 impl Prefs {
@@ -89,6 +113,21 @@ impl Prefs {
             && matches!(sidebar.as_str(), "" | "contents" | "files")
         {
             self.sidebar = Some(sidebar);
+        }
+        for (file, pos) in update.positions {
+            self.positions.insert(file, pos);
+        }
+        // Forget the oldest positions beyond the limit.
+        while self.positions.len() > MAX_POSITIONS {
+            let oldest = self
+                .positions
+                .iter()
+                .min_by_key(|(_, p)| p.at)
+                .map(|(k, _)| k.clone());
+            match oldest {
+                Some(k) => self.positions.remove(&k),
+                None => break,
+            };
         }
     }
 
@@ -170,15 +209,34 @@ mod tests {
     }
 
     #[test]
+    fn positions_are_capped_dropping_the_oldest() {
+        let mut p = Prefs::default();
+        for i in 0..(MAX_POSITIONS as u64 + 5) {
+            let mut update = Prefs::default();
+            update
+                .positions
+                .insert(format!("/f{i}.md"), Position { line: 1, at: i });
+            p.merge(update);
+        }
+        assert_eq!(p.positions.len(), MAX_POSITIONS);
+        assert!(!p.positions.contains_key("/f0.md"), "oldest forgotten");
+        assert!(
+            p.positions
+                .contains_key(&format!("/f{}.md", MAX_POSITIONS + 4))
+        );
+    }
+
+    #[test]
     fn prefs_merge_ignores_invalid_sidebar() {
         let mut p = Prefs::default();
         p.merge(Prefs {
             theme: Some(Theme::Light),
             sidebar: Some("contents".into()),
+            ..Default::default()
         });
         p.merge(Prefs {
-            theme: None,
             sidebar: Some("evil".into()),
+            ..Default::default()
         });
         assert_eq!(p.theme, Some(Theme::Light));
         assert_eq!(p.sidebar.as_deref(), Some("contents"));

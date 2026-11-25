@@ -11,7 +11,9 @@
 
   // Standalone pages inline KaTeX; served pages fetch it on first use.
   function load() {
-    if (window.katex) return Promise.resolve();
+    // Check for the library itself: an element with id="katex" (e.g. a
+    // "KaTeX" heading) also shows up as window.katex.
+    if (window.katex && typeof window.katex.render === "function") return Promise.resolve();
     if (!jsSrc) return Promise.reject(new Error("KaTeX not available"));
     if (!loading) {
       loading = Promise.all([
@@ -44,6 +46,8 @@
         ? el.parentElement : el;
       var out = document.createElement(display ? "div" : "span");
       out.className = display ? "math math-display" : "math math-inline";
+      var pos = target.getAttribute("data-sourcepos") || el.getAttribute("data-sourcepos");
+      if (pos) out.setAttribute("data-sourcepos", pos);
       // throwOnError: false shows bad TeX in red instead of failing the page;
       // KaTeX's default trust: false keeps \href, \url etc. disabled.
       window.katex.render(el.textContent.trim(), out, {
@@ -55,7 +59,8 @@
   }
 
   (window.mdvEnhancers = window.mdvEnhancers || []).push(render);
-  render(document.querySelector(".markdown-body")).catch(function (e) {
+  // live.js waits for these before comparing updates with the page.
+  (window.mdvInitial = window.mdvInitial || []).push(render(document.querySelector(".markdown-body")).catch(function (e) {
     console.error("markdown-viewer:", e);
-  });
+  }));
 })();

@@ -105,3 +105,36 @@ html.mdv-sidebar-open .mdv-sidebar { transform: none; box-shadow: 0 0 24px rgba(
   to { background-color: transparent; box-shadow: 0 0 0 6px transparent; }
 }
 .markdown-body .mdv-flash { animation: mdv-flash 1.6s ease-out; border-radius: 4px; }
+
+/* Search results in the Files panel */
+.mdv-panel a.mdv-hit { white-space: normal; padding-top: 5px; padding-bottom: 5px; }
+.mdv-hit-file { display: block; font-size: 12px; color: var(--fgColor-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdv-hit-text { display: block; font-size: 12px; overflow-wrap: anywhere; }
+.mdv-hit mark { background: var(--bgColor-attention-muted); color: inherit; border-radius: 2px; }
+
+/* Image and diagram zoom */
+.markdown-body img:not(a img), .markdown-body div.mermaid { cursor: zoom-in; }
+.mdv-zoom { position: fixed; inset: 0; z-index: 45; background: rgba(0,0,0,.82); overflow: hidden; cursor: grab; }
+.mdv-zoom.mdv-dragging { cursor: grabbing; }
+.mdv-zoom-stage { position: absolute; left: 50%; top: 50%; transform-origin: 0 0; }
+.mdv-zoom-stage > img, .mdv-zoom-stage > svg {
+  display: block; max-width: 92vw; max-height: 92vh; border-radius: 6px;
+  background: var(--bgColor-default); box-shadow: 0 12px 48px rgba(0,0,0,.4);
+}
+.mdv-zoom-stage > svg { max-height: none; padding: 16px; }
+
+/* Presentation mode */
+.mdv-present {
+  position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column;
+  background: var(--bgColor-default);
+}
+.mdv-present .markdown-body.mdv-slide {
+  flex: 1; display: flex; flex-direction: column; overflow-y: auto;
+  /* "safe" keeps tall slides scrollable from their top. */
+  justify-content: safe center;
+  width: 100%; max-width: 1200px; margin: 0 auto; padding: 5vh 6vw;
+  font-size: clamp(18px, 2.1vw, 32px);
+}
+.mdv-present .mdv-slide-inner { flex-shrink: 0; }
+.mdv-present .mdv-slide h1, .mdv-present .mdv-slide h2 { border-bottom: none; }
+.mdv-present-bar { padding: 8px 18px; text-align: right; color: var(--fgColor-muted); font-variant-numeric: tabular-nums; }

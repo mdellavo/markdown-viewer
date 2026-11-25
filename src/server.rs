@@ -24,7 +24,7 @@ use tokio::sync::watch;
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::WatchStream;
 
-use crate::config::Prefs;
+use crate::config::{Position, Prefs};
 use crate::docs::{self, Docs};
 use crate::render::{
     KATEX_CSS, KATEX_CSS_PATH, KATEX_JS, KATEX_JS_PATH, MERMAID_JS_GZ, MERMAID_PATH, PageOptions,
@@ -34,6 +34,9 @@ use crate::render::{
 pub const EVENTS_PATH: &str = "/__mdv/events";
 const PREFS_PATH: &str = "/__mdv/prefs";
 const FILES_PATH: &str = "/__mdv/files";
+const SEARCH_PATH: &str = "/__mdv/search";
+const OPEN_PATH: &str = "/__mdv/open";
+const POSITION_PATH: &str = "/__mdv/position";
 
 /// What to serve and how.
 pub struct ServeOptions {
@@ -51,6 +54,11 @@ pub struct ServeOptions {
     pub prefs: Prefs,
     /// Save preference changes from the page to the state file.
     pub remember: bool,
+    /// Editor setting for click-to-source (see editor.rs).
+    pub editor: Option<String>,
+    /// What this server serves, reported at `/__mdv/whoami` so a second
+    /// launch for the same target can find it.
+    pub identity: String,
 }
 
 #[derive(Clone)]
@@ -62,6 +70,8 @@ struct AppState {
     custom_css: Option<PathBuf>,
     prefs: Arc<Mutex<Prefs>>,
     remember: bool,
+    editor: Option<String>,
+    identity: Arc<String>,
     port: u16,
     /// Flips to true when the server is shutting down.
     closing: watch::Receiver<bool>,
@@ -166,6 +176,8 @@ impl Server {
             custom_css: opts.custom_css,
             prefs: Arc::new(Mutex::new(opts.prefs)),
             remember: opts.remember,
+            editor: opts.editor,
+            identity: Arc::new(opts.identity),
             port: addr.port(),
             closing,
             close_on_exit,
@@ -176,6 +188,10 @@ impl Server {
             .route(EVENTS_PATH, get(events))
             .route(PREFS_PATH, post(save_prefs))
             .route(FILES_PATH, get(list_files))
+            .route(SEARCH_PATH, get(search))
+            .route(OPEN_PATH, post(open_in_editor))
+            .route(POSITION_PATH, post(save_position))
+            .route(crate::instances::WHOAMI_PATH, get(whoami))
             .route(MERMAID_PATH, get(mermaid_js))
             .route(KATEX_JS_PATH, get(katex_js))
             .route(KATEX_CSS_PATH, get(katex_css))
@@ -253,10 +269,15 @@ fn doc_page(state: &AppState, doc: &Path) -> Response {
         .custom_css
         .as_ref()
         .and_then(|p| std::fs::read_to_string(p).ok());
+    let resume_line = prefs
+        .positions
+        .get(doc.to_string_lossy().as_ref())
+        .map(|p| p.line);
     let page = PageOptions {
         title: file_title(doc),
         theme: prefs.theme.unwrap_or(state.page.theme),
         sidebar: prefs.sidebar,
+        resume_line,
         doc: Some(rel_path(state.docs.root(), doc)),
         close_on_exit: state.close_on_exit.load(Ordering::Relaxed),
         custom_css: custom_css.or_else(|| state.page.custom_css.clone()),
@@ -272,7 +293,7 @@ struct EventsQuery {
 }
 
 async fn events(State(state): State<AppState>, Query(q): Query<EventsQuery>) -> Response {
-    let doc = if q.doc.is_empty() {
+    let doc = if q.doc.is_empty() || is_main(&state, &q.doc) {
         match &state.main {
             Some(main) => Some(main.clone()),
             None => {
@@ -319,6 +340,16 @@ async fn save_prefs(
     if headers.get("x-mdv").is_none() {
         return StatusCode::FORBIDDEN;
     }
+    // Positions have their own endpoint, which checks the file.
+    let update = Prefs {
+        positions: Default::default(),
+        ..update
+    };
+    remember(&state, update).await;
+    StatusCode::NO_CONTENT
+}
+
+async fn remember(state: &AppState, update: Prefs) {
     state.prefs.lock().unwrap().merge(update.clone());
     if state.remember {
         let _ = tokio::task::spawn_blocking(move || {
@@ -328,7 +359,97 @@ async fn save_prefs(
         })
         .await;
     }
+}
+
+/// A document reference from the page: its path relative to the root
+/// (empty for the main document) and a 1-based source line.
+#[derive(Deserialize)]
+struct DocLine {
+    #[serde(default)]
+    doc: String,
+    line: u32,
+}
+
+/// The file a page's `doc` refers to, if it's a real Markdown file.
+fn doc_file(state: &AppState, doc: &str) -> Option<PathBuf> {
+    let path = if doc.is_empty() || is_main(state, doc) {
+        state.main.clone()?
+    } else {
+        resolve(state.docs.root(), doc, false)?
+    };
+    (path.is_file() && docs::is_markdown(&path)).then_some(path)
+}
+
+fn is_main(state: &AppState, doc: &str) -> bool {
+    state
+        .main
+        .as_ref()
+        .is_some_and(|m| rel_path(state.docs.root(), m) == doc)
+}
+
+/// Click-to-source: open the document in the editor at a line.
+async fn open_in_editor(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<DocLine>,
+) -> Response {
+    if headers.get("x-mdv").is_none() {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Some(file) = doc_file(&state, &req.doc) else {
+        return (StatusCode::NOT_FOUND, "no file to open").into_response();
+    };
+    match crate::editor::open(&file, req.line, state.editor.as_deref()) {
+        Ok(()) => StatusCode::NO_CONTENT.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e:#}")).into_response(),
+    }
+}
+
+/// Remember where the reader is in a document.
+async fn save_position(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<DocLine>,
+) -> StatusCode {
+    if headers.get("x-mdv").is_none() {
+        return StatusCode::FORBIDDEN;
+    }
+    let Some(file) = doc_file(&state, &req.doc) else {
+        return StatusCode::NOT_FOUND;
+    };
+    let at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or_default();
+    let mut update = Prefs::default();
+    update.positions.insert(
+        file.to_string_lossy().into_owned(),
+        Position { line: req.line, at },
+    );
+    remember(&state, update).await;
     StatusCode::NO_CONTENT
+}
+
+#[derive(Deserialize)]
+struct SearchQuery {
+    #[serde(default)]
+    q: String,
+}
+
+async fn search(State(state): State<AppState>, Query(q): Query<SearchQuery>) -> Response {
+    let docs = state.docs.clone();
+    match tokio::task::spawn_blocking(move || docs.search(&q.q)).await {
+        Ok(hits) => no_store(Json(serde_json::json!({ "hits": hits })).into_response()),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+async fn whoami(State(state): State<AppState>) -> Response {
+    Json(serde_json::json!({
+        "target": state.identity.as_str(),
+        "pid": std::process::id(),
+    }))
+    .into_response()
 }
 
 async fn list_files(State(state): State<AppState>) -> Response {

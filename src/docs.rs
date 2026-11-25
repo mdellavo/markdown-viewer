@@ -27,6 +27,18 @@ const MAX_FILES: usize = 2000;
 const MAX_DEPTH: usize = 6;
 /// Folders never worth listing.
 const SKIP_DIRS: &[&str] = &["node_modules", "target", "vendor", "__pycache__"];
+/// Search limits.
+const MAX_HITS: usize = 100;
+const MAX_HITS_PER_FILE: usize = 3;
+const MAX_SEARCH_FILE_BYTES: u64 = 2 * 1024 * 1024;
+
+/// A search match: file, 1-based line, and the line's text around it.
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+pub struct Hit {
+    pub file: String,
+    pub line: usize,
+    pub text: String,
+}
 
 pub struct Docs {
     root: PathBuf,
@@ -141,20 +153,131 @@ impl Docs {
         }
         let text = std::fs::read_to_string(doc)
             .with_context(|| format!("cannot read {}", doc.display()))?;
-        Ok(self.renderer.render_body(&text))
+        Ok(self.render_text(&text, doc.parent().unwrap_or(&self.root)))
+    }
+
+    /// Render Markdown that lives in `dir` (for resolving Obsidian links).
+    pub fn render_text(&self, text: &str, dir: &Path) -> String {
+        if !self.renderer.options().obsidian {
+            return self.renderer.render_body(text);
+        }
+        let (files, _) = self.list_files();
+        let ctx = crate::obsidian::LinkContext {
+            root: &self.root,
+            dir,
+            files: &files,
+            served: true,
+        };
+        self.renderer.render_doc(text, Some(&ctx))
+    }
+
+    /// Register a document with no file behind it (stdin, the clipboard),
+    /// shown under `key`. Update it with [`Docs::set_virtual`].
+    pub fn add_virtual(&self, key: &Path, html: String) {
+        let (tx, _) = watch::channel(html);
+        self.channels.lock().unwrap().insert(key.to_path_buf(), tx);
+    }
+
+    pub fn set_virtual(&self, key: &Path, html: String) {
+        if let Some(tx) = self.channels.lock().unwrap().get(key) {
+            tx.send_if_modified(|current| {
+                let changed = *current != html;
+                if changed {
+                    *current = html;
+                }
+                changed
+            });
+        }
+    }
+
+    /// Case-insensitive text search across the Markdown files.
+    pub fn search(&self, query: &str) -> Vec<Hit> {
+        let needle = query.trim().to_lowercase();
+        let mut hits = Vec::new();
+        if needle.is_empty() {
+            return hits;
+        }
+        for file in self.list_files().0 {
+            let path = self.root.join(&file);
+            if std::fs::metadata(&path).map_or(true, |m| m.len() > MAX_SEARCH_FILE_BYTES) {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            let mut in_file = 0;
+            for (i, line) in text.lines().enumerate() {
+                let lower = line.to_lowercase();
+                let Some(at) = lower.find(&needle) else {
+                    continue;
+                };
+                hits.push(Hit {
+                    file: file.clone(),
+                    line: i + 1,
+                    text: snippet(line, at, needle.len()),
+                });
+                in_file += 1;
+                if hits.len() >= MAX_HITS {
+                    return hits;
+                }
+                if in_file >= MAX_HITS_PER_FILE {
+                    break;
+                }
+            }
+        }
+        hits
     }
 
     /// Markdown files under the root, as `/`-separated relative paths: the
     /// root's own files first, then each folder's, alphabetically.
     pub fn list_files(&self) -> (Vec<String>, bool) {
-        let mut files = Vec::new();
-        let truncated = collect(&self.root, &self.root, 0, &mut files);
-        files.sort_by(|a, b| {
-            let depth = |s: &str| s.matches('/').count().min(1);
-            (depth(a), a.to_lowercase()).cmp(&(depth(b), b.to_lowercase()))
-        });
-        (files, truncated)
+        markdown_files(&self.root)
     }
+}
+
+/// Markdown files under `root`, `/`-separated and root-relative: the
+/// root's own files first, then each folder's, alphabetically. The bool is
+/// true if the list was cut short.
+pub fn markdown_files(root: &Path) -> (Vec<String>, bool) {
+    let mut files = Vec::new();
+    let truncated = collect(root, root, 0, &mut files);
+    files.sort_by(|a, b| {
+        let depth = |s: &str| s.matches('/').count().min(1);
+        (depth(a), a.to_lowercase()).cmp(&(depth(b), b.to_lowercase()))
+    });
+    (files, truncated)
+}
+
+/// Up to ~120 characters of `line` around the match at byte `at`.
+/// (`at` comes from the lowercased line; lowercasing can shift byte
+/// offsets for some scripts, so clamp to the original's char boundaries.)
+fn snippet(line: &str, at: usize, len: usize) -> String {
+    const CONTEXT: usize = 50;
+    let start = floor_char(line, at.saturating_sub(CONTEXT).min(line.len()));
+    let end = ceil_char(line, (at + len + CONTEXT).min(line.len()));
+    let mut out = String::new();
+    if start > 0 {
+        out.push('…');
+    }
+    out.push_str(line[start..end].trim());
+    if end < line.len() {
+        out.push('…');
+    }
+    out
+}
+
+fn floor_char(s: &str, mut i: usize) -> usize {
+    while i > 0 && !s.is_char_boundary(i) {
+        i -= 1;
+    }
+    i
+}
+
+fn ceil_char(s: &str, mut i: usize) -> usize {
+    while i < s.len() && !s.is_char_boundary(i) {
+        i += 1;
+    }
+    i
 }
 
 /// Recursively gather Markdown files; returns true if a limit was hit.
@@ -320,6 +443,18 @@ mod tests {
                 "docs/guide.md"
             ]
         );
+    }
+
+    #[test]
+    fn snippets_are_trimmed_on_char_boundaries() {
+        let line = format!("{}needle{}", "é".repeat(80), "ü".repeat(80));
+        let at = line.find("needle").unwrap();
+        let s = snippet(&line, at, 6);
+        assert!(
+            s.starts_with('…') && s.ends_with('…') && s.contains("needle"),
+            "{s}"
+        );
+        assert_eq!(snippet("short needle", 6, 6), "short needle");
     }
 
     #[test]

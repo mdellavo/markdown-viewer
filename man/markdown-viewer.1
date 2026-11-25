@@ -1,0 +1,120 @@
+.ie \n(.g .ds Aq \(aq
+.el .ds Aq '
+.TH markdown-viewer 1  "markdown-viewer 0.3.0" 
+.SH NAME
+markdown\-viewer \- Render a Markdown file with GitHub styling and live\-reload it in your browser
+.SH SYNOPSIS
+\fBmarkdown\-viewer\fR [\fB\-w\fR|\fB\-\-watch\fR] [\fB\-o\fR|\fB\-\-output\fR] [\fB\-\-pdf\fR] [\fB\-\-clipboard\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-\-no\-open\fR] [\fB\-\-browser\fR] [\fB\-\-app\fR] [\fB\-\-window\fR] [\fB\-\-tab\fR] [\fB\-\-exit\-when\-closed\fR] [\fB\-\-install\-finder\fR] [\fB\-\-uninstall\-finder\fR] [\fB\-\-theme\fR] [\fB\-\-style\fR] [\fB\-\-css\fR] [\fB\-\-number\-headings\fR] [\fB\-\-front\-matter\fR] [\fB\-\-obsidian\fR] [\fB\-\-no\-obsidian\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIFILE\fR] 
+.SH DESCRIPTION
+Render a Markdown file with GitHub styling and live\-reload it in your browser
+.SH OPTIONS
+.TP
+\fB\-w\fR, \fB\-\-watch\fR
+Serve the page and live\-reload it whenever the file changes
+.TP
+\fB\-o\fR, \fB\-\-output\fR \fI<PATH>\fR
+Write the rendered HTML to this file ("\-" for stdout) instead of opening it
+.TP
+\fB\-\-pdf\fR \fI<PATH>\fR
+Write a PDF to this file instead of opening it (needs Chrome, Chromium, Edge, Brave or Vivaldi)
+.TP
+\fB\-\-clipboard\fR
+Preview the clipboard instead of a file. With \-\-watch, the page follows the clipboard as it changes
+.TP
+\fB\-p\fR, \fB\-\-port\fR \fI<PORT>\fR
+Port for \-\-watch (default: any free port)
+.TP
+\fB\-\-no\-open\fR
+Don\*(Aqt open a browser
+.TP
+\fB\-\-browser\fR \fI<NAME>\fR
+Browser to open instead of the default (e.g. "Google Chrome", "firefox")
+.TP
+\fB\-\-app\fR
+Open as a minimal app window with no tabs or address bar (default). Chrome, Edge, Brave, Chromium and Vivaldi only; other browsers get a new window
+.TP
+\fB\-\-window\fR
+Open in a normal new browser window
+.TP
+\fB\-\-tab\fR
+Open in a tab of an existing browser window
+.TP
+\fB\-\-exit\-when\-closed\fR
+With \-\-watch: exit once the page has been closed (used by the Finder integration, where there\*(Aqs no terminal to press Ctrl\-C in)
+.TP
+\fB\-\-install\-finder\fR
+macOS: add "Markdown Viewer" to Finder (Open With, double\-click and a right\-click Quick Action) for the current user
+.TP
+\fB\-\-uninstall\-finder\fR
+macOS: remove the Finder integration
+.TP
+\fB\-\-theme\fR \fI<THEME>\fR
+Colour theme (default: the one you last chose in the viewer, else auto). Press t in the viewer to switch
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+auto: Follow the operating system\*(Aqs light/dark setting
+.IP \(bu 2
+light
+.IP \(bu 2
+dark
+.RE
+.TP
+\fB\-\-style\fR \fI<STYLE>\fR
+Page style
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+github: GitHub\*(Aqs README look
+.IP \(bu 2
+wide: GitHub\*(Aqs look, using the full window width
+.IP \(bu 2
+book: Serif type and a narrower column, for long\-form reading
+.IP \(bu 2
+compact: Smaller type and tighter spacing, for dense documents
+.RE
+.TP
+\fB\-\-css\fR \fI<PATH>\fR
+Extra CSS file, applied after the built\-in styles
+.TP
+\fB\-\-number\-headings\fR
+Number headings (1, 1.1, 1.2, …)
+.TP
+\fB\-\-front\-matter\fR \fI<HOW>\fR
+YAML front matter: shown as a table, like GitHub (default), or hidden
+.br
+
+.br
+\fIPossible values:\fR
+.RS 14
+.IP \(bu 2
+table: Show it as a table, like GitHub
+.IP \(bu 2
+hide: Leave it out
+.RE
+.TP
+\fB\-\-obsidian\fR
+Obsidian notes: [[wiki links]], ![[embeds]], callouts, ==highlights== and %%comments%%. On by default inside a vault (a .obsidian folder)
+.TP
+\fB\-\-no\-obsidian\fR
+Turn off Obsidian notes, even inside a vault
+.TP
+\fB\-\-editor\fR \fI<COMMAND>\fR
+Editor for double\-click\-to\-source, e.g. "zed" or "code \-g {file}:{line}" (default: $VISUAL/$EDITOR if it\*(Aqs a GUI editor, else the first one found)
+.TP
+\fB\-h\fR, \fB\-\-help\fR
+Print help (see a summary with \*(Aq\-h\*(Aq)
+.TP
+\fB\-V\fR, \fB\-\-version\fR
+Print version
+.TP
+[\fIFILE\fR]
+Markdown file to render, a folder to browse (default: the current folder), or "\-" to read standard input. Folders are always served with live reload
+.SH VERSION
+v0.3.0

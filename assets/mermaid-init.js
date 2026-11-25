@@ -20,7 +20,9 @@
 
   // Standalone pages inline the library; served pages fetch it on first use.
   function load() {
-    if (window.mermaid) return Promise.resolve();
+    // Check for the library itself: an element with id="mermaid" (e.g. a
+    // "Mermaid" heading) also shows up as window.mermaid.
+    if (window.mermaid && typeof window.mermaid.initialize === "function") return Promise.resolve();
     if (!src) return Promise.reject(new Error("mermaid.js not available"));
     if (!loading) {
       loading = new Promise(function (resolve, reject) {
@@ -65,6 +67,8 @@
       var div = document.createElement("div");
       div.className = "mermaid";
       div.innerHTML = svg;
+      // Keep the source line, for click-to-source and reading positions.
+      if (pre.hasAttribute("data-sourcepos")) div.setAttribute("data-sourcepos", pre.getAttribute("data-sourcepos"));
       sources.set(div, code);
       pre.replaceWith(div);
     }
@@ -83,6 +87,7 @@
       var pre = document.createElement("pre");
       pre.className = "mermaid";
       pre.textContent = sources.get(d);
+      if (d.hasAttribute("data-sourcepos")) pre.setAttribute("data-sourcepos", d.getAttribute("data-sourcepos"));
       staging.appendChild(pre);
     });
     await render(staging);
@@ -92,7 +97,8 @@
   (window.mdvRetheme = window.mdvRetheme || []).push(retheme);
 
   (window.mdvEnhancers = window.mdvEnhancers || []).push(render);
-  render(document.querySelector(".markdown-body")).catch(function (e) {
+  // live.js waits for these before comparing updates with the page.
+  (window.mdvInitial = window.mdvInitial || []).push(render(document.querySelector(".markdown-body")).catch(function (e) {
     console.error("markdown-viewer:", e);
-  });
+  }));
 })();

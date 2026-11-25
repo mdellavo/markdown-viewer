@@ -2,35 +2,11 @@
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::TcpStream;
-use std::process::{Child, Command, Stdio};
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-const BIN: &str = env!("CARGO_BIN_EXE_markdown-viewer");
-
-/// This test's private folder for settings and state.
-fn test_dir() -> std::path::PathBuf {
-    let dir = std::env::temp_dir()
-        .join(format!(
-            "mdv-test-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ))
-        .to_string_lossy()
-        .replace(['(', ')'], "")
-        .into();
-    std::fs::create_dir_all(&dir).unwrap();
-    dir
-}
-
-/// The binary, isolated from the user's settings file and remembered
-/// preferences (each test gets its own, empty, state).
-fn mdv() -> Command {
-    let mut cmd = Command::new(BIN);
-    let dir = test_dir();
-    cmd.env("MARKDOWN_VIEWER_CONFIG", dir.join("config.toml"))
-        .env("MARKDOWN_VIEWER_STATE", dir.join("state.json"));
-    cmd
-}
+mod common;
+use common::*;
 
 /// Render the GFM fixture to stdout and snapshot the body (the page chrome
 /// is mostly embedded CSS and a random nonce, so it's excluded).
@@ -49,7 +25,11 @@ fn renders_fixture_body() {
     let start = html.find("<article class=\"markdown-body\">").unwrap();
     let end = html.find("</article>").unwrap();
     insta::assert_snapshot!(&html[start..end]);
-    assert!(!html.contains("front matter is hidden"));
+    assert!(html.contains("<th>title</th>"), "front matter table");
+    assert!(
+        !html[start..end].contains("data-sourcepos"),
+        "exports carry no source positions"
+    );
     // The fixture has a diagram, so the standalone page inlines mermaid.
     assert!(html.contains("<pre class=\"mermaid\">graph LR"));
     assert!(html.contains("globalThis[\"mermaid\"]"));
@@ -64,26 +44,6 @@ fn missing_file_is_an_error() {
     let out = mdv().arg("does-not-exist.md").output().unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("cannot open"));
-}
-
-struct Running(Child);
-impl Drop for Running {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
-
-fn http_get(addr: &str, path: &str, host: &str) -> String {
-    let mut s = TcpStream::connect(addr).unwrap();
-    write!(
-        s,
-        "GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n"
-    )
-    .unwrap();
-    let mut buf = Vec::new();
-    s.read_to_end(&mut buf).unwrap();
-    String::from_utf8_lossy(&buf).into_owned()
 }
 
 #[test]
@@ -142,21 +102,6 @@ fn watch_serves_and_pushes_updates() {
     wait_for(&mut reader, "Second");
 }
 
-fn wait_for(reader: &mut impl BufRead, needle: &str) {
-    let deadline = Instant::now() + Duration::from_secs(10);
-    let mut line = String::new();
-    while Instant::now() < deadline {
-        line.clear();
-        if reader.read_line(&mut line).unwrap_or(0) == 0 {
-            break;
-        }
-        if line.starts_with("data:") && line.contains(needle) {
-            return;
-        }
-    }
-    panic!("never saw {needle:?} in event stream");
-}
-
 /// examples/example.md is the feature tour; make sure every feature in it
 /// still renders.
 #[test]
@@ -174,7 +119,10 @@ fn example_renders_every_feature() {
     let body = &html[html.find("<article").unwrap()..html.find("</article>").unwrap()];
     let count = |needle: &str| body.matches(needle).count();
 
-    assert!(!body.contains("YAML front matter"), "front matter hidden");
+    assert!(
+        body.contains("class=\"mdv-front-matter\""),
+        "front matter table"
+    );
     assert_eq!(count("<pre class=\"mermaid\">"), 10, "mermaid diagrams");
     assert_eq!(
         count("markdown-alert-"),
@@ -185,7 +133,7 @@ fn example_renders_every_feature() {
     assert_eq!(count("data-math-style=\"inline\""), 4, "inline math");
     assert_eq!(count("data-math-style=\"display\""), 3, "display math");
     assert!(body.contains("$5 or $10"), "dollar amounts stay text");
-    assert_eq!(count("<table>"), 1);
+    assert_eq!(count("<table>"), 2, "the table, plus the front matter's");
     assert_eq!(count("class=\"footnote-ref\""), 2);
     for tag in ["<h1", "<h2", "<h3", "<h4", "<h5", "<h6"] {
         assert!(body.contains(tag), "heading {tag}");
@@ -374,40 +322,6 @@ fn exit_when_closed_after_page_goes_away() {
     let mut rest = String::new();
     stdout.read_to_string(&mut rest).unwrap();
     assert!(rest.contains("Page closed; exiting."), "{rest}");
-}
-
-/// A running `--watch` server and its address.
-struct Served {
-    addr: String,
-    _stdout: BufReader<std::process::ChildStdout>,
-    _guard: Running,
-}
-
-fn start(mut cmd: Command) -> Served {
-    let mut child = cmd.arg("--no-open").stdout(Stdio::piped()).spawn().unwrap();
-    let mut stdout = BufReader::new(child.stdout.take().unwrap());
-    let mut first = String::new();
-    stdout.read_line(&mut first).unwrap();
-    let addr = first
-        .split(" at http://")
-        .nth(1)
-        .unwrap_or_else(|| panic!("unexpected output: {first}"))
-        .trim()
-        .trim_end_matches('/')
-        .to_string();
-    Served {
-        addr,
-        _stdout: stdout,
-        _guard: Running(child),
-    }
-}
-
-fn http(addr: &str, request: &str) -> String {
-    let mut s = TcpStream::connect(addr).unwrap();
-    s.write_all(request.as_bytes()).unwrap();
-    let mut buf = Vec::new();
-    s.read_to_end(&mut buf).unwrap();
-    String::from_utf8_lossy(&buf).into_owned()
 }
 
 #[test]
@@ -607,4 +521,224 @@ fn pdf_export() {
         "suspiciously small: {} bytes",
         pdf.len()
     );
+}
+
+/// The shell completions and man page in the repo (installed by Homebrew
+/// and the Linux packages) must match the current options. To update them:
+/// `UPDATE_GENERATED=1 cargo test --test cli generated_files`.
+#[test]
+fn generated_files_are_up_to_date() {
+    let files: [(&[&str], &str); 4] = [
+        (
+            &["--generate-completions", "bash"],
+            "completions/markdown-viewer.bash",
+        ),
+        (
+            &["--generate-completions", "zsh"],
+            "completions/_markdown-viewer",
+        ),
+        (
+            &["--generate-completions", "fish"],
+            "completions/markdown-viewer.fish",
+        ),
+        (&["--generate-man"], "man/markdown-viewer.1"),
+    ];
+    let update = std::env::var_os("UPDATE_GENERATED").is_some();
+    for (args, path) in files {
+        let out = mdv().args(args).output().unwrap();
+        assert!(out.status.success());
+        if update {
+            std::fs::create_dir_all(std::path::Path::new(path).parent().unwrap()).unwrap();
+            std::fs::write(path, &out.stdout).unwrap();
+        } else {
+            let committed = std::fs::read(path).unwrap_or_default();
+            assert!(
+                committed == out.stdout,
+                "{path} is out of date; run: UPDATE_GENERATED=1 cargo test --test cli generated_files"
+            );
+        }
+    }
+}
+
+fn post(addr: &str, path: &str, json: &str) -> String {
+    http(
+        addr,
+        &format!(
+            "POST {path} HTTP/1.1\r\nHost: {addr}\r\nContent-Type: application/json\r\nX-MDV: 1\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{json}",
+            json.len()
+        ),
+    )
+}
+
+#[test]
+fn second_launch_reuses_the_running_viewer() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Hi\n").unwrap();
+    let first = start({
+        let mut c = mdv();
+        c.arg("--watch").arg(&md);
+        c
+    });
+    let again = mdv()
+        .args(["--watch", "--no-open"])
+        .arg(&md)
+        .output()
+        .unwrap();
+    assert!(again.status.success());
+    let out = String::from_utf8_lossy(&again.stdout);
+    assert!(
+        out.contains(&format!("Already open at http://{}/", first.addr)),
+        "{out}"
+    );
+}
+
+#[test]
+fn reads_standard_input() {
+    let mut child = mdv()
+        .args(["-", "-o", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"# From stdin\n\n$x^2$\n")
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    let html = String::from_utf8(out.stdout).unwrap();
+    assert!(html.contains("<h1 id=\"from-stdin\"") && html.contains("data-math-style"));
+    assert!(html.contains("<title>stdin</title>"));
+}
+
+#[test]
+fn numbered_headings_and_front_matter_options() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "---\ntitle: T\n---\n# Title\n\n## A\n\n## B\n").unwrap();
+    // Just the <html> tag and the document body (the stylesheet also
+    // mentions data-mdv-number).
+    let html = |args: &[&str]| {
+        let out = mdv()
+            .arg(&md)
+            .args(["-o", "-"])
+            .args(args)
+            .output()
+            .unwrap();
+        let page = String::from_utf8(out.stdout).unwrap();
+        let tag = page[page.find("<html").unwrap()..]
+            .split('>')
+            .next()
+            .unwrap()
+            .to_string();
+        tag + &page[page.find("<article").unwrap()..]
+    };
+    let plain = html(&[]);
+    assert!(!plain.contains("data-mdv-number"));
+    assert!(plain.contains("mdv-front-matter"), "table by default");
+    let numbered = html(&["--number-headings", "--front-matter", "hide"]);
+    assert!(
+        numbered.contains("data-mdv-number=\"h2\""),
+        "one h1: number from h2"
+    );
+    assert!(!numbered.contains("class=\"mdv-front-matter\""));
+}
+
+#[test]
+fn obsidian_vault_links_resolve_and_open() {
+    let dir = tempfile::tempdir().unwrap();
+    let vault = dir.path();
+    std::fs::create_dir_all(vault.join(".obsidian")).unwrap();
+    std::fs::create_dir_all(vault.join("notes/deep")).unwrap();
+    std::fs::write(
+        vault.join("notes/Home.md"),
+        "# Home\n\nSee [[Other Note]] and [[Missing]].\n\n> [!tip] Hint\n> ==marked== %%secret%%\n",
+    )
+    .unwrap();
+    std::fs::write(vault.join("notes/deep/Other Note.md"), "# Other\n").unwrap();
+
+    let server = start({
+        let mut c = mdv();
+        c.arg("--watch").arg(vault.join("notes/Home.md"));
+        c
+    });
+    let a = &server.addr;
+    let page = http_get(a, "/", a);
+    assert!(
+        page.contains("href=\"/notes/deep/Other%20Note.md\""),
+        "vault-wide link"
+    );
+    assert!(page.contains("mdv-wikilink-missing"));
+    assert!(page.contains("class=\"callout\"") && page.contains("<mark"));
+    assert!(!page.contains("secret"), "comments hidden");
+    // The whole vault is served, so the link works.
+    assert!(http_get(a, "/notes/deep/Other%20Note.md", a).contains("<h1 id=\"other\""));
+
+    // Outside a vault (or with --no-obsidian) it's plain Markdown.
+    let out = mdv()
+        .arg(vault.join("notes/Home.md"))
+        .args(["-o", "-", "--no-obsidian"])
+        .output()
+        .unwrap();
+    assert!(!String::from_utf8_lossy(&out.stdout).contains("data-wikilink"));
+}
+
+#[test]
+fn search_positions_and_click_to_source() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("README.md"), "# Readme\n\nNothing here.\n").unwrap();
+    std::fs::write(
+        root.join("guide.md"),
+        "# Guide\n\nIntro.\n\n## Setup\n\nInstall the Widget first.\n",
+    )
+    .unwrap();
+    // A fake editor that records what it was asked to open.
+    let log = root.join("editor.log");
+    let editor = root.join("fake-editor.sh");
+    std::fs::write(&editor, format!("#!/bin/sh\necho \"$@\" > {:?}\n", log)).unwrap();
+    std::process::Command::new("chmod")
+        .args(["+x"])
+        .arg(&editor)
+        .status()
+        .unwrap();
+
+    let server = start({
+        let mut c = mdv();
+        c.arg(root)
+            .arg("--editor")
+            .arg(format!("{} {{file}}:{{line}}", editor.display()));
+        c
+    });
+    let a = &server.addr;
+
+    // Served pages carry source positions.
+    assert!(http_get(a, "/guide.md", a).contains("data-sourcepos=\"7:1-7:25\""));
+
+    let hits = http_get(a, "/__mdv/search?q=widget", a);
+    let json: serde_json::Value =
+        serde_json::from_str(hits.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+    assert_eq!(json["hits"][0]["file"], "guide.md");
+    assert_eq!(json["hits"][0]["line"], 7);
+
+    // Click-to-source runs the editor at the right file and line.
+    assert!(post(a, "/__mdv/open", r#"{"doc":"guide.md","line":7}"#).starts_with("HTTP/1.1 204"));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !log.exists() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let opened = std::fs::read_to_string(&log).unwrap();
+    assert!(opened.trim().ends_with("guide.md:7"), "{opened}");
+    assert!(
+        post(a, "/__mdv/open", r#"{"doc":"../../etc/passwd","line":1}"#)
+            .starts_with("HTTP/1.1 404")
+    );
+
+    // A saved reading position comes back when the page is opened again.
+    assert!(
+        post(a, "/__mdv/position", r#"{"doc":"guide.md","line":5}"#).starts_with("HTTP/1.1 204")
+    );
+    assert!(http_get(a, "/guide.md", a).contains("data-mdv-resume=\"5\""));
 }

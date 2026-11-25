@@ -168,6 +168,60 @@ fn tab_command(url: &str, target: &Target) -> Option<Cmd> {
     }
 }
 
+/// Bring an existing window showing `url` (or a page under it) to the
+/// front. Returns false if no such window was found or this browser can't
+/// be scripted (only Chrome-family browsers and Safari on macOS can).
+pub fn focus(url: &str, browser: Option<&str>) -> bool {
+    if !cfg!(target_os = "macos") {
+        return false;
+    }
+    let target = match browser {
+        Some(name) => Target::Named(name.to_string()),
+        None => default_browser(),
+    };
+    let (app, kind) = match &target {
+        Target::Bundle(id) => (format!("application id \"{id}\""), classify(id)),
+        Target::Named(name) => (
+            format!("application \"{}\"", name.replace('"', "")),
+            classify(name),
+        ),
+        _ => return false,
+    };
+    let (tabs, select) = match kind {
+        Kind::Chromium => ("tabs of w", "set active tab index of w to i"),
+        Kind::Safari => ("tabs of w", "set current tab of w to t"),
+        _ => return false,
+    };
+    // The URL arrives as an argument; it's never spliced into the script.
+    // `running` is checked first so this never launches the browser.
+    let script = format!(
+        "on run argv\n\
+         set wanted to item 1 of argv\n\
+         if not ({app} is running) then return \"no\"\n\
+         tell {app}\n\
+         repeat with w in windows\n\
+         set i to 0\n\
+         repeat with t in {tabs}\n\
+         set i to i + 1\n\
+         if (URL of t) starts with wanted then\n\
+         {select}\n\
+         set index of w to 1\n\
+         activate\n\
+         return \"yes\"\n\
+         end if\n\
+         end repeat\n\
+         end repeat\n\
+         end tell\n\
+         return \"no\"\n\
+         end run"
+    );
+    Command::new("osascript")
+        .args(["-e", &script, url])
+        .stderr(Stdio::null())
+        .output()
+        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "yes")
+}
+
 /// The URL is passed as an argument, never spliced into the script.
 fn safari_new_window(url: &str) -> Cmd {
     cmd(

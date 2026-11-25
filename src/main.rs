@@ -1,33 +1,38 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
-use std::io::Write as _;
+use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 
 mod browser;
 mod config;
 mod docs;
+mod editor;
 #[cfg(target_os = "macos")]
 mod finder;
+mod frontmatter;
 mod github;
+mod instances;
+mod obsidian;
 mod pdf;
 mod render;
 mod server;
 mod theme;
 
 use config::{Config, Prefs};
-use render::{PageOptions, Renderer, Style, Theme};
+use render::{FrontMatter, PageOptions, RenderOptions, Renderer, Style, Theme};
 
 /// Render Markdown with GitHub styling and view it in your browser.
 #[derive(Debug, Parser)]
-#[command(version, about)]
+#[command(name = "markdown-viewer", version, about)]
 struct Cli {
-    /// Markdown file to render, or a folder to browse (default: the current
-    /// folder). Folders are always served with live reload.
+    /// Markdown file to render, a folder to browse (default: the current
+    /// folder), or "-" to read standard input. Folders are always served
+    /// with live reload.
     file: Option<PathBuf>,
 
     /// Serve the page and live-reload it whenever the file changes.
@@ -42,6 +47,11 @@ struct Cli {
     /// Chromium, Edge, Brave or Vivaldi).
     #[arg(long, value_name = "PATH", conflicts_with = "watch")]
     pdf: Option<PathBuf>,
+
+    /// Preview the clipboard instead of a file. With --watch, the page
+    /// follows the clipboard as it changes.
+    #[arg(long, conflicts_with = "file")]
+    clipboard: bool,
 
     /// Port for --watch (default: any free port).
     #[arg(short, long)]
@@ -95,6 +105,37 @@ struct Cli {
     /// Extra CSS file, applied after the built-in styles.
     #[arg(long, value_name = "PATH")]
     css: Option<PathBuf>,
+
+    /// Number headings (1, 1.1, 1.2, …).
+    #[arg(long)]
+    number_headings: bool,
+
+    /// YAML front matter: shown as a table, like GitHub (default), or hidden.
+    #[arg(long, value_enum, value_name = "HOW")]
+    front_matter: Option<FrontMatter>,
+
+    /// Obsidian notes: [[wiki links]], ![[embeds]], callouts, ==highlights==
+    /// and %%comments%%. On by default inside a vault (a .obsidian folder).
+    #[arg(long, overrides_with = "no_obsidian")]
+    obsidian: bool,
+
+    /// Turn off Obsidian notes, even inside a vault.
+    #[arg(long, overrides_with = "obsidian")]
+    no_obsidian: bool,
+
+    /// Editor for double-click-to-source, e.g. "zed" or
+    /// "code -g {file}:{line}" (default: $VISUAL/$EDITOR if it's a GUI
+    /// editor, else the first one found).
+    #[arg(long, value_name = "COMMAND")]
+    editor: Option<String>,
+
+    /// Print a shell completion script (bash, zsh, fish, elvish, powershell).
+    #[arg(long, value_enum, value_name = "SHELL", exclusive = true, hide = true)]
+    generate_completions: Option<clap_complete::Shell>,
+
+    /// Print the man page.
+    #[arg(long, exclusive = true, hide = true)]
+    generate_man: bool,
 }
 
 fn main() {
@@ -115,6 +156,11 @@ struct Settings {
     /// `--theme` if given; it wins over remembered and configured themes.
     theme_flag: Option<Theme>,
     config_theme: Option<Theme>,
+    number_headings: bool,
+    front_matter: FrontMatter,
+    /// `None`: decide by whether the file is in an Obsidian vault.
+    obsidian: Option<bool>,
+    editor: Option<String>,
 }
 
 impl Settings {
@@ -136,6 +182,13 @@ impl Settings {
         } else {
             config.open_mode().unwrap_or_default()
         };
+        let obsidian = if cli.obsidian {
+            Some(true)
+        } else if cli.no_obsidian {
+            Some(false)
+        } else {
+            config.obsidian
+        };
         Ok(Self {
             style: cli.style.or(config.style).unwrap_or_default(),
             css_path,
@@ -145,6 +198,10 @@ impl Settings {
             port: cli.port.or(config.port).unwrap_or(0),
             theme_flag: cli.theme,
             config_theme: config.theme,
+            number_headings: cli.number_headings || config.number_headings.unwrap_or(false),
+            front_matter: cli.front_matter.or(config.front_matter).unwrap_or_default(),
+            obsidian,
+            editor: cli.editor.clone().or(config.editor),
         })
     }
 
@@ -162,6 +219,14 @@ impl Settings {
         self.theme_flag.or(self.config_theme).unwrap_or_default()
     }
 
+    fn render_options(&self, sourcepos: bool, at: &Path) -> RenderOptions {
+        RenderOptions {
+            sourcepos,
+            obsidian: self.obsidian.unwrap_or_else(|| obsidian::in_vault(at)),
+            front_matter: self.front_matter,
+        }
+    }
+
     fn page(&self, title: String, theme: Theme) -> PageOptions {
         PageOptions {
             title,
@@ -169,44 +234,104 @@ impl Settings {
             style: self.style,
             custom_css: self.css.clone(),
             fixed_theme: self.theme_flag.is_some(),
+            number_headings: self.number_headings,
             ..Default::default()
         }
     }
 }
 
+/// What to show.
+enum Source {
+    File(PathBuf),
+    Folder(PathBuf),
+    /// Text with no file behind it: standard input or the clipboard.
+    Text {
+        name: &'static str,
+        text: String,
+    },
+}
+
 fn run(cli: Cli) -> Result<()> {
+    if let Some(shell) = cli.generate_completions {
+        clap_complete::generate(
+            shell,
+            &mut Cli::command(),
+            "markdown-viewer",
+            &mut std::io::stdout(),
+        );
+        return Ok(());
+    }
+    if cli.generate_man {
+        clap_mangen::Man::new(Cli::command()).render(&mut std::io::stdout())?;
+        return Ok(());
+    }
     if cli.install_finder || cli.uninstall_finder {
         return finder_integration(cli.install_finder);
     }
     let settings = Settings::new(&cli, Config::load()?)?;
-    let target = cli.file.clone().unwrap_or_else(|| PathBuf::from("."));
-    let target = target
-        .canonicalize()
-        .with_context(|| format!("cannot open {}", target.display()))?;
+    let cwd = std::env::current_dir()?.canonicalize()?;
 
-    if target.is_dir() {
-        if cli.output.is_some() || cli.pdf.is_some() {
-            bail!(
-                "{} is a folder; -o and --pdf need a Markdown file",
-                target.display()
-            );
+    let source = if cli.clipboard {
+        Source::Text {
+            name: "Clipboard",
+            text: read_clipboard()?,
         }
-        return serve(&cli, &settings, target, None);
-    }
-    if !target.is_file() {
-        bail!("{} is not a file", target.display());
-    }
+    } else {
+        match &cli.file {
+            Some(p) if p.as_os_str() == "-" => {
+                let mut text = String::new();
+                std::io::stdin()
+                    .read_to_string(&mut text)
+                    .context("cannot read standard input")?;
+                Source::Text {
+                    name: "stdin",
+                    text,
+                }
+            }
+            Some(p) => {
+                let path = p
+                    .canonicalize()
+                    .with_context(|| format!("cannot open {}", p.display()))?;
+                if path.is_dir() {
+                    Source::Folder(path)
+                } else if path.is_file() {
+                    Source::File(path)
+                } else {
+                    bail!("{} is not a file", p.display());
+                }
+            }
+            None => Source::Folder(cwd.clone()),
+        }
+    };
+
+    let (markdown, dir, title) = match &source {
+        Source::Folder(path) => {
+            if cli.output.is_some() || cli.pdf.is_some() {
+                bail!(
+                    "{} is a folder; -o and --pdf need a Markdown file",
+                    path.display()
+                );
+            }
+            return serve(&cli, &settings, &source);
+        }
+        Source::File(path) => (
+            read(path)?,
+            path.parent()
+                .context("file has no parent folder")?
+                .to_path_buf(),
+            server::file_title(path),
+        ),
+        Source::Text { name, text } => (text.clone(), cwd.clone(), name.to_string()),
+    };
     if !cli.watch && (cli.exit_when_closed || cli.port.is_some()) {
         bail!("--port and --exit-when-closed need --watch");
     }
-    let markdown = read(&target)?;
-    let renderer = Renderer::new();
-    let title = server::file_title(&target);
-    let dir = target.parent().context("source has no parent directory")?;
+
+    let (renderer, body) = render_standalone(&settings, &markdown, &dir);
 
     if let Some(output) = &cli.output {
         let page = settings.page(title, settings.export_theme());
-        let html = renderer.render_page(&markdown, &page);
+        let html = renderer.wrap_page(&body, &page);
         if output.as_os_str() == "-" {
             std::io::stdout().write_all(html.as_bytes())?;
         } else {
@@ -219,28 +344,32 @@ fn run(cli: Cli) -> Result<()> {
     if let Some(out) = &cli.pdf {
         // PDFs are always light: they're for printing and sharing.
         let page = PageOptions {
-            base_href: Some(dir_url(dir)),
+            base_href: Some(dir_url(&dir)),
             ..settings.page(title, Theme::Light)
         };
-        pdf::print(&renderer.render_page(&markdown, &page), out)?;
+        pdf::print(&renderer.wrap_page(&body, &page), out)?;
         say(&format!("Wrote {}", out.display()));
         return Ok(());
     }
 
     if cli.watch {
-        return serve(&cli, &settings, dir.to_path_buf(), Some(target.clone()));
+        return serve(&cli, &settings, &source);
     }
 
     // One-shot: write a self-contained page to the temp dir and open it.
     let prefs = Prefs::load();
     let page = PageOptions {
-        base_href: Some(dir_url(dir)),
+        base_href: Some(dir_url(&dir)),
         ui: true,
         sidebar: prefs.sidebar.clone(),
-        ..settings.page(title, settings.viewing_theme(&prefs))
+        ..settings.page(title.clone(), settings.viewing_theme(&prefs))
     };
-    let out = temp_page_path(&target)?;
-    std::fs::write(&out, renderer.render_page(&markdown, &page))
+    let key = match &source {
+        Source::File(path) => path.clone(),
+        _ => dir.join(&title),
+    };
+    let out = temp_page_path(&key)?;
+    std::fs::write(&out, renderer.wrap_page(&body, &page))
         .with_context(|| format!("cannot write {}", out.display()))?;
     say(&out.display().to_string());
     if !cli.no_open {
@@ -249,19 +378,76 @@ fn run(cli: Cli) -> Result<()> {
     Ok(())
 }
 
-/// Serve `root` with live reload. `main` is the file to show at `/`;
-/// `None` means folder mode.
-fn serve(cli: &Cli, settings: &Settings, root: PathBuf, main: Option<PathBuf>) -> Result<()> {
+/// Render for a page that isn't served: Obsidian links (if on) resolve
+/// relative to the document's folder.
+fn render_standalone(settings: &Settings, markdown: &str, dir: &Path) -> (Renderer, String) {
+    let options = settings.render_options(false, dir);
+    let renderer = Renderer::with_options(options.clone());
+    let body = if options.obsidian {
+        let root = obsidian::vault_root(dir).unwrap_or_else(|| dir.to_path_buf());
+        let (files, _) = docs::markdown_files(&root);
+        let ctx = obsidian::LinkContext {
+            root: &root,
+            dir,
+            files: &files,
+            served: false,
+        };
+        renderer.render_doc(markdown, Some(&ctx))
+    } else {
+        renderer.render_body(markdown)
+    };
+    (renderer, body)
+}
+
+/// Serve with live reload.
+fn serve(cli: &Cli, settings: &Settings, source: &Source) -> Result<()> {
+    // What we serve from, what `/` shows, and who we are (for reuse).
+    let cwd = std::env::current_dir()?.canonicalize()?;
+    let (root, main, identity) = match source {
+        Source::Folder(dir) => (dir.clone(), None, Some(dir.clone())),
+        Source::File(file) => {
+            let parent = file.parent().context("file has no parent folder")?;
+            let options = settings.render_options(true, parent);
+            // In a vault, serve the whole vault so linked notes open.
+            let root = options
+                .obsidian
+                .then(|| obsidian::vault_root(parent))
+                .flatten()
+                .unwrap_or_else(|| parent.to_path_buf());
+            (root, Some(file.clone()), Some(file.clone()))
+        }
+        Source::Text { name, .. } => (cwd.clone(), Some(cwd.join(format!("({name})"))), None),
+    };
+
+    // Already being served? Reuse that viewer (and bring its window
+    // forward) instead of starting another.
+    if let Some(target) = &identity
+        && let Some(url) = instances::find(target)
+    {
+        if !cli.no_open && !browser::focus(&url, settings.browser.as_deref()) {
+            browser::open(&url, settings.browser.as_deref(), settings.open)?;
+        }
+        say(&format!("Already open at {url}"));
+        return Ok(());
+    }
+
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
     rt.block_on(async move {
-        let renderer = Arc::new(Renderer::new());
+        let renderer = Arc::new(Renderer::with_options(settings.render_options(true, &root)));
         let docs = docs::Docs::new(root.clone(), renderer.clone())?;
+        if let (Source::Text { text, .. }, Some(key)) = (source, &main) {
+            docs.add_virtual(key, docs.render_text(text, &root));
+            if cli.clipboard && cli.watch {
+                follow_clipboard(docs.clone(), key.clone(), root.clone(), text.clone());
+            }
+        }
         let saved = Prefs::load();
         let prefs = Prefs {
             theme: Some(settings.viewing_theme(&saved)),
             sidebar: saved.sidebar,
+            positions: saved.positions,
         };
         let page = PageOptions {
             served: true,
@@ -279,12 +465,30 @@ fn serve(cli: &Cli, settings: &Settings, root: PathBuf, main: Option<PathBuf>) -
             custom_css: settings.css_path.clone(),
             prefs,
             remember: true,
+            editor: settings.editor.clone(),
+            identity: identity
+                .as_ref()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default(),
         })
         .await?;
         let url = server.url();
+        let port = url
+            .trim_end_matches('/')
+            .rsplit(':')
+            .next()
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(0);
+        let _registration = identity.as_ref().and_then(|t| instances::register(t, port));
         let handle = server.handle();
-        let shown = main.as_ref().unwrap_or(&root);
-        say(&format!("Serving {} at {url}", shown.display()));
+        let shown = match source {
+            Source::Text { name, .. } => name.to_string(),
+            _ => identity
+                .as_ref()
+                .map(|p| p.display().to_string())
+                .unwrap_or_default(),
+        };
+        say(&format!("Serving {shown} at {url}"));
         say("Watching for changes. Press Ctrl-C to stop.");
         let mut server = tokio::spawn(server.run());
         if !cli.no_open {
@@ -319,6 +523,44 @@ fn serve(cli: &Cli, settings: &Settings, root: PathBuf, main: Option<PathBuf>) -
             }
         }
     })
+}
+
+/// Poll the clipboard and update the page when its text changes.
+fn follow_clipboard(docs: Arc<docs::Docs>, key: PathBuf, root: PathBuf, mut last: String) {
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_millis(800)).await;
+            let Ok(Ok(text)) = tokio::task::spawn_blocking(read_clipboard).await else {
+                continue;
+            };
+            if text != last && !text.trim().is_empty() {
+                let html = docs.render_text(&text, &root);
+                docs.set_virtual(&key, html);
+                last = text;
+            }
+        }
+    });
+}
+
+/// The clipboard's text: pbpaste on macOS; wl-paste, xclip or xsel on Linux.
+fn read_clipboard() -> Result<String> {
+    let candidates: &[(&str, &[&str])] = if cfg!(target_os = "macos") {
+        &[("pbpaste", &[])]
+    } else {
+        &[
+            ("wl-paste", &["--no-newline"]),
+            ("xclip", &["-selection", "clipboard", "-o"]),
+            ("xsel", &["--clipboard", "--output"]),
+        ]
+    };
+    for (program, args) in candidates {
+        if let Ok(out) = std::process::Command::new(program).args(*args).output()
+            && out.status.success()
+        {
+            return Ok(String::from_utf8_lossy(&out.stdout).into_owned());
+        }
+    }
+    bail!("couldn't read the clipboard (needs pbpaste, wl-paste, xclip or xsel)")
 }
 
 #[cfg(target_os = "macos")]
@@ -395,6 +637,29 @@ mod tests {
         assert_eq!(
             dir_url(Path::new("/tmp/my docs#1")),
             "file:///tmp/my%20docs%231/"
+        );
+    }
+
+    #[test]
+    fn generates_completions_and_man_page() {
+        for shell in [
+            clap_complete::Shell::Bash,
+            clap_complete::Shell::Zsh,
+            clap_complete::Shell::Fish,
+        ] {
+            let mut out = Vec::new();
+            clap_complete::generate(shell, &mut Cli::command(), "markdown-viewer", &mut out);
+            let text = String::from_utf8(out).unwrap();
+            assert!(text.contains("number-headings"), "{shell:?}");
+        }
+        let mut man = Vec::new();
+        clap_mangen::Man::new(Cli::command())
+            .render(&mut man)
+            .unwrap();
+        assert!(
+            String::from_utf8(man)
+                .unwrap()
+                .contains(".TH markdown-viewer")
         );
     }
 
