@@ -173,6 +173,9 @@ impl Docs {
         }
         let text = std::fs::read_to_string(doc)
             .with_context(|| format!("cannot read {}", doc.display()))?;
+        if let Some(delim) = crate::tables::delimiter(doc) {
+            return Ok(crate::tables::to_html(&text, delim));
+        }
         Ok(self.render_text(&text, doc.parent().unwrap_or(&self.root)))
     }
 
@@ -267,14 +270,29 @@ impl Docs {
     pub fn list_files(&self) -> (Vec<String>, bool) {
         markdown_files(&self.root)
     }
+
+    /// Every file the viewer shows as a page (Markdown, CSV, TSV), for the
+    /// Files sidebar.
+    pub fn list_documents(&self) -> (Vec<String>, bool) {
+        document_files(&self.root)
+    }
 }
 
 /// Markdown files under `root`, `/`-separated and root-relative: the
 /// root's own files first, then each folder's, alphabetically. The bool is
 /// true if the list was cut short.
 pub fn markdown_files(root: &Path) -> (Vec<String>, bool) {
+    files_where(root, is_markdown)
+}
+
+/// Like [`markdown_files`], with CSV and TSV files too.
+pub fn document_files(root: &Path) -> (Vec<String>, bool) {
+    files_where(root, is_viewable)
+}
+
+fn files_where(root: &Path, wanted: fn(&Path) -> bool) -> (Vec<String>, bool) {
     let mut files = Vec::new();
-    let truncated = collect(root, root, 0, &mut files);
+    let truncated = collect(root, root, 0, wanted, &mut files);
     files.sort_by(|a, b| {
         let depth = |s: &str| s.matches('/').count().min(1);
         (depth(a), a.to_lowercase()).cmp(&(depth(b), b.to_lowercase()))
@@ -315,7 +333,13 @@ fn ceil_char(s: &str, mut i: usize) -> usize {
 }
 
 /// Recursively gather Markdown files; returns true if a limit was hit.
-fn collect(root: &Path, dir: &Path, depth: usize, out: &mut Vec<String>) -> bool {
+fn collect(
+    root: &Path,
+    dir: &Path,
+    depth: usize,
+    wanted: fn(&Path) -> bool,
+    out: &mut Vec<String>,
+) -> bool {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return false;
     };
@@ -340,16 +364,21 @@ fn collect(root: &Path, dir: &Path, depth: usize, out: &mut Vec<String>) -> bool
             if depth + 1 >= MAX_DEPTH || SKIP_DIRS.contains(&name.as_ref()) {
                 continue;
             }
-            if collect(root, &path, depth + 1, out) {
+            if collect(root, &path, depth + 1, wanted, out) {
                 return true;
             }
-        } else if is_markdown(&path)
+        } else if wanted(&path)
             && let Ok(rel) = path.strip_prefix(root)
         {
             out.push(rel.to_string_lossy().replace('\\', "/"));
         }
     }
     false
+}
+
+/// Markdown, or a CSV or TSV file (shown as a table).
+pub fn is_viewable(path: &Path) -> bool {
+    is_markdown(path) || crate::tables::delimiter(path).is_some()
 }
 
 pub fn is_markdown(path: &Path) -> bool {
@@ -402,7 +431,7 @@ pub fn listing_markdown(root: &Path, dir: &Path) -> String {
             }
             match entry.file_type() {
                 Ok(t) if t.is_dir() && !SKIP_DIRS.contains(&name.as_str()) => dirs.push(name),
-                Ok(t) if t.is_file() && is_markdown(&entry.path()) => files.push(name),
+                Ok(t) if t.is_file() && is_viewable(&entry.path()) => files.push(name),
                 _ => {}
             }
         }
@@ -427,7 +456,7 @@ pub fn listing_markdown(root: &Path, dir: &Path) -> String {
 }
 
 /// Escape characters with meaning in Markdown link text and headings.
-fn escape_md(s: &str) -> String {
+pub fn escape_md(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for c in s.chars() {
         if "\\`*_{}[]()<>#+-.!|~$".contains(c) {
@@ -463,7 +492,7 @@ mod tests {
         let dir = tree();
         let mut files = Vec::new();
         let root = dir.path().canonicalize().unwrap();
-        assert!(!collect(&root, &root, 0, &mut files));
+        assert!(!collect(&root, &root, 0, is_markdown, &mut files));
         files.sort_by(|a, b| {
             let depth = |s: &str| s.matches('/').count().min(1);
             (depth(a), a.to_lowercase()).cmp(&(depth(b), b.to_lowercase()))

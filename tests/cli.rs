@@ -157,6 +157,7 @@ fn example_renders_every_feature() {
         "👍",
         "lang=\"rust\"",
         "<nav class=\"mdv-toc\"",
+        "href=\"cities.csv\"",
         "<figcaption class=\"mdv-code-title\">geometry.py</figcaption>",
         "mdv-line mdv-hl",
         "mdv-numbered",
@@ -1018,4 +1019,207 @@ fn folder_export_writes_a_site() {
     let refused = mdv().arg(dir.path()).arg("-o").arg(&busy).output().unwrap();
     assert!(!refused.status.success());
     assert!(String::from_utf8_lossy(&refused.stderr).contains("isn't empty"));
+}
+
+#[test]
+fn csv_and_tsv_files_are_tables() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("data.csv"), "name,n\n\"a, b\",2\nc,10\n").unwrap();
+    std::fs::write(dir.path().join("data.tsv"), "x\ty\n1\t2\n").unwrap();
+    std::fs::write(dir.path().join("README.md"), "# Data\n\n[CSV](data.csv)\n").unwrap();
+    let out = mdv()
+        .arg(dir.path().join("data.csv"))
+        .args(["-o", "-"])
+        .output()
+        .unwrap();
+    let html = String::from_utf8(out.stdout).unwrap();
+    assert!(html.contains("<td>a, b</td>"), "{html}");
+    assert!(html.contains("<th align=\"right\">n</th>"));
+
+    // Served: a page of its own, and in the listing and file list.
+    let server = start({
+        let mut c = mdv();
+        c.arg("--watch").arg(dir.path());
+        c
+    });
+    let a = &server.addr;
+    let page = http_get(a, "/data.tsv", a);
+    assert!(page.contains("data-doc=\"data.tsv\""), "{page}");
+    let events = http_get(a, "/__mdv/files", a);
+    assert!(
+        events.contains("\"data.csv\"") && events.contains("\"data.tsv\""),
+        "{events}"
+    );
+
+    // And in a static site.
+    let site = dir.path().join("site");
+    assert!(
+        mdv()
+            .arg(dir.path())
+            .arg("-o")
+            .arg(&site)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let exported = std::fs::read_to_string(site.join("data.csv.html")).unwrap();
+    assert!(exported.contains("<td>a, b</td>"));
+    assert!(site.join("data.tsv.html").is_file());
+    let index = std::fs::read_to_string(site.join("index.html")).unwrap();
+    assert!(index.contains("href=\"data.csv.html\""), "{index}");
+}
+
+#[test]
+fn github_references_follow_the_remote() {
+    let dir = tempfile::tempdir().unwrap();
+    let git = |args: &[&str]| {
+        assert!(
+            Command::new("git")
+                .arg("-C")
+                .arg(dir.path())
+                .args(args)
+                .status()
+                .unwrap()
+                .success()
+        );
+    };
+    git(&["init", "-q"]);
+    git(&["remote", "add", "origin", "git@github.com:octo/proj.git"]);
+    let md = dir.path().join("notes.md");
+    std::fs::write(&md, "Fixes #7, thanks @octo-cat. `#8` isn't.\n").unwrap();
+    let render = || {
+        let out = mdv().arg(&md).args(["-o", "-"]).output().unwrap();
+        String::from_utf8(out.stdout).unwrap()
+    };
+    let html = render();
+    assert!(
+        html.contains("<a class=\"mdv-ref\" href=\"https://github.com/octo/proj/issues/7\">#7</a>"),
+        "{html}"
+    );
+    assert!(html.contains("href=\"https://github.com/octo-cat\">@octo-cat</a>"));
+    assert!(html.contains("<code>#8</code>"));
+
+    // The settings file can name another repository, or turn them off.
+    let config = test_dir().join("config.toml");
+    std::fs::write(&config, "github_repo = \"other/repo\"\n").unwrap();
+    assert!(render().contains("https://github.com/other/repo/issues/7"));
+    std::fs::write(&config, "github_references = false\n").unwrap();
+    assert!(!render().contains("mdv-ref"));
+    std::fs::write(&config, "github_repo = \"nope\"\n").unwrap();
+    let bad = mdv().arg(&md).args(["-o", "-"]).output().unwrap();
+    assert!(!bad.status.success());
+    std::fs::remove_file(&config).unwrap();
+}
+
+#[test]
+fn lint_reports_problems() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a.md"), "# A\n\n### Skip\n\n![](x.png)\n").unwrap();
+    std::fs::write(dir.path().join("ok.md"), "# OK\n\n## Fine\n").unwrap();
+    let out = mdv().arg("--lint").arg(dir.path()).output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(out.status.code(), Some(1), "{text}");
+    assert!(
+        text.contains("a.md:3: heading level jumps from 1 to 3 (heading-increment)"),
+        "{text}"
+    );
+    assert!(
+        text.contains("a.md:5: image without alt text: x.png (image-alt)"),
+        "{text}"
+    );
+    assert!(text.contains("Linted 2 files: 2 problems."), "{text}");
+
+    // Rules can be turned off; unknown ones are an error.
+    let config = test_dir().join("config.toml");
+    std::fs::write(
+        &config,
+        "lint_ignore = [\"heading-increment\", \"image-alt\"]\n",
+    )
+    .unwrap();
+    let out = mdv().arg("--lint").arg(dir.path()).output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    std::fs::write(&config, "lint_ignore = [\"nope\"]\n").unwrap();
+    let out = mdv().arg("--lint").arg(dir.path()).output().unwrap();
+    assert!(String::from_utf8_lossy(&out.stderr).contains("unknown rule \"nope\""));
+    std::fs::remove_file(&config).unwrap();
+}
+
+#[test]
+fn desktop_integration() {
+    let dir = tempfile::tempdir().unwrap();
+    let install = mdv()
+        .arg("--install-desktop")
+        .env("XDG_DATA_HOME", dir.path())
+        .output()
+        .unwrap();
+    let entry = dir.path().join("applications/markdown-viewer.desktop");
+    if cfg!(target_os = "macos") {
+        assert!(!install.status.success());
+        assert!(String::from_utf8_lossy(&install.stderr).contains("--install-finder"));
+        return;
+    }
+    assert!(
+        install.status.success(),
+        "{}",
+        String::from_utf8_lossy(&install.stderr)
+    );
+    let text = std::fs::read_to_string(&entry).unwrap();
+    assert!(
+        text.contains("--watch --exit-when-closed %f") && text.contains("MimeType=text/markdown;")
+    );
+    assert!(
+        dir.path()
+            .join("icons/hicolor/scalable/apps/markdown-viewer.svg")
+            .is_file()
+    );
+    let uninstall = mdv()
+        .arg("--uninstall-desktop")
+        .env("XDG_DATA_HOME", dir.path())
+        .output()
+        .unwrap();
+    assert!(uninstall.status.success());
+    assert!(!entry.exists());
+}
+
+#[test]
+fn recent_files_are_remembered_and_listed() {
+    let home = tempfile::tempdir().unwrap();
+    let home_path = home.path().canonicalize().unwrap();
+    let notes = home_path.join("notes");
+    std::fs::create_dir(&notes).unwrap();
+    std::fs::write(notes.join("todo list.md"), "# Todo\n").unwrap();
+    // Opening a file (here served, without a browser) remembers it;
+    // exporting doesn't.
+    drop(start({
+        let mut c = mdv();
+        c.arg("--watch")
+            .arg(notes.join("todo list.md"))
+            .env("HOME", &home_path);
+        c
+    }));
+    let export = mdv()
+        .arg(notes.join("todo list.md"))
+        .args(["-o", "-"])
+        .env("HOME", &home_path)
+        .output()
+        .unwrap();
+    assert!(export.status.success());
+    let state = std::fs::read_to_string(test_dir().join("state.json")).unwrap();
+    assert_eq!(state.matches("todo list.md").count(), 1, "{state}");
+
+    // No FILE in the home folder: the Recent page, linking to the file.
+    let server = start({
+        let mut c = mdv();
+        c.current_dir(&home_path).env("HOME", &home_path);
+        c
+    });
+    let a = &server.addr;
+    let page = http_get(a, "/", a);
+    assert!(page.contains("<title>(Recent)</title>"), "{page}");
+    assert!(page.contains("href=\"/notes/todo%20list.md\""), "{page}");
+    assert!(http_get(a, "/notes/todo%20list.md", a).contains("Todo"));
 }

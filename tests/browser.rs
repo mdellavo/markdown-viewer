@@ -747,3 +747,60 @@ fn static_site_works_from_disk() {
         serde_json::json!(true)
     );
 }
+
+#[test]
+fn tables_sort_and_stay_sorted_across_edits() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("t.md");
+    let table = "| Name | Size |\n| --- | --- |\n| b | 10 |\n| a | 9 |\n| c | 100 |\n";
+    std::fs::write(&md, format!("# T\n\n{table}")).unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    let names = "return [...document.querySelectorAll('.markdown-body tbody tr')].map(r => r.cells[0].textContent).join('');";
+    let click = |col: usize| {
+        js(
+            &tab,
+            &format!(
+                "document.querySelectorAll('.markdown-body thead th')[{col}].click(); return null;"
+            ),
+        );
+    };
+    until(
+        &tab,
+        "document.querySelector('table.mdv-sortable')",
+        "a sortable table",
+    );
+    click(1);
+    assert_eq!(
+        js(&tab, names),
+        "abc",
+        "numbers sort as numbers: 9 < 10 < 100"
+    );
+    click(0);
+    assert_eq!(js(&tab, names), "abc");
+    click(0);
+    assert_eq!(js(&tab, names), "cba");
+
+    // An edit above the table: it stays sorted, and each row keeps its own
+    // source line (for click-to-source).
+    std::fs::write(&md, format!("# T\n\nNew paragraph.\n\n{table}")).unwrap();
+    until(
+        &tab,
+        "document.querySelector('.markdown-body p')",
+        "the update",
+    );
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(js(&tab, names), "cba");
+    let lines = js(
+        &tab,
+        "return [...document.querySelectorAll('.markdown-body tbody tr')].map(r => r.cells[0].textContent + r.getAttribute('data-sourcepos').split(':')[0]).join(' ');",
+    );
+    assert_eq!(lines, "c9 b7 a8");
+    click(0);
+    assert_eq!(
+        js(&tab, names),
+        "bac",
+        "a third click restores the file's order"
+    );
+}

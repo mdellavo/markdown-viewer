@@ -11,6 +11,7 @@ use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 mod browser;
 mod codeblocks;
 mod config;
+mod desktop;
 mod docs;
 mod editor;
 #[cfg(target_os = "macos")]
@@ -20,11 +21,15 @@ mod gitdiff;
 mod github;
 mod instances;
 mod links;
+mod lint;
 mod obsidian;
 mod pdf;
+mod recent;
+mod references;
 mod render;
 mod server;
 mod site;
+mod tables;
 mod tasks;
 mod theme;
 mod toc;
@@ -75,9 +80,21 @@ struct Cli {
     #[arg(long, conflicts_with_all = ["watch", "output", "pdf", "clipboard", "goto"])]
     check_links: bool,
 
+    /// Show the files and folders you opened recently (also what you get
+    /// with no FILE in your home folder).
+    #[arg(long, conflicts_with_all = ["file", "clipboard", "goto", "output", "pdf", "check_links", "lint"])]
+    recent: bool,
+
     /// With --check-links: also check web links (needs curl).
     #[arg(long, requires = "check_links")]
     online: bool,
+
+    /// Report writing problems in FILE (or every Markdown file in a
+    /// folder): skipped heading levels, images without alt text, empty
+    /// links and more; exits with status 1 if there are any. Combines with
+    /// --check-links.
+    #[arg(long, conflicts_with_all = ["watch", "output", "pdf", "clipboard", "goto"])]
+    lint: bool,
 
     /// Port for --watch (default: any free port).
     #[arg(short, long)]
@@ -118,6 +135,15 @@ struct Cli {
     /// macOS: remove the Finder integration.
     #[arg(long, exclusive = true, hide = !cfg!(target_os = "macos"))]
     uninstall_finder: bool,
+
+    /// Linux: add "Markdown Viewer" to your desktop's applications, for
+    /// Open With on Markdown, CSV and TSV files (current user only).
+    #[arg(long, exclusive = true, hide = cfg!(target_os = "macos"))]
+    install_desktop: bool,
+
+    /// Linux: remove the desktop integration.
+    #[arg(long, exclusive = true, hide = cfg!(target_os = "macos"))]
+    uninstall_desktop: bool,
 
     /// Colour theme (default: the one you last chose in the viewer, else
     /// auto). Press t in the viewer to switch.
@@ -193,6 +219,12 @@ struct Settings {
     /// `None`: decide by whether the file is in an Obsidian vault.
     obsidian: Option<bool>,
     editor: Option<String>,
+    github_references: bool,
+    /// The repository for references, from the settings file.
+    github_repo: Option<String>,
+    lint_ignore: Vec<String>,
+    /// Remember opened files for the Recent page.
+    recent: bool,
 }
 
 impl Settings {
@@ -235,6 +267,13 @@ impl Settings {
             front_matter: cli.front_matter.or(config.front_matter).unwrap_or_default(),
             obsidian,
             editor: cli.editor.clone().or(config.editor),
+            github_references: config.github_references.unwrap_or(true),
+            github_repo: config
+                .github_repo
+                .as_deref()
+                .and_then(references::from_setting),
+            lint_ignore: config.lint_ignore.unwrap_or_default(),
+            recent: config.recent.unwrap_or(true),
         })
     }
 
@@ -258,6 +297,11 @@ impl Settings {
             obsidian: self.obsidian.unwrap_or_else(|| obsidian::in_vault(at)),
             front_matter: self.front_matter,
             line_numbers: self.line_numbers,
+            github: if self.github_references {
+                self.github_repo.clone().or_else(|| references::detect(at))
+            } else {
+                None
+            },
         }
     }
 
@@ -278,10 +322,12 @@ impl Settings {
 enum Source {
     File(PathBuf),
     Folder(PathBuf),
-    /// Text with no file behind it: standard input or the clipboard.
+    /// Text with no file behind it: standard input, the clipboard or the
+    /// Recent page, served from `root` (relative links resolve there).
     Text {
         name: &'static str,
         text: String,
+        root: PathBuf,
     },
 }
 
@@ -302,6 +348,12 @@ fn run(cli: Cli) -> Result<()> {
     if cli.install_finder || cli.uninstall_finder {
         return finder_integration(cli.install_finder);
     }
+    if cli.install_desktop {
+        return desktop::install();
+    }
+    if cli.uninstall_desktop {
+        return desktop::uninstall();
+    }
     let settings = Settings::new(&cli, Config::load()?)?;
     let cwd = std::env::current_dir()?.canonicalize()?;
 
@@ -320,11 +372,21 @@ fn run(cli: Cli) -> Result<()> {
     if goto.is_some() && cli.if_running {
         return Ok(());
     }
-    let watch = cli.watch || goto.is_some();
+    // The Recent page: asked for, or no FILE in the home folder (browsing
+    // all of it is rarely what you want). Its links go through the server,
+    // so it's always served.
+    let home = config::home().and_then(|h| h.canonicalize().ok());
+    let show_recent = cli.recent
+        || (cli.file.is_none()
+            && !cli.clipboard
+            && goto.is_none()
+            && settings.recent
+            && home.as_ref() == Some(&cwd));
+    let watch = cli.watch || goto.is_some() || show_recent;
 
-    if cli.check_links {
+    if cli.check_links || cli.lint {
         let target = cli.file.clone().unwrap_or_else(|| cwd.clone());
-        return check_links(&settings, &target, cli.online);
+        return check(&settings, &target, cli.check_links, cli.online, cli.lint);
     }
 
     let source = if let Some((file, _)) = &goto {
@@ -333,6 +395,14 @@ fn run(cli: Cli) -> Result<()> {
         Source::Text {
             name: "Clipboard",
             text: read_clipboard()?,
+            root: cwd.clone(),
+        }
+    } else if show_recent {
+        let home = home.context("cannot find your home folder")?;
+        Source::Text {
+            name: "Recent",
+            text: recent::page(&Prefs::load().recent, &home),
+            root: home,
         }
     } else {
         match &cli.file {
@@ -344,6 +414,7 @@ fn run(cli: Cli) -> Result<()> {
                 Source::Text {
                     name: "stdin",
                     text,
+                    root: cwd.clone(),
                 }
             }
             Some(p) => {
@@ -361,6 +432,15 @@ fn run(cli: Cli) -> Result<()> {
             None => Source::Folder(cwd.clone()),
         }
     };
+
+    // Remember what was opened (not exported) for the Recent page.
+    if settings.recent
+        && cli.output.is_none()
+        && cli.pdf.is_none()
+        && let Source::File(path) | Source::Folder(path) = &source
+    {
+        recent::record(path);
+    }
 
     let (markdown, dir, title) = match &source {
         Source::Folder(path) => {
@@ -385,13 +465,18 @@ fn run(cli: Cli) -> Result<()> {
                 .to_path_buf(),
             server::file_title(path),
         ),
-        Source::Text { name, text } => (text.clone(), cwd.clone(), name.to_string()),
+        Source::Text { name, text, root } => (text.clone(), root.clone(), name.to_string()),
     };
     if !watch && (cli.exit_when_closed || cli.port.is_some()) {
         bail!("--port and --exit-when-closed need --watch");
     }
 
-    let (renderer, body) = render_standalone(&settings, &markdown, &dir);
+    let (renderer, mut body) = render_standalone(&settings, &markdown, &dir);
+    if let Source::File(path) = &source
+        && let Some(delim) = tables::delimiter(path)
+    {
+        body = tables::to_html(&markdown, delim);
+    }
 
     if let Some(output) = &cli.output {
         let page = settings.page(title, settings.export_theme());
@@ -449,6 +534,8 @@ fn docs_command() -> clap::Command {
     Cli::command()
         .mut_arg("install_finder", |a| a.hide(false))
         .mut_arg("uninstall_finder", |a| a.hide(false))
+        .mut_arg("install_desktop", |a| a.hide(false))
+        .mut_arg("uninstall_desktop", |a| a.hide(false))
 }
 
 /// Render for a page that isn't served: Obsidian links (if on) resolve
@@ -514,7 +601,9 @@ fn parse_goto(spec: &str) -> Result<(PathBuf, u32)> {
 }
 
 /// --check-links: report broken links; fail if there are any.
-fn check_links(settings: &Settings, target: &Path, online: bool) -> Result<()> {
+/// `--check-links` and/or `--lint`: report problems as `file:line: what
+/// (why)`, and exit with status 1 if there are any.
+fn check(settings: &Settings, target: &Path, links: bool, online: bool, lint: bool) -> Result<()> {
     let target = target
         .canonicalize()
         .with_context(|| format!("cannot open {}", target.display()))?;
@@ -529,6 +618,12 @@ fn check_links(settings: &Settings, target: &Path, online: bool) -> Result<()> {
     };
     let renderer = Arc::new(Renderer::with_options(settings.render_options(true, &root)));
     let checker = links::Checker::new(renderer, root.clone());
+    // Lint without Obsidian embeds (other files' problems) or GitHub links.
+    let lint_renderer = Renderer::with_options(RenderOptions {
+        obsidian: false,
+        github: None,
+        ..settings.render_options(true, &root)
+    });
     let shown = |f: &Path| -> String {
         let base = if target.is_dir() { &target } else { &root };
         f.strip_prefix(base)
@@ -539,7 +634,22 @@ fn check_links(settings: &Settings, target: &Path, online: bool) -> Result<()> {
     let mut problems: Vec<(String, u32, String, String)> = Vec::new();
     let mut web: Vec<(String, links::Link)> = Vec::new();
     let mut total = 0;
+    let mut lint_count = 0;
     for file in &files {
+        if lint {
+            let text = read(file)?;
+            for p in lint::check(
+                &text,
+                &lint_renderer.render_body(&text),
+                &settings.lint_ignore,
+            ) {
+                lint_count += 1;
+                problems.push((shown(file), p.line, p.message, p.rule.to_string()));
+            }
+        }
+        if !links {
+            continue;
+        }
         let (broken, external, count) = checker.check(file);
         total += count;
         for b in broken {
@@ -566,11 +676,24 @@ fn check_links(settings: &Settings, target: &Path, online: bool) -> Result<()> {
         format!(" {} web links not checked (add --online).", web.len())
     };
     let files_word = if files.len() == 1 { "file" } else { "files" };
-    say(&format!(
-        "Checked {total} links in {} {files_word}: {} broken.{not_checked}",
-        files.len(),
-        problems.len()
-    ));
+    if links {
+        say(&format!(
+            "Checked {total} links in {} {files_word}: {} broken.{not_checked}",
+            files.len(),
+            problems.len() - lint_count
+        ));
+    }
+    if lint {
+        let word = if lint_count == 1 {
+            "problem"
+        } else {
+            "problems"
+        };
+        say(&format!(
+            "Linted {} {files_word}: {lint_count} {word}.",
+            files.len()
+        ));
+    }
     if !problems.is_empty() {
         std::process::exit(1);
     }
@@ -580,7 +703,6 @@ fn check_links(settings: &Settings, target: &Path, online: bool) -> Result<()> {
 /// Serve with live reload. `start_line` opens the page at that line.
 fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32>) -> Result<()> {
     // What we serve from, what `/` shows, and who we are (for reuse).
-    let cwd = std::env::current_dir()?.canonicalize()?;
     let (root, main, identity) = match source {
         Source::Folder(dir) => (dir.clone(), None, Some(dir.clone())),
         Source::File(file) => {
@@ -594,7 +716,9 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
                 .unwrap_or_else(|| parent.to_path_buf());
             (root, Some(file.clone()), Some(file.clone()))
         }
-        Source::Text { name, .. } => (cwd.clone(), Some(cwd.join(format!("({name})"))), None),
+        Source::Text { name, root, .. } => {
+            (root.clone(), Some(root.join(format!("({name})"))), None)
+        }
     };
 
     // Already being served? Reuse that viewer (and bring its window

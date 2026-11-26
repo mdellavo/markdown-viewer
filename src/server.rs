@@ -319,7 +319,7 @@ async fn events(State(state): State<AppState>, Query(q): Query<EventsQuery>) -> 
             }
         }
     } else {
-        resolve(state.docs.root(), &q.doc, true).filter(|p| p.is_dir() || docs::is_markdown(p))
+        resolve(state.docs.root(), &q.doc, true).filter(|p| p.is_dir() || docs::is_viewable(p))
     };
     let Some(doc) = doc else {
         return StatusCode::NOT_FOUND.into_response();
@@ -599,7 +599,7 @@ async fn whoami(State(state): State<AppState>) -> Response {
 
 async fn list_files(State(state): State<AppState>) -> Response {
     let docs = state.docs.clone();
-    match tokio::task::spawn_blocking(move || docs.list_files()).await {
+    match tokio::task::spawn_blocking(move || docs.list_documents()).await {
         Ok((files, truncated)) => no_store(
             Json(serde_json::json!({ "files": files, "truncated": truncated })).into_response(),
         ),
@@ -659,7 +659,7 @@ async fn path_handler(State(state): State<AppState>, req: Request) -> Response {
         }
         return dir_page(&state, &path);
     }
-    if docs::is_markdown(&path) {
+    if docs::is_viewable(&path) {
         return doc_page(&state, &path);
     }
     match tokio::fs::read(&path).await {

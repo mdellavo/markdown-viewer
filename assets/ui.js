@@ -318,7 +318,9 @@
   }
   function fileHref(f) {
     if (siteRoot === null) return "/" + f.split("/").map(encodeURIComponent).join("/");
-    return siteRoot + f.replace(/\.(md|markdown|mdown|mkd|mkdn)$/i, ".html").split("/").map(encodeURIComponent).join("/");
+    var page = /\.(md|markdown|mdown|mkd|mkdn)$/i.test(f)
+      ? f.replace(/\.[^.]+$/, ".html") : f + ".html";
+    return siteRoot + page.split("/").map(encodeURIComponent).join("/");
   }
   var filesLoaded = false;
   var searchTimer, searchSeq = 0;
@@ -437,6 +439,97 @@
     return ok;
   }
   (window.mdvEnhancers = window.mdvEnhancers || []).push(addCopyButtons);
+
+  // ---- Sortable tables -----------------------------------------------------
+  // Click a header to sort by that column: ascending, descending, then back
+  // to the file's order. Sorting is the reader's view, not a change to the
+  // document: live.js calls mdvSort.save() before an update (restoring the
+  // file's order, which its source positions follow) and restore() after.
+  function sortable(table) {
+    return table.tHead && table.tBodies.length === 1 && table.tBodies[0].rows.length > 1 &&
+      !table.closest(".mdv-ui");
+  }
+  function markSortable(container) {
+    container.querySelectorAll("table").forEach(function (t) {
+      if (sortable(t)) t.classList.add("mdv-sortable");
+    });
+  }
+  markSortable(body);
+  (window.mdvEnhancers = window.mdvEnhancers || []).push(markSortable);
+
+  var NUMBER = /^[-+]?[$€£¥]?\s*[-+]?(\d[\d,]*\.?\d*|\.\d+)(e[-+]?\d+)?\s*%?$/i;
+  function sortKey(cell) {
+    var text = cell ? cell.textContent.trim() : "";
+    if (NUMBER.test(text)) {
+      var n = parseFloat(text.replace(/[^\d.eE+-]/g, ""));
+      if (isFinite(n)) return { n: n, t: text };
+    }
+    return { n: null, t: text };
+  }
+  var collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+  function sortTable(table, col, dir) {
+    var tbody = table.tBodies[0];
+    var rows = Array.prototype.slice.call(tbody.rows);
+    rows.forEach(function (r, i) {
+      if (!r.hasAttribute("data-mdv-order")) r.setAttribute("data-mdv-order", String(i));
+    });
+    var order = function (r) { return +r.getAttribute("data-mdv-order"); };
+    if (dir) {
+      var keys = new Map(rows.map(function (r) { return [r, sortKey(r.cells[col])]; }));
+      var sign = dir === "descending" ? -1 : 1;
+      rows.sort(function (a, b) {
+        var x = keys.get(a), y = keys.get(b);
+        // Empty cells last, whichever way.
+        if (!x.t !== !y.t) return x.t ? -1 : 1;
+        var c = x.n !== null && y.n !== null ? x.n - y.n
+          : x.n !== null ? -1 : y.n !== null ? 1 : collator.compare(x.t, y.t);
+        return c * sign || order(a) - order(b);
+      });
+    } else {
+      rows.sort(function (a, b) { return order(a) - order(b); });
+    }
+    rows.forEach(function (r) {
+      if (!dir) r.removeAttribute("data-mdv-order");
+      tbody.appendChild(r);
+    });
+    Array.prototype.forEach.call(table.tHead.rows[0].cells, function (th, i) {
+      if (dir && i === col) th.setAttribute("aria-sort", dir);
+      else th.removeAttribute("aria-sort");
+    });
+  }
+  body.addEventListener("click", function (e) {
+    var th = e.target.closest && e.target.closest("thead th");
+    if (!th || e.target.closest("a")) return;
+    var table = th.closest("table");
+    if (!table || !body.contains(table) || !sortable(table)) return;
+    var now = th.getAttribute("aria-sort");
+    var next = now === "ascending" ? "descending" : now === "descending" ? null : "ascending";
+    sortTable(table, th.cellIndex, next);
+  });
+
+  function tableSignature(table) {
+    return table.tHead ? table.tHead.textContent.replace(/\s+/g, " ").trim() : "";
+  }
+  window.mdvSort = {
+    // Put every sorted table back in the file's order; returns what to redo.
+    save: function (container) {
+      var saved = [];
+      container.querySelectorAll("table").forEach(function (t, i) {
+        var th = t.tHead && t.tHead.querySelector("th[aria-sort]");
+        if (!th) return;
+        saved.push([i, tableSignature(t), th.cellIndex, th.getAttribute("aria-sort")]);
+        sortTable(t, th.cellIndex, null);
+      });
+      return saved;
+    },
+    restore: function (container, saved) {
+      var tables = container.querySelectorAll("table");
+      saved.forEach(function (s) {
+        var t = tables[s[0]];
+        if (t && sortable(t) && tableSignature(t) === s[1]) sortTable(t, s[2], s[3]);
+      });
+    },
+  };
 
   // ---- Task lists ----------------------------------------------------------
   // On served Markdown files, ticking a box changes its [ ] in the file;

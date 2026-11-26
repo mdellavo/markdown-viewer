@@ -57,6 +57,15 @@
     });
   }
 
+  // Sorted tables (ui.js): back to the file's order around updates, so
+  // comparisons and source positions match the server's markup.
+  function saveSorts(container) {
+    return window.mdvSort ? window.mdvSort.save(container) : [];
+  }
+  function restoreSorts(container, saved) {
+    if (window.mdvSort && saved.length) window.mdvSort.restore(container, saved);
+  }
+
   // Undo transient UI decoration so it doesn't count as a change.
   function clean(container) {
     container.querySelectorAll(".mdv-flash, [class*='mdv-git-']").forEach(function (n) {
@@ -88,11 +97,13 @@
       if (version !== latest) return;
       lastKeys = blocks.map(key);
       var folds = saveFolds(body);
+      var sorts = saveSorts(body);
       clean(body);
       var same = body.children.length === next.children.length &&
         Array.prototype.every.call(body.children, function (c, i) { return c.isEqualNode(next.children[i]); });
       if (!same) body.replaceChildren.apply(body, Array.prototype.slice.call(next.childNodes));
       restoreFolds(body, folds);
+      restoreSorts(body, sorts);
       document.dispatchEvent(new CustomEvent("mdv:updated", { detail: { changed: null } }));
     });
   }
@@ -114,6 +125,7 @@
         return firstSync(blocks, version);
       }
       var folds = saveFolds(body);
+      var sorts = saveSorts(body);
       var x = window.scrollX, y = window.scrollY;
       var after = body.children[oldN - tail] || null;
       for (var i = oldN - tail - 1; i >= head; i--) body.children[i].remove();
@@ -123,6 +135,7 @@
         syncPositions(body.children[newN - tail + t], blocks[newN - tail + t]);
       }
       restoreFolds(body, folds);
+      restoreSorts(body, sorts);
       window.scrollTo(x, y);
       lastKeys = keys;
       var moved = head === oldN && head === newN;

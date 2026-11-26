@@ -37,8 +37,14 @@ pub fn export(
     page: &dyn Fn(String) -> PageOptions,
 ) -> Result<Summary> {
     let out = prepare(root, out)?;
-    let (files, truncated) = docs::markdown_files(root);
+    let (files, truncated) = docs::document_files(root);
     let markdown: HashSet<&str> = files.iter().map(String::as_str).collect();
+    // Wiki links resolve to notes only, as in the viewer.
+    let notes: Vec<String> = files
+        .iter()
+        .filter(|f| docs::is_markdown(Path::new(f.as_str())))
+        .cloned()
+        .collect();
     // Folders with Markdown somewhere inside, each getting an index.html.
     let mut folders = BTreeSet::from([String::new()]);
     for f in &files {
@@ -53,7 +59,7 @@ pub fn export(
         obsidian,
         root,
         out: &out,
-        files: &files,
+        notes: &notes,
         markdown,
         folders: &folders,
         page,
@@ -138,7 +144,7 @@ struct Site<'a> {
     obsidian: bool,
     root: &'a Path,
     out: &'a Path,
-    files: &'a [String],
+    notes: &'a [String],
     markdown: HashSet<&'a str>,
     folders: &'a BTreeSet<String>,
     page: &'a dyn Fn(String) -> PageOptions,
@@ -155,14 +161,16 @@ impl Site<'_> {
         assets: &mut BTreeSet<String>,
         libs: &mut Libs,
     ) -> Result<()> {
-        let is_folder = to.ends_with("index.html") && !docs::is_markdown(Path::new(doc));
+        let is_folder = to.ends_with("index.html") && !docs::is_viewable(Path::new(doc));
         let dir = if is_folder { doc } else { parent(doc) };
-        let body = if self.obsidian {
+        let body = if let Some(delim) = crate::tables::delimiter(Path::new(doc)) {
+            crate::tables::to_html(text, delim)
+        } else if self.obsidian {
             let abs = self.root.join(dir);
             let ctx = LinkContext {
                 root: self.root,
                 dir: &abs,
-                files: self.files,
+                files: self.notes,
                 served: false,
                 depth: 0,
             };
@@ -395,8 +403,12 @@ fn write_support(out: &Path, files: &[String], libs: &Libs) -> Result<()> {
     Ok(())
 }
 
-/// `a/b.md` → `a/b.html`.
+/// `a/b.md` → `a/b.html`; other pages keep their extension, so they
+/// can't clash (`data.csv` → `data.csv.html`).
 fn html_name(rel: &str) -> String {
+    if !docs::is_markdown(Path::new(rel)) {
+        return format!("{rel}.html");
+    }
     let stem = match rel.rfind('.') {
         Some(dot) if dot > rel.rfind('/').map_or(0, |s| s + 1) => &rel[..dot],
         _ => rel,
@@ -441,7 +453,7 @@ mod tests {
         assert_eq!(relative_url("a", "a/x.html"), "x.html");
         assert_eq!(relative_url("", "c:d.html"), "./c:d.html");
         assert_eq!(html_name("a.b/README.markdown"), "a.b/README.html");
-        assert_eq!(html_name("a.b/notes"), "a.b/notes.html");
+        assert_eq!(html_name("a.b/notes.csv"), "a.b/notes.csv.html");
     }
 
     #[test]

@@ -4,7 +4,7 @@
 .SH NAME
 markdown\-viewer \- Render a Markdown file with GitHub styling and live\-reload it in your browser
 .SH SYNOPSIS
-\fBmarkdown\-viewer\fR [\fB\-w\fR|\fB\-\-watch\fR] [\fB\-o\fR|\fB\-\-output\fR] [\fB\-\-pdf\fR] [\fB\-\-clipboard\fR] [\fB\-\-goto\fR] [\fB\-\-if\-running\fR] [\fB\-\-check\-links\fR] [\fB\-\-online\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-\-no\-open\fR] [\fB\-\-browser\fR] [\fB\-\-app\fR] [\fB\-\-window\fR] [\fB\-\-tab\fR] [\fB\-\-exit\-when\-closed\fR] [\fB\-\-install\-finder\fR] [\fB\-\-uninstall\-finder\fR] [\fB\-\-theme\fR] [\fB\-\-style\fR] [\fB\-\-css\fR] [\fB\-\-number\-headings\fR] [\fB\-\-line\-numbers\fR] [\fB\-\-front\-matter\fR] [\fB\-\-obsidian\fR] [\fB\-\-no\-obsidian\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIFILE\fR] 
+\fBmarkdown\-viewer\fR [\fB\-w\fR|\fB\-\-watch\fR] [\fB\-o\fR|\fB\-\-output\fR] [\fB\-\-pdf\fR] [\fB\-\-clipboard\fR] [\fB\-\-goto\fR] [\fB\-\-if\-running\fR] [\fB\-\-check\-links\fR] [\fB\-\-recent\fR] [\fB\-\-online\fR] [\fB\-\-lint\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-\-no\-open\fR] [\fB\-\-browser\fR] [\fB\-\-app\fR] [\fB\-\-window\fR] [\fB\-\-tab\fR] [\fB\-\-exit\-when\-closed\fR] [\fB\-\-install\-finder\fR] [\fB\-\-uninstall\-finder\fR] [\fB\-\-install\-desktop\fR] [\fB\-\-uninstall\-desktop\fR] [\fB\-\-theme\fR] [\fB\-\-style\fR] [\fB\-\-css\fR] [\fB\-\-number\-headings\fR] [\fB\-\-line\-numbers\fR] [\fB\-\-front\-matter\fR] [\fB\-\-obsidian\fR] [\fB\-\-no\-obsidian\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIFILE\fR] 
 .SH DESCRIPTION
 Render a Markdown file with GitHub styling and live\-reload it in your browser
 .SH OPTIONS
@@ -30,8 +30,14 @@ With \-\-goto: do nothing if no viewer is showing the file (for editors followin
 \fB\-\-check\-links\fR
 Check links and images in FILE (or every Markdown file in a folder) and report broken ones; exits with status 1 if any are
 .TP
+\fB\-\-recent\fR
+Show the files and folders you opened recently (also what you get with no FILE in your home folder)
+.TP
 \fB\-\-online\fR
 With \-\-check\-links: also check web links (needs curl)
+.TP
+\fB\-\-lint\fR
+Report writing problems in FILE (or every Markdown file in a folder): skipped heading levels, images without alt text, empty links and more; exits with status 1 if there are any. Combines with \-\-check\-links
 .TP
 \fB\-p\fR, \fB\-\-port\fR \fI<PORT>\fR
 Port for \-\-watch (default: any free port)
@@ -59,6 +65,12 @@ macOS: add "Markdown Viewer" to Finder (Open With, double\-click and a right\-cl
 .TP
 \fB\-\-uninstall\-finder\fR
 macOS: remove the Finder integration
+.TP
+\fB\-\-install\-desktop\fR
+Linux: add "Markdown Viewer" to your desktop\*(Aqs applications, for Open With on Markdown, CSV and TSV files (current user only)
+.TP
+\fB\-\-uninstall\-desktop\fR
+Linux: remove the desktop integration
 .TP
 \fB\-\-theme\fR \fI<THEME>\fR
 Colour theme (default: the one you last chose in the viewer, else auto). Press t in the viewer to switch

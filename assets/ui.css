@@ -185,3 +185,11 @@ html.mdv-sidebar-open .mdv-sidebar { transform: none; box-shadow: 0 0 24px rgba(
 
 /* Task boxes that update the file (served pages). */
 .markdown-body input.task-list-item-checkbox:not([disabled]) { cursor: pointer; }
+
+/* Sortable tables: click a header. The arrow shows the current order. */
+.markdown-body table.mdv-sortable thead th { cursor: pointer; user-select: none; }
+.markdown-body table.mdv-sortable thead th:hover { background: var(--bgColor-muted); }
+.markdown-body table.mdv-sortable th[aria-sort]::after {
+  content: "▲"; display: inline-block; margin-left: 4px; font-size: 0.7em; color: var(--fgColor-muted);
+}
+.markdown-body table.mdv-sortable th[aria-sort="descending"]::after { content: "▼"; }

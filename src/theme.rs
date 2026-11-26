@@ -173,7 +173,9 @@ const CODE_AND_TOC: &str = "\
 .markdown-body pre.mdv-wrapped, .markdown-body pre.mdv-wrapped code { white-space: pre-wrap; word-break: break-word; }\n\
 .markdown-body .mdv-toc { margin-bottom: 16px; padding: 8px 16px; border-left: 3px solid var(--borderColor-default); }\n\
 .markdown-body .mdv-toc ul { margin: 0; padding-left: 1.4em; }\n\
-.markdown-body .mdv-toc > ul { padding-left: 0; list-style: none; }\n";
+.markdown-body .mdv-toc > ul { padding-left: 0; list-style: none; }\n\
+.markdown-body .mdv-data-note { color: var(--fgColor-muted); font-size: 12px; }\n\
+.markdown-body table.mdv-data td { white-space: pre-wrap; }\n";
 
 /// CSS counters for `data-mdv-number="h1"` (number from h1) or `"h2"`
 /// (a single h1 is the title). Four levels deep.

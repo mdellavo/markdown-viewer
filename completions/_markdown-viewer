@@ -39,7 +39,9 @@ hide\:"Leave it out"))' \
 '()--clipboard[Preview the clipboard instead of a file. With --watch, the page follows the clipboard as it changes]' \
 '--if-running[With --goto\: do nothing if no viewer is showing the file (for editors following the cursor, so a closed preview stays closed)]' \
 '(-w --watch -o --output --pdf --clipboard --goto)--check-links[Check links and images in FILE (or every Markdown file in a folder) and report broken ones; exits with status 1 if any are]' \
+'(--clipboard --goto -o --output --pdf --check-links --lint)--recent[Show the files and folders you opened recently (also what you get with no FILE in your home folder)]' \
 '--online[With --check-links\: also check web links (needs curl)]' \
+'(-w --watch -o --output --pdf --clipboard --goto)--lint[Report writing problems in FILE (or every Markdown file in a folder)\: skipped heading levels, images without alt text, empty links and more; exits with status 1 if there are any. Combines with --check-links]' \
 '--no-open[Don'\''t open a browser]' \
 '--app[Open as a minimal app window with no tabs or address bar (default). Chrome, Edge, Brave, Chromium and Vivaldi only; other browsers get a new window]' \
 '--window[Open in a normal new browser window]' \
@@ -52,6 +54,8 @@ hide\:"Leave it out"))' \
 '--generate-man[Print the man page]' \
 '--install-finder[macOS\: add "Markdown Viewer" to Finder (Open With, double-click and a right-click Quick Action) for the current user]' \
 '--uninstall-finder[macOS\: remove the Finder integration]' \
+'--install-desktop[Linux\: add "Markdown Viewer" to your desktop'\''s applications, for Open With on Markdown, CSV and TSV files (current user only)]' \
+'--uninstall-desktop[Linux\: remove the desktop integration]' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '-V[Print version]' \

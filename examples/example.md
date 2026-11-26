@@ -61,6 +61,8 @@ Every heading gets an anchor; hover one to see the link icon.
 - Email autolink: someone@example.com
 - Link to a heading on this page: [jump to Mermaid](#mermaid-diagrams)
 - Relative link to another Markdown file: [other.md](other.md)
+- GitHub references (in a checkout with a GitHub remote): #1, GH-1,
+  rust-lang/rust#1 and @github
 
 [spec]: https://spec.commonmark.org/ "CommonMark"
 
@@ -127,6 +129,9 @@ Task list:
 | Tables | ✅ | left, center and right alignment |
 | **Inline** *formatting* | ✅ | `code`, [links](#links), ~~strike~~ |
 | Escaped \| pipe | ✅ | use `\|` |
+
+In the viewer, click a column header to sort. CSV and TSV files are shown
+as tables too: [cities.csv](cities.csv).
 
 ## Code
 

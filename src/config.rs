@@ -41,6 +41,17 @@ pub struct Config {
     pub line_numbers: Option<bool>,
     /// Obsidian notes; by default, on inside a vault (a `.obsidian` folder).
     pub obsidian: Option<bool>,
+    /// Link `#123`, `@user` and commit hashes to GitHub (default: on, in a
+    /// git checkout with a GitHub remote).
+    pub github_references: Option<bool>,
+    /// The repository for GitHub references, `owner/repo` or its web
+    /// address, if it isn't found from the git remote.
+    pub github_repo: Option<String>,
+    /// `--lint` rules to skip.
+    pub lint_ignore: Option<Vec<String>>,
+    /// Remember the files and folders you open, for the Recent page
+    /// (default: on).
+    pub recent: Option<bool>,
 }
 
 impl Config {
@@ -61,6 +72,20 @@ impl Config {
         config.css = config.css.map(|p| expand_home(&p));
         if let Some(open) = &config.open {
             open_mode(open)?;
+        }
+        if let Some(repo) = &config.github_repo
+            && crate::references::from_setting(repo).is_none()
+        {
+            anyhow::bail!("github_repo: expected owner/repo or a GitHub address, got {repo:?}");
+        }
+        for rule in config.lint_ignore.iter().flatten() {
+            if !crate::lint::RULES.iter().any(|(name, _)| name == rule) {
+                let names: Vec<&str> = crate::lint::RULES.iter().map(|(n, _)| *n).collect();
+                anyhow::bail!(
+                    "lint_ignore: unknown rule {rule:?} (rules: {})",
+                    names.join(", ")
+                );
+            }
         }
         Ok(config)
     }
@@ -97,6 +122,17 @@ pub struct Prefs {
     /// Where you were reading, per file (absolute path → position).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub positions: BTreeMap<String, Position>,
+    /// Recently opened files and folders, newest first (see recent.rs).
+    /// Never changed by pages: `merge` ignores it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub recent: Vec<RecentItem>,
+}
+
+/// A recently opened file or folder (absolute path) and when.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RecentItem {
+    pub path: String,
+    pub at: u64,
 }
 
 /// A reading position: the source line of the block at the top of the
@@ -191,7 +227,7 @@ pub fn state_path() -> Option<PathBuf> {
     Some(base.join("markdown-viewer/state.json"))
 }
 
-fn home() -> Option<PathBuf> {
+pub fn home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
 }
 

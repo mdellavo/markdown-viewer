@@ -114,6 +114,9 @@ pub struct RenderOptions {
     pub front_matter: FrontMatter,
     /// Number the lines of every code block (`--line-numbers`).
     pub line_numbers: bool,
+    /// Link GitHub references (`#123`, `@user`, commits) to this
+    /// repository's web address.
+    pub github: Option<String>,
 }
 
 /// Turns ```mermaid fences into `<pre class="mermaid">` blocks for
@@ -264,6 +267,9 @@ impl Renderer {
         {
             let embed = |rel: &str, heading: Option<&str>| self.embed_note(ctx, rel, heading);
             html = crate::obsidian::finish(html, ctx, &embed);
+        }
+        if let Some(repo) = &self.render.github {
+            html = crate::references::finish(&html, repo);
         }
         if self.render.front_matter == FrontMatter::Table
             && let Some((yaml, end)) = crate::frontmatter::extract(markdown)
