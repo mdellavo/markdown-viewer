@@ -32,7 +32,8 @@ markdown-viewer --watch examples/example.md
   - Headings with link anchors (hover a heading for its link icon).
   - Bold, italic and strikethrough.
   - Tables with column alignment.
-  - Task lists.
+  - Task lists. When watching, tick a box to update the file: the `[ ]`
+    in the Markdown becomes `[x]`.
   - Autolinked URLs and email addresses.
   - Footnotes.
   - Emoji shortcodes such as `:rocket:`.
@@ -124,6 +125,11 @@ markdown-viewer --watch examples/example.md
 
 - `-o` writes a single self-contained HTML file (or `-o -` for stdout), with
   any diagrams and math included.
+- For a folder, `-o site/` writes a static site: a page for every Markdown
+  file, with links between them working, an index for every folder (its
+  README or a listing), the images they use, and the viewer UI with a Files
+  sidebar. Put it on GitHub Pages or any web server, or open it straight
+  from disk.
 - `--pdf` writes a PDF using Chrome, Chromium, Edge, Brave or Vivaldi, with
   diagrams and math rendered, in light colours, and without page breaks
   inside code blocks, tables or diagrams.
@@ -161,6 +167,12 @@ sudo apt install ./markdown-viewer_*_amd64.deb      # Debian, Ubuntu
 sudo dnf install ./markdown-viewer-*.x86_64.rpm     # Fedora, RHEL
 ```
 
+On Arch Linux, from the AUR (prebuilt, x86_64 and ARM64):
+
+```sh
+yay -S markdown-viewer-bin    # or paru, or makepkg by hand
+```
+
 With Rust's tools (the crate is `markdown-viewer-rs`; the command is still
 `markdown-viewer`):
 
@@ -177,6 +189,7 @@ markdown-viewer --watch README.md        # live-reload as the file changes
 markdown-viewer README.md -o out.html    # write the HTML to a file
 markdown-viewer README.md -o - | less    # ...or to stdout
 markdown-viewer README.md --pdf out.pdf  # write a PDF
+markdown-viewer docs/ -o site/           # write a folder as a static site
 markdown-viewer docs/                    # browse a folder (live)
 git show HEAD~1:README.md | markdown-viewer -   # preview standard input
 markdown-viewer --clipboard --watch      # follow the clipboard as it changes
@@ -187,7 +200,7 @@ markdown-viewer --goto README.md:42      # scroll a running preview to line 42
 | Option | Description |
 |---|---|
 | `-w`, `--watch` | Serve on `127.0.0.1` and reload the page when the file changes |
-| `-o`, `--output <PATH>` | Write HTML to `PATH` (`-` for stdout) instead of opening it |
+| `-o`, `--output <PATH>` | Write HTML to `PATH` (`-` for stdout) instead of opening it; for a folder, a static site into the folder `PATH` |
 | `--pdf <PATH>` | Write a PDF to `PATH` (needs a Chromium-based browser) |
 | `-p`, `--port <N>` | Port for `--watch` (default: any free port) |
 | `--browser <NAME>` | Open a specific browser, e.g. `"Google Chrome"` or `firefox` |
@@ -383,6 +396,54 @@ To run it straight from the source tree without installing:
 cargo run -- --watch examples/example.md
 ```
 
+### Packages
+
+Release packages are built by `packaging/package.sh`, the script the
+release workflow uses. Build for a target first, then package it. The output
+goes to `dist/`, with a `.sha256` checksum next to each file.
+
+```sh
+target=$(rustc -vV | sed -n 's/^host: //p')    # e.g. aarch64-apple-darwin
+cargo build --release --locked --target "$target"
+packaging/package.sh "$target"
+```
+
+This always makes `markdown-viewer-<target>.tar.gz`, which holds the binary,
+README, LICENSE, CHANGELOG, shell completions and man page. On Linux it also
+makes a `.deb` and an `.rpm`, which need two more tools:
+
+```sh
+cargo install cargo-deb cargo-generate-rpm
+```
+
+Their contents are set in `Cargo.toml`, under `[package.metadata.deb]` and
+`[package.metadata.generate-rpm]`. To check a `.deb`:
+
+```sh
+sudo dpkg -i dist/markdown-viewer_*.deb && markdown-viewer --version
+```
+
+The Homebrew formula and the AUR package download a published GitHub
+release, so they're generated from that release's checksums:
+
+```sh
+v=0.5.0
+gh release download v$v --pattern '*.sha256' --dir /tmp/sums
+
+# Homebrew: the formula for mdellavo/homebrew-tap
+packaging/homebrew/formula.sh $v /tmp/sums > markdown-viewer.rb
+
+# AUR: PKGBUILD and .SRCINFO for markdown-viewer-bin, then build and
+# install it in an Arch Linux container to check it (needs Docker)
+packaging/aur/pkgbuild.sh $v /tmp/sums dist/aur
+docker run --rm -v "$PWD/dist/aur:/pkg:ro" -v "$PWD/packaging/aur/test.sh:/test.sh:ro" \
+  archlinux:latest bash /test.sh /pkg
+```
+
+For crates.io, `cargo package --locked` builds and checks the crate that
+`cargo publish` would upload. It needs everything committed; add
+`--allow-dirty` to try it with uncommitted changes.
+
 ### Development
 
 ```sh
@@ -428,6 +489,14 @@ Releases are built by GitHub Actions when a `v*` tag is pushed; see
   file in your editor or to remember a position, but only for Markdown files
   inside the served folder, and only with a custom header other websites
   can't send. The editor runs without a shell.
+- **Ticking task boxes:** the one way the page changes your files. The
+  server only changes a `[ ]` or `[x]` in a Markdown file inside the served
+  folder, only if that line still holds a task item in the state the page
+  showed, and only with the same custom header. If the file is open in an
+  editor with unsaved changes, the editor will see it changed on disk.
+- **Static sites:** `-o DIR` only writes into an empty folder or one an
+  earlier export wrote, and only copies files inside the exported folder
+  that a page links to.
 - **PDF export:** runs the browser headless with a throwaway profile, so it
   never touches your own browser profile.
 

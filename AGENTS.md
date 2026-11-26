@@ -34,6 +34,14 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   `.mdv-line` spans, closing and reopening spans across line breaks.
 - `src/toc.rs`: `[TOC]` / `<!-- TOC [maxN] -->` markers.
 - `src/gitdiff.rs`: lines changed since `HEAD`, via `git diff -U0`.
+- `src/tasks.rs`: ticking task boxes (`POST /__mdv/task`): changes the
+  `[ ]` at the item's source position, only if it is still a task item in
+  the state the page showed.
+- `src/site.rs`: `-o DIR` for a folder. Pages are standalone pages with
+  `PageOptions::site_root` set: libraries load from `_mdv/` at the site
+  root, and `ui.js` gets a Files sidebar from `_mdv/files.js`. Links are
+  rewritten (`.md` → `.html`, folders → `index.html`) and linked files
+  copied. Pages must keep working from `file://` (a browser test checks).
 - `src/links.rs`: `--check-links` (local files, anchors, wiki links;
   web links through `curl` with `--online`) and the `/__mdv/check` endpoint.
 - `src/obsidian.rs`: resolving `[[wiki links]]` and `![[embeds]]` (by name
@@ -128,8 +136,12 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   completions and man page; `.deb` and `.rpm` on Linux), used by both the
   release workflow and CI.
 - `packaging/homebrew/formula.sh`: generates the Homebrew formula for a release.
-- `.github/workflows/`: `ci.yml` (fmt, clippy, tests on macOS and Linux) and
-  `release.yml` (binaries, GitHub release, tap update).
+- `packaging/aur/pkgbuild.sh`: generates the AUR package
+  (`markdown-viewer-bin`: PKGBUILD and .SRCINFO) from a release's
+  archives; `packaging/aur/test.sh` builds and installs it in an
+  `archlinux` container (CI does this for the latest release).
+- `.github/workflows/`: `ci.yml` (fmt, clippy, tests on macOS and Linux, release builds, the AUR package) and
+  `release.yml` (binaries, GitHub release, Homebrew tap, crates.io, AUR).
 
 ## Commands
 
@@ -213,7 +225,11 @@ The release workflow fails if the tag doesn't match `Cargo.toml`. It then:
   private half of a deploy key with write access to `mdellavo/homebrew-tap`
   only);
 - publishes the crate to crates.io as `markdown-viewer-rs` if the
-  `CARGO_REGISTRY_TOKEN` secret is set.
+  `CARGO_REGISTRY_TOKEN` secret is set;
+- tests the AUR package on Arch and pushes it to
+  `aur.archlinux.org/markdown-viewer-bin.git` if the `AUR_SSH_PRIVATE_KEY`
+  secret is set (a key on the maintaining AUR account). The optional
+  `AUR_MAINTAINER` repository variable adds a Maintainer line.
 
 Each step warns and skips if its secret is missing. To update the tap by
 hand:

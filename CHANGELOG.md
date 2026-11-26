@@ -6,6 +6,19 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Tick task list boxes in the viewer to update the file.
+- `-o DIR` for a folder writes a static site: linked pages, folder
+  indexes, the images they use, and the viewer UI with a Files sidebar.
+- An Arch Linux package, `markdown-viewer-bin` in the AUR, updated by the
+  release workflow.
+
+### Changed
+
+- The workflows use the Node.js 24 versions of the GitHub actions
+  (`checkout` v7, `upload-artifact` v7, `download-artifact` v8).
+
 ## [0.5.0] - 2026-11-25
 
 ### Added
