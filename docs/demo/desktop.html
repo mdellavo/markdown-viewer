@@ -1,0 +1,121 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>demo</title>
+<!-- The stage for the README demo (docs/demo.sh): an editor window and a
+     markdown-viewer window side by side on a desktop. tests/demo.rs copies
+     this next to the document, so the viewer is same-origin and the
+     recorder can see when it has updated. -->
+<style>
+  :root {
+    --desk: linear-gradient(135deg, #8ec5fc 0%, #e0c3fc 100%);
+    --win: #ffffff; --bar: #ececec; --bar-text: #4d4d4d; --border: rgba(0,0,0,.18);
+    --code-bg: #ffffff; --code-text: #24292f; --gutter: #8c959f;
+    --heading: #0550ae; --mark: #cf222e; --fence: #8250df; --quote: #116329;
+    --cursor: #0969da; --line: #f6f8fa;
+  }
+  :root[data-theme="dark"] {
+    --desk: linear-gradient(135deg, #1e2a4a 0%, #3b2158 100%);
+    --win: #0d1117; --bar: #2b2d31; --bar-text: #c9d1d9; --border: rgba(255,255,255,.14);
+    --code-bg: #0d1117; --code-text: #e6edf3; --gutter: #6e7681;
+    --heading: #79c0ff; --mark: #ff7b72; --fence: #d2a8ff; --quote: #7ee787;
+    --cursor: #58a6ff; --line: #161b22;
+  }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background: var(--desk);
+    font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    display: flex; gap: 16px; padding: 20px; box-sizing: border-box;
+  }
+  .win {
+    flex: 1 1 0; min-width: 0; display: flex; flex-direction: column;
+    background: var(--win); border-radius: 10px; overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: 0 18px 40px rgba(0,0,0,.28), 0 2px 6px rgba(0,0,0,.18);
+  }
+  .bar {
+    flex: none; height: 30px; display: flex; align-items: center; position: relative;
+    background: var(--bar); color: var(--bar-text); border-bottom: 1px solid var(--border);
+  }
+  .dots { display: flex; gap: 8px; padding-left: 12px; }
+  .dots i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .dots i:nth-child(1) { background: #ff5f57; }
+  .dots i:nth-child(2) { background: #febc2e; }
+  .dots i:nth-child(3) { background: #28c840; }
+  .title { position: absolute; left: 0; right: 0; text-align: center; pointer-events: none; font-weight: 500; }
+  .code {
+    flex: 1; overflow: hidden; background: var(--code-bg); color: var(--code-text);
+    font: 14px/21px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    padding: 10px 0;
+  }
+  .ln { display: flex; white-space: pre; }
+  .ln.cur { background: var(--line); }
+  .ln b { flex: none; width: 40px; padding-right: 14px; text-align: right; color: var(--gutter); font-weight: normal; }
+  .h { color: var(--heading); font-weight: bold; }
+  .m { color: var(--mark); }
+  .f { color: var(--fence); }
+  .q { color: var(--quote); }
+  .caret { display: inline-block; width: 2px; height: 18px; margin-right: -2px; vertical-align: -4px; background: var(--cursor); }
+  iframe { flex: 1; border: 0; width: 100%; background: var(--win); }
+</style>
+</head>
+<body>
+  <div class="win">
+    <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="title" id="etitle"></div></div>
+    <div class="code" id="code"></div>
+  </div>
+  <div class="win">
+    <div class="bar"><div class="dots"><i></i><i></i><i></i></div><div class="title" id="vtitle"></div></div>
+    <iframe id="viewer"></iframe>
+  </div>
+<script>
+  const params = new URLSearchParams(location.search);
+  const file = params.get("file");
+  document.documentElement.dataset.theme = params.get("theme") || "light";
+  document.getElementById("vtitle").textContent = file + " — markdown-viewer";
+  const viewer = document.getElementById("viewer");
+  window.updates = 0;
+  viewer.addEventListener("load", () => {
+    viewer.contentDocument.addEventListener("mdv:updated", () => window.updates++);
+  });
+  viewer.src = file;
+
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  // Just enough Markdown colouring to read like an editor.
+  function paint(line, state) {
+    if (/^\s*(```|~~~)/.test(line)) { state.fence = !state.fence; return `<span class="f">${esc(line)}</span>`; }
+    if (state.fence) return esc(line);
+    if (/^#{1,6}\s/.test(line)) return `<span class="h">${esc(line)}</span>`;
+    if (/^>/.test(line)) return `<span class="q">${esc(line)}</span>`;
+    const m = line.match(/^(\s*(?:[-*+]|\d+\.)\s(?:\[[ x]\]\s)?)(.*)$/);
+    if (m) return `<span class="m">${esc(m[1])}</span>${esc(m[2])}`;
+    return esc(line);
+  }
+
+  // Show `text` with the caret at `pos`, and a dirty marker until saved.
+  window.show = (text, pos, dirty) => {
+    document.getElementById("etitle").textContent = (dirty ? "● " : "") + file;
+    const before = text.slice(0, pos).split("\n");
+    const caretLine = before.length - 1, caretCol = before[caretLine].length;
+    const lines = text.split("\n"), state = { fence: false }, out = [];
+    lines.forEach((line, i) => {
+      let html;
+      if (i === caretLine && caretCol > 0) {
+        // Colour the line with a placeholder where the caret goes.
+        html = paint(line.slice(0, caretCol) + "\u0001" + line.slice(caretCol), state)
+          .replace("\u0001", '<span class="caret"></span>');
+      } else {
+        html = (i === caretLine ? '<span class="caret"></span>' : "") + paint(line, state);
+      }
+      out.push(`<div class="ln${i === caretLine ? " cur" : ""}"><b>${i + 1}</b>${html}</div>`);
+    });
+    const code = document.getElementById("code");
+    code.innerHTML = out.join("");
+    const cur = code.querySelector(".cur");
+    if (cur.offsetTop + cur.offsetHeight > code.scrollTop + code.clientHeight - 21)
+      code.scrollTop = cur.offsetTop + cur.offsetHeight - code.clientHeight + 21;
+  };
+</script>
+</body>
+</html>

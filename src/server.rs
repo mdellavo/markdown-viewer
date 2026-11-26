@@ -2,6 +2,7 @@
 //! and folder under the root, a live-update stream per document, the
 //! viewer's preferences and file list, and static files (for images).
 
+use crate::platform::Canonical;
 use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -487,7 +488,7 @@ async fn goto(
         return StatusCode::FORBIDDEN;
     }
     let root = state.docs.root();
-    let Ok(file) = req.file.canonicalize() else {
+    let Ok(file) = req.file.canonical() else {
         return StatusCode::NOT_FOUND;
     };
     if !file.starts_with(root) || !docs::is_markdown(&file) {
@@ -686,7 +687,7 @@ fn resolve(root: &Path, url_path: &str, allow_dirs: bool) -> Option<PathBuf> {
     let candidate = if rel.is_empty() {
         root.to_path_buf()
     } else {
-        root.join(rel).canonicalize().ok()?
+        root.join(rel).canonical().ok()?
     };
     let ok_kind = candidate.is_file() || (allow_dirs && candidate.is_dir());
     (candidate.starts_with(root) && ok_kind).then_some(candidate)
@@ -718,7 +719,7 @@ mod tests {
     #[test]
     fn resolve_stays_inside_root() {
         let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
+        let root = dir.path().canonical().unwrap();
         std::fs::write(root.join("a.png"), b"x").unwrap();
         std::fs::create_dir(root.join("sub")).unwrap();
         std::fs::write(root.join("sub/b c.png"), b"x").unwrap();

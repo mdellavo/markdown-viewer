@@ -1,0 +1,10 @@
+# Keep LF line endings on every platform: tests compare files byte for byte
+# (snapshots, generated completions), and Markdown fixtures check line
+# endings explicitly where it matters.
+* text=auto eol=lf
+*.png binary
+*.icns binary
+*.gz binary
+*.woff2 binary
+*.cmd text eol=crlf
+*.ps1 text eol=lf

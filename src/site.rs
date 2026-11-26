@@ -9,6 +9,7 @@
 //! `.nojekyll` file stops Jekyll hiding `_mdv/`) and opened straight from
 //! disk.
 
+use crate::platform::Canonical;
 use std::collections::{BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -125,7 +126,7 @@ fn prepare(root: &Path, out: &Path) -> Result<PathBuf> {
         }
     }
     std::fs::create_dir_all(out).with_context(|| format!("cannot create {}", out.display()))?;
-    let out = out.canonicalize()?;
+    let out = out.canonical()?;
     if out == root || root.starts_with(&out) {
         bail!("the site can't be written over the folder being exported");
     }
@@ -366,7 +367,7 @@ fn copy_assets(root: &Path, out: &Path, assets: &BTreeSet<String>) -> Result<usi
     for rel in assets {
         // Never copy from outside the folder (through a symlink) or from
         // the output itself.
-        let Ok(src) = root.join(rel).canonicalize() else {
+        let Ok(src) = root.join(rel).canonical() else {
             continue;
         };
         if !src.starts_with(root) || src.starts_with(out) {
@@ -478,7 +479,7 @@ mod tests {
         std::fs::write(src.join("img/logo.png"), "png").unwrap();
         std::fs::write(src.join("img/unused.png"), "png").unwrap();
         std::fs::write(src.join("img/dark.png"), "png").unwrap();
-        let src = src.canonicalize().unwrap();
+        let src = src.canonical().unwrap();
         let out = tmp.join("site");
 
         let renderer = Renderer::default();

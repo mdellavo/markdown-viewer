@@ -6,6 +6,21 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Windows support: release zips for x64 and ARM64, a Scoop bucket
+  (`scoop bucket add mdellavo https://github.com/mdellavo/scoop-bucket`),
+  and `cargo binstall` downloads. On Windows the default browser comes from
+  the registry, `--browser` finds Chrome, Edge, Brave, Vivaldi or Firefox in
+  their install folders, `--pdf` uses Chrome or Edge, editors installed as
+  `.cmd` files (VS Code, Cursor) work for click-to-source, `--clipboard`
+  uses PowerShell, and settings live in `%APPDATA%\markdown-viewer`.
+- PowerShell completions (`completions/_markdown-viewer.ps1`).
+
+### Changed
+
+- Line endings are LF on every platform (`.gitattributes`).
+
 ## [0.7.1] - 2026-11-26
 
 ### Added

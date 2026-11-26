@@ -50,7 +50,7 @@ pub fn page(list: &[RecentItem], root: &Path) -> String {
 }
 
 fn dirs_home() -> Option<std::path::PathBuf> {
-    std::env::var_os("HOME").map(std::path::PathBuf::from)
+    crate::platform::home()
 }
 
 fn page_at(list: &[RecentItem], root: &Path, now: u64, home: Option<&Path>) -> String {
@@ -130,6 +130,7 @@ fn ago(secs: u64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::platform::Canonical;
 
     #[test]
     fn keeps_the_newest_without_duplicates() {
@@ -146,11 +147,11 @@ mod tests {
     #[test]
     fn page_links_what_it_can() {
         let dir = tempfile::tempdir().unwrap();
-        let home = dir.path().canonicalize().unwrap();
+        let home = dir.path().canonical().unwrap();
         std::fs::create_dir_all(home.join("notes|x")).unwrap();
         std::fs::write(home.join("notes|x/a b.md"), "# A").unwrap();
         let outside = tempfile::tempdir().unwrap();
-        let out = outside.path().canonicalize().unwrap().join("o.md");
+        let out = outside.path().canonical().unwrap().join("o.md");
         std::fs::write(&out, "# O").unwrap();
         let list = vec![
             RecentItem {

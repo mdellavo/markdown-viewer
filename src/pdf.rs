@@ -32,6 +32,11 @@ pub fn find_browser() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("MARKDOWN_VIEWER_CHROME") {
         return Some(PathBuf::from(p));
     }
+    if cfg!(windows) {
+        return crate::platform::windows_chromium_browsers()
+            .into_iter()
+            .next();
+    }
     if cfg!(target_os = "macos") {
         let home = std::env::var_os("HOME").map(PathBuf::from);
         let dirs = [
@@ -91,7 +96,7 @@ pub fn print(html: &str, out: &Path) -> Result<()> {
         .arg("--no-pdf-header-footer")
         .arg("--print-to-pdf-no-header")
         .arg(format!("--print-to-pdf={}", out_abs.display()))
-        .arg(format!("file://{}", page.display()))
+        .arg(crate::platform::file_url(&page))
         .output()
         .with_context(|| format!("cannot run {}", browser.display()))?;
 

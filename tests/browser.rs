@@ -266,14 +266,7 @@ fn double_click_opens_the_source_in_the_editor() {
     let md = dir.path().join("doc.md");
     std::fs::write(&md, "# Title\n\nFirst paragraph.\n\nSecond paragraph.\n").unwrap();
     let log = dir.path().join("editor.log");
-    let editor = dir.path().join("editor.sh");
-    std::fs::write(&editor, format!("#!/bin/sh\necho \"$@\" > {log:?}\n")).unwrap();
-    std::process::Command::new("chmod")
-        .arg("+x")
-        .arg(&editor)
-        .status()
-        .unwrap();
-    let template = format!("{} {{file}}:{{line}}", editor.display());
+    let template = fake_editor(dir.path(), &log);
     let server = serve(&md, &["--editor", &template]);
     let tab = open(&browser, &format!("http://{}/", server.addr));
 
@@ -690,10 +683,7 @@ fn static_site_works_from_disk() {
     let status = mdv().arg(&src).arg("-o").arg(&out).status().unwrap();
     assert!(status.success());
 
-    let url = format!(
-        "file://{}",
-        out.join("index.html").canonicalize().unwrap().display()
-    );
+    let url = file_url(&dunce::canonicalize(out.join("index.html")).unwrap());
     let tab = open(&browser, &url);
     // The Files sidebar lists the site's pages; following a link works.
     press(&tab, "f");

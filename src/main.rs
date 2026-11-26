@@ -1,3 +1,4 @@
+use crate::platform::Canonical;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
@@ -6,7 +7,6 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use clap::{CommandFactory, Parser};
-use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 
 mod browser;
 mod codeblocks;
@@ -24,6 +24,7 @@ mod links;
 mod lint;
 mod obsidian;
 mod pdf;
+mod platform;
 mod recent;
 mod references;
 mod render;
@@ -138,11 +139,11 @@ struct Cli {
 
     /// Linux: add "Markdown Viewer" to your desktop's applications, for
     /// Open With on Markdown, CSV and TSV files (current user only).
-    #[arg(long, exclusive = true, hide = cfg!(target_os = "macos"))]
+    #[arg(long, exclusive = true, hide = cfg!(any(target_os = "macos", windows)))]
     install_desktop: bool,
 
     /// Linux: remove the desktop integration.
-    #[arg(long, exclusive = true, hide = cfg!(target_os = "macos"))]
+    #[arg(long, exclusive = true, hide = cfg!(any(target_os = "macos", windows)))]
     uninstall_desktop: bool,
 
     /// Colour theme (default: the one you last chose in the viewer, else
@@ -355,7 +356,7 @@ fn run(cli: Cli) -> Result<()> {
         return desktop::uninstall();
     }
     let settings = Settings::new(&cli, Config::load()?)?;
-    let cwd = std::env::current_dir()?.canonicalize()?;
+    let cwd = std::env::current_dir()?.canonical()?;
 
     // --goto: scroll a viewer that's already showing the file, else start
     // one (below) opened at that line.
@@ -375,7 +376,7 @@ fn run(cli: Cli) -> Result<()> {
     // The Recent page: asked for, or no FILE in the home folder (browsing
     // all of it is rarely what you want). Its links go through the server,
     // so it's always served.
-    let home = config::home().and_then(|h| h.canonicalize().ok());
+    let home = platform::home().and_then(|h| h.canonical().ok());
     let show_recent = cli.recent
         || (cli.file.is_none()
             && !cli.clipboard
@@ -419,7 +420,7 @@ fn run(cli: Cli) -> Result<()> {
             }
             Some(p) => {
                 let path = p
-                    .canonicalize()
+                    .canonical()
                     .with_context(|| format!("cannot open {}", p.display()))?;
                 if path.is_dir() {
                     Source::Folder(path)
@@ -522,7 +523,11 @@ fn run(cli: Cli) -> Result<()> {
         .with_context(|| format!("cannot write {}", out.display()))?;
     say(&out.display().to_string());
     if !cli.no_open {
-        browser::open(&file_url(&out), settings.browser.as_deref(), settings.open)?;
+        browser::open(
+            &platform::file_url(&out),
+            settings.browser.as_deref(),
+            settings.open,
+        )?;
     }
     Ok(())
 }
@@ -592,7 +597,7 @@ fn parse_goto(spec: &str) -> Result<(PathBuf, u32)> {
         _ => (spec, 1),
     };
     let file = Path::new(path)
-        .canonicalize()
+        .canonical()
         .with_context(|| format!("cannot open {path}"))?;
     if !file.is_file() {
         bail!("{path} is not a file");
@@ -605,7 +610,7 @@ fn parse_goto(spec: &str) -> Result<(PathBuf, u32)> {
 /// (why)`, and exit with status 1 if there are any.
 fn check(settings: &Settings, target: &Path, links: bool, online: bool, lint: bool) -> Result<()> {
     let target = target
-        .canonicalize()
+        .canonical()
         .with_context(|| format!("cannot open {}", target.display()))?;
     let (root, files) = if target.is_dir() {
         let (files, _) = docs::markdown_files(&target);
@@ -851,6 +856,16 @@ fn follow_clipboard(docs: Arc<docs::Docs>, key: PathBuf, root: PathBuf, mut last
 fn read_clipboard() -> Result<String> {
     let candidates: &[(&str, &[&str])] = if cfg!(target_os = "macos") {
         &[("pbpaste", &[])]
+    } else if cfg!(windows) {
+        &[(
+            "powershell",
+            &[
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "[Console]::OutputEncoding = [Text.Encoding]::UTF8; Get-Clipboard -Raw",
+            ],
+        )]
     } else {
         &[
             ("wl-paste", &["--no-newline"]),
@@ -865,7 +880,7 @@ fn read_clipboard() -> Result<String> {
             return Ok(String::from_utf8_lossy(&out.stdout).into_owned());
         }
     }
-    bail!("couldn't read the clipboard (needs pbpaste, wl-paste, xclip or xsel)")
+    bail!("couldn't read the clipboard (needs pbpaste, PowerShell, wl-paste, xclip or xsel)")
 }
 
 #[cfg(target_os = "macos")]
@@ -906,27 +921,9 @@ fn temp_page_path(source: &Path) -> Result<PathBuf> {
     Ok(dir.join(format!("{stem}-{:08x}.html", h.finish() as u32)))
 }
 
-const PATH_ENCODE: &AsciiSet = &CONTROLS
-    .add(b' ')
-    .add(b'"')
-    .add(b'#')
-    .add(b'%')
-    .add(b'<')
-    .add(b'>')
-    .add(b'?')
-    .add(b'`')
-    .add(b'{')
-    .add(b'}');
-
-/// `file://` URL for a file.
-fn file_url(path: &Path) -> String {
-    let path = path.to_string_lossy();
-    format!("file://{}", utf8_percent_encode(&path, PATH_ENCODE))
-}
-
 /// `file://` URL for a directory, with a trailing slash so it works as `<base>`.
 fn dir_url(dir: &Path) -> String {
-    let mut url = file_url(dir);
+    let mut url = platform::file_url(dir);
     if !url.ends_with('/') {
         url.push('/');
     }

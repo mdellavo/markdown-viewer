@@ -9,6 +9,7 @@
 //! writing a temp file and renaming it over the original, which would
 //! silently end a watch placed on the file itself.
 
+use crate::platform::Canonical;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -133,7 +134,7 @@ impl Docs {
         }
         let mut affected = HashSet::new();
         for path in paths {
-            let Some(parent) = path.parent().and_then(|p| p.canonicalize().ok()) else {
+            let Some(parent) = path.parent().and_then(|p| p.canonical().ok()) else {
                 continue;
             };
             if let Some(name) = path.file_name() {
@@ -491,7 +492,7 @@ mod tests {
     fn lists_markdown_files_root_first_skipping_noise() {
         let dir = tree();
         let mut files = Vec::new();
-        let root = dir.path().canonicalize().unwrap();
+        let root = dir.path().canonical().unwrap();
         assert!(!collect(&root, &root, 0, is_markdown, &mut files));
         files.sort_by(|a, b| {
             let depth = |s: &str| s.matches('/').count().min(1);

@@ -2,7 +2,8 @@ name: Release
 
 # Push a tag like v0.4.0 to build binaries and Linux packages, publish a
 # GitHub release, update the Homebrew formula in mdellavo/homebrew-tap, and
-# publish the crate to crates.io and the AUR package markdown-viewer-bin.
+# publish the crate to crates.io, the AUR package markdown-viewer-bin, and
+# the Scoop manifest in mdellavo/scoop-bucket.
 on:
   push:
     tags: ["v*"]
@@ -10,6 +11,12 @@ on:
 env:
   CARGO_TERM_COLOR: always
   TAP_REPO: mdellavo/homebrew-tap
+  SCOOP_REPO: mdellavo/scoop-bucket
+
+# Git Bash on Windows, so the same scripts run everywhere.
+defaults:
+  run:
+    shell: bash
 
 permissions:
   contents: write
@@ -23,6 +30,8 @@ jobs:
           - { target: x86_64-apple-darwin, os: macos-latest }
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
           - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+          - { target: aarch64-pc-windows-msvc, os: windows-latest }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -40,6 +49,9 @@ jobs:
           tool: cargo-deb,cargo-generate-rpm
       - run: cargo build --release --locked --target ${{ matrix.target }}
       - run: packaging/package.sh ${{ matrix.target }}
+        if: runner.os != 'Windows'
+      - run: pwsh packaging/package.ps1 ${{ matrix.target }}
+        if: runner.os == 'Windows'
       - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}
@@ -159,4 +171,52 @@ jobs:
           git add PKGBUILD .SRCINFO
           git commit -m "Update to ${GITHUB_REF_NAME#v}"
           git push origin HEAD:master
+          rm -f "$key"
+
+  scoop:
+    needs: release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Generate the manifest
+        run: packaging/scoop/manifest.sh "${GITHUB_REF_NAME#v}" dist > markdown-viewer.json
+      # Install the published release with Scoop itself, as users will.
+      - name: Install Scoop
+        shell: pwsh
+        run: |
+          Invoke-RestMethod -Uri https://get.scoop.sh -OutFile install-scoop.ps1
+          ./install-scoop.ps1 -RunAsAdmin
+          "$env:USERPROFILE\scoop\shims" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - name: Install markdown-viewer from the manifest
+        shell: pwsh
+        run: |
+          scoop install ./markdown-viewer.json
+          markdown-viewer --version
+      # SCOOP_BUCKET_DEPLOY_KEY is the private half of a deploy key with
+      # write access to the bucket repository only.
+      - name: Update the bucket
+        env:
+          DEPLOY_KEY: ${{ secrets.SCOOP_BUCKET_DEPLOY_KEY }}
+        run: |
+          if [ -z "$DEPLOY_KEY" ]; then
+            echo "::warning::SCOOP_BUCKET_DEPLOY_KEY not set; skipping the Scoop bucket"
+            exit 0
+          fi
+          key="$RUNNER_TEMP/scoop_key"
+          printf '%s\n' "$DEPLOY_KEY" > "$key"
+          chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git clone "git@github.com:${SCOOP_REPO}.git" bucket-repo
+          mkdir -p bucket-repo/bucket
+          cp markdown-viewer.json bucket-repo/bucket/markdown-viewer.json
+          cd bucket-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bucket/markdown-viewer.json
+          git commit -m "markdown-viewer ${GITHUB_REF_NAME}"
+          git push
           rm -f "$key"

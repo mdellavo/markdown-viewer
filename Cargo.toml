@@ -54,6 +54,15 @@ pkg-url = "{ repo }/releases/download/v{ version }/markdown-viewer-{ target }.ta
 bin-dir = "markdown-viewer-{ target }/{ bin }{ binary-ext }"
 pkg-fmt = "tgz"
 
+# Windows releases are zip files.
+[package.metadata.binstall.overrides.x86_64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/markdown-viewer-{ target }.zip"
+pkg-fmt = "zip"
+
+[package.metadata.binstall.overrides.aarch64-pc-windows-msvc]
+pkg-url = "{ repo }/releases/download/v{ version }/markdown-viewer-{ target }.zip"
+pkg-fmt = "zip"
+
 [dependencies]
 anyhow = "1.0.105"
 axum = "0.8.9"
@@ -61,6 +70,7 @@ clap = { version = "4.6.10", features = ["derive"] }
 clap_complete = "4.6.12"
 clap_mangen = "0.3.4"
 comrak = { version = "1.2.0", default-features = false, features = ["shortcodes", "syntect-fancy"] }
+dunce = "1.0.5"
 flate2 = "1.1.11"
 mime_guess = "2.0.5"
 notify-debouncer-full = "0.8.0"
@@ -85,3 +95,6 @@ tempfile = "3.27.0"
 lto = true
 codegen-units = 1
 strip = true
+
+[target."cfg(windows)".dependencies]
+winreg = "0.56.0"

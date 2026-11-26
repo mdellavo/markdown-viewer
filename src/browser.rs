@@ -10,6 +10,9 @@
 //!   `make new document` for Safari.
 //! - Each mode falls back to the next (app → window → tab) when the browser
 //!   can't do it.
+//!
+//! The default browser comes from LaunchServices (macOS), `xdg-settings`
+//! (Linux) or the registry (Windows).
 
 use std::process::{Command, Stdio};
 
@@ -75,7 +78,8 @@ enum Target {
     /// macOS default browser by bundle id.
     #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     Bundle(String),
-    /// Linux default browser as a command name.
+    /// Default browser (Linux) or a browser found on disk (Windows), as a
+    /// command name or path.
     #[cfg_attr(target_os = "macos", allow(dead_code))]
     Command(String),
     /// Couldn't tell; use the OS default opener.
@@ -90,6 +94,12 @@ fn supports_app_mode(name: &str) -> bool {
 /// Open `url` (an `http://` or `file://` URL).
 pub fn open(url: &str, browser: Option<&str>, mode: Mode) -> Result<Opened> {
     let target = match browser {
+        // Windows browsers usually aren't on PATH: find `--browser edge`
+        // in its install folder.
+        Some(name) if cfg!(windows) => match crate::platform::windows_browser(name) {
+            Some(exe) => Target::Command(exe.to_string_lossy().into_owned()),
+            None => Target::Named(name.to_string()),
+        },
         Some(name) => Target::Named(name.to_string()),
         None => default_browser(),
     };
@@ -261,8 +271,7 @@ fn spawn((program, args): Cmd) -> Result<()> {
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    #[cfg(unix)]
-    std::os::unix::process::CommandExt::process_group(&mut command, 0);
+    crate::platform::detach(&mut command);
     let mut child = command
         .spawn()
         .with_context(|| format!("cannot run {program}"))?;
@@ -306,7 +315,15 @@ fn default_browser() -> Target {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+fn default_browser() -> Target {
+    match crate::platform::default_browser() {
+        Some(exe) => Target::Command(exe.to_string_lossy().into_owned()),
+        None => Target::Unknown,
+    }
+}
+
+#[cfg(all(not(target_os = "macos"), not(windows)))]
 fn default_browser() -> Target {
     let out = Command::new("xdg-settings")
         .args(["get", "default-web-browser"])
@@ -336,7 +353,7 @@ fn handler_from_launchservices(json: &str) -> Option<String> {
 
 /// Map a `.desktop` id (e.g. `google-chrome.desktop`, `firefox_firefox.desktop`
 /// for snaps) to a command, for browsers we know how to drive.
-#[cfg_attr(target_os = "macos", allow(dead_code))]
+#[cfg_attr(any(target_os = "macos", windows), allow(dead_code))]
 fn desktop_to_command(desktop: &str) -> Option<String> {
     let id = desktop.strip_suffix(".desktop").unwrap_or(desktop);
     let id = id.split('_').next_back().unwrap_or(id);

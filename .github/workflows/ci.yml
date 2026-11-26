@@ -8,15 +8,20 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# Git Bash on Windows, so the same scripts run everywhere.
+defaults:
+  run:
+    shell: bash
+
 jobs:
   check:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest]
+        os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     env:
-      # Both runners have Chrome; fail rather than skip the browser tests.
+      # Every runner has Chrome; fail rather than skip the browser tests.
       MARKDOWN_VIEWER_BROWSER_TESTS: required
     steps:
       - uses: actions/checkout@v7
@@ -41,6 +46,8 @@ jobs:
           - { target: x86_64-apple-darwin, os: macos-latest }
           - { target: x86_64-unknown-linux-gnu, os: ubuntu-22.04 }
           - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm }
+          - { target: x86_64-pc-windows-msvc, os: windows-latest }
+          - { target: aarch64-pc-windows-msvc, os: windows-latest }
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -57,6 +64,18 @@ jobs:
           tool: cargo-deb,cargo-generate-rpm
       - run: cargo build --release --locked --target ${{ matrix.target }}
       - run: packaging/package.sh ${{ matrix.target }}
+        if: runner.os != 'Windows'
+      - run: pwsh packaging/package.ps1 ${{ matrix.target }}
+        if: runner.os == 'Windows'
+      - name: Unzip and run the Windows build
+        if: matrix.target == 'x86_64-pc-windows-msvc'
+        run: |
+          cd dist
+          unzip -q markdown-viewer-x86_64-pc-windows-msvc.zip
+          cd markdown-viewer-x86_64-pc-windows-msvc
+          ./markdown-viewer.exe --version
+          printf '# Hello\n' | ./markdown-viewer.exe - -o - | grep -q '<h1'
+          test -f completions/_markdown-viewer.ps1
       - name: Install the .deb and run it
         if: runner.os == 'Linux'
         run: |
@@ -76,6 +95,11 @@ jobs:
           done
           packaging/homebrew/formula.sh 0.0.0 fake > formula.rb
           ruby -c formula.rb
+          for t in x86_64-pc-windows-msvc aarch64-pc-windows-msvc; do
+            echo "0000  markdown-viewer-$t.zip" > fake/markdown-viewer-$t.zip.sha256
+          done
+          packaging/scoop/manifest.sh 0.0.0 fake > markdown-viewer.json
+          python3 -c "import json; m = json.load(open('markdown-viewer.json')); assert m['bin'] == 'markdown-viewer.exe'"
 
   # The AUR package for the latest release, built and installed on Arch.
   aur:

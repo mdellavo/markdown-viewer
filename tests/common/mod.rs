@@ -102,3 +102,34 @@ pub fn http(addr: &str, request: &str) -> String {
     s.read_to_end(&mut buf).unwrap();
     String::from_utf8_lossy(&buf).into_owned()
 }
+
+/// A fake editor that writes the arguments it gets to `log`: a `.cmd` file
+/// on Windows, a shell script elsewhere. Returns an `--editor` template.
+pub fn fake_editor(dir: &std::path::Path, log: &std::path::Path) -> String {
+    let editor = if cfg!(windows) {
+        let editor = dir.join("fake-editor.cmd");
+        std::fs::write(&editor, format!("@echo %*> \"{}\"\r\n", log.display())).unwrap();
+        editor
+    } else {
+        let editor = dir.join("fake-editor.sh");
+        std::fs::write(&editor, format!("#!/bin/sh\necho \"$@\" > {log:?}\n")).unwrap();
+        Command::new("chmod")
+            .arg("+x")
+            .arg(&editor)
+            .status()
+            .unwrap();
+        editor
+    };
+    format!("\"{}\" {{file}}:{{line}}", editor.display())
+}
+
+/// `file:` URL for an absolute path (`file:///C:/…` on Windows).
+pub fn file_url(path: &std::path::Path) -> String {
+    let path = path.to_string_lossy().replace('\\', "/");
+    let path = if path.starts_with('/') {
+        path
+    } else {
+        format!("/{path}")
+    };
+    format!("file://{}", path.replace(' ', "%20"))
+}

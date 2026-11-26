@@ -11,6 +11,7 @@
 //! (`packaging/linux/markdown-viewer.desktop`, kept equal to [`entry`] by a
 //! test).
 
+use crate::platform::Canonical;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -96,11 +97,11 @@ fn data_home() -> Result<PathBuf> {
 /// removes).
 fn program() -> Result<PathBuf> {
     let exe = std::env::current_exe().context("cannot find this program's path")?;
-    let real = exe.canonicalize().unwrap_or_else(|_| exe.clone());
+    let real = exe.canonical().unwrap_or_else(|_| exe.clone());
     let on_path = std::env::var_os("PATH").and_then(|path| {
         std::env::split_paths(&path)
             .map(|dir| dir.join("markdown-viewer"))
-            .find(|p| p.canonicalize().is_ok_and(|c| c == real))
+            .find(|p| p.canonical().is_ok_and(|c| c == real))
     });
     Ok(on_path.unwrap_or(exe))
 }
@@ -108,6 +109,9 @@ fn program() -> Result<PathBuf> {
 pub fn install() -> Result<()> {
     if cfg!(target_os = "macos") {
         bail!("on macOS, use --install-finder");
+    }
+    if cfg!(windows) {
+        bail!("desktop integration is for Linux; Windows Explorer integration isn't available yet");
     }
     let exe = program()?;
     let data = data_home()?;
@@ -129,6 +133,9 @@ pub fn install() -> Result<()> {
 pub fn uninstall() -> Result<()> {
     if cfg!(target_os = "macos") {
         bail!("on macOS, use --uninstall-finder");
+    }
+    if cfg!(windows) {
+        bail!("desktop integration is for Linux");
     }
     let data = data_home()?;
     let removed = uninstall_from(&data)?;

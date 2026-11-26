@@ -533,7 +533,7 @@ fn pdf_export() {
 /// `UPDATE_GENERATED=1 cargo test --test cli generated_files`.
 #[test]
 fn generated_files_are_up_to_date() {
-    let files: [(&[&str], &str); 4] = [
+    let files: [(&[&str], &str); 5] = [
         (
             &["--generate-completions", "bash"],
             "completions/markdown-viewer.bash",
@@ -545,6 +545,10 @@ fn generated_files_are_up_to_date() {
         (
             &["--generate-completions", "fish"],
             "completions/markdown-viewer.fish",
+        ),
+        (
+            &["--generate-completions", "powershell"],
+            "completions/_markdown-viewer.ps1",
         ),
         (&["--generate-man"], "man/markdown-viewer.1"),
     ];
@@ -702,19 +706,11 @@ fn search_positions_and_click_to_source() {
     .unwrap();
     // A fake editor that records what it was asked to open.
     let log = root.join("editor.log");
-    let editor = root.join("fake-editor.sh");
-    std::fs::write(&editor, format!("#!/bin/sh\necho \"$@\" > {:?}\n", log)).unwrap();
-    std::process::Command::new("chmod")
-        .args(["+x"])
-        .arg(&editor)
-        .status()
-        .unwrap();
+    let editor = fake_editor(root, &log);
 
     let server = start({
         let mut c = mdv();
-        c.arg(root)
-            .arg("--editor")
-            .arg(format!("{} {{file}}:{{line}}", editor.display()));
+        c.arg(root).arg("--editor").arg(&editor);
         c
     });
     let a = &server.addr;
@@ -1162,6 +1158,11 @@ fn desktop_integration() {
         assert!(String::from_utf8_lossy(&install.stderr).contains("--install-finder"));
         return;
     }
+    if cfg!(windows) {
+        assert!(!install.status.success());
+        assert!(String::from_utf8_lossy(&install.stderr).contains("for Linux"));
+        return;
+    }
     assert!(
         install.status.success(),
         "{}",
@@ -1188,7 +1189,7 @@ fn desktop_integration() {
 #[test]
 fn recent_files_are_remembered_and_listed() {
     let home = tempfile::tempdir().unwrap();
-    let home_path = home.path().canonicalize().unwrap();
+    let home_path = dunce::canonicalize(home.path()).unwrap();
     let notes = home_path.join("notes");
     std::fs::create_dir(&notes).unwrap();
     std::fs::write(notes.join("todo list.md"), "# Todo\n").unwrap();

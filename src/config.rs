@@ -201,15 +201,17 @@ impl Prefs {
 
 /// `$MARKDOWN_VIEWER_CONFIG`, else `$XDG_CONFIG_HOME/markdown-viewer/config.toml`,
 /// else `~/.config/markdown-viewer/config.toml` (on macOS too, as is usual
-/// for command-line tools).
+/// for command-line tools), or on Windows `%APPDATA%\markdown-viewer\config.toml`.
 pub fn config_path() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("MARKDOWN_VIEWER_CONFIG") {
         return Some(PathBuf::from(p));
     }
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| home().map(|h| h.join(".config")))?;
-    Some(base.join("markdown-viewer/config.toml"))
+    let base = match std::env::var_os("XDG_CONFIG_HOME") {
+        Some(dir) => PathBuf::from(dir),
+        None if cfg!(windows) => PathBuf::from(std::env::var_os("APPDATA")?),
+        None => home()?.join(".config"),
+    };
+    Some(base.join("markdown-viewer").join("config.toml"))
 }
 
 /// `$MARKDOWN_VIEWER_STATE`, else the platform's place for app state.
@@ -219,16 +221,18 @@ pub fn state_path() -> Option<PathBuf> {
     }
     let base = if cfg!(target_os = "macos") {
         home()?.join("Library/Application Support")
+    } else if cfg!(windows) {
+        PathBuf::from(std::env::var_os("LOCALAPPDATA")?)
     } else {
         std::env::var_os("XDG_STATE_HOME")
             .map(PathBuf::from)
             .or_else(|| home().map(|h| h.join(".local/state")))?
     };
-    Some(base.join("markdown-viewer/state.json"))
+    Some(base.join("markdown-viewer").join("state.json"))
 }
 
 pub fn home() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
+    crate::platform::home()
 }
 
 fn expand_home(path: &Path) -> PathBuf {

@@ -4,6 +4,7 @@
 //! `#anchors` in the same or another document, and Obsidian wiki links.
 //! With `--online`, http(s) links are also requested (through `curl`).
 
+use crate::platform::Canonical;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -181,7 +182,7 @@ impl Checker {
     }
 
     fn anchors_of(&self, file: &Path) -> Option<HashSet<String>> {
-        let key = file.canonicalize().unwrap_or_else(|_| file.to_path_buf());
+        let key = file.canonical().unwrap_or_else(|_| file.to_path_buf());
         if let Some(cached) = self.anchors.lock().unwrap().get(&key) {
             return cached.clone();
         }
@@ -321,7 +322,7 @@ mod tests {
     #[test]
     fn finds_broken_files_and_anchors() {
         let dir = tempfile::tempdir().unwrap();
-        let root = dir.path().canonicalize().unwrap();
+        let root = dir.path().canonical().unwrap();
         std::fs::write(root.join("pic.png"), b"x").unwrap();
         std::fs::write(root.join("other.md"), "# Other\n\n## Real section\n").unwrap();
         std::fs::write(

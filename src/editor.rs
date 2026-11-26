@@ -22,18 +22,24 @@ const KNOWN: &[(&str, &[&str])] = &[
     ("subl", &["{file}:{line}"]),
     ("mate", &["-l", "{line}", "{file}"]),
     ("idea", &["--line", "{line}", "{file}"]),
+    ("notepad++", &["-n{line}", "{file}"]),
 ];
 
 /// Open `file` at `line` (1-based).
 pub fn open(file: &Path, line: u32, configured: Option<&str>) -> Result<()> {
     let (program, args) = command(file, line, configured)?;
-    let mut cmd = Command::new(&program);
+    // On Windows, `code` is really `code.cmd`, which needs its full name.
+    let resolved = if cfg!(windows) {
+        crate::platform::find_program(&program).unwrap_or_else(|| program.clone().into())
+    } else {
+        program.clone().into()
+    };
+    let mut cmd = Command::new(&resolved);
     cmd.args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
-    #[cfg(unix)]
-    std::os::unix::process::CommandExt::process_group(&mut cmd, 0);
+    crate::platform::detach(&mut cmd);
     let mut child = cmd
         .spawn()
         .with_context(|| format!("cannot run editor {program}"))?;
@@ -81,6 +87,10 @@ pub fn command(file: &Path, line: u32, configured: Option<&str>) -> Result<(Stri
     if cfg!(target_os = "macos") {
         return Ok(("open".into(), vec!["-t".into(), file.into_owned()]));
     }
+    if cfg!(windows) {
+        // Always there, though it can't jump to the line.
+        return Ok(("notepad".into(), vec![file.into_owned()]));
+    }
     bail!(
         "no editor found; set `editor` in the settings file (e.g. editor = \"zed {{file}}:{{line}}\")"
     )
@@ -88,13 +98,13 @@ pub fn command(file: &Path, line: u32, configured: Option<&str>) -> Result<(Stri
 
 /// Arguments for a known editor, matched by its command's file name.
 fn known_args(program: &str) -> Option<&'static [&'static str]> {
-    let name = Path::new(program).file_name()?.to_str()?;
+    // `code`, `code.cmd` and `C:\…\Code\bin\code.cmd` are all VS Code.
+    let name = Path::new(program).file_stem()?.to_str()?;
     KNOWN.iter().find(|(n, _)| *n == name).map(|(_, a)| *a)
 }
 
 fn on_path(name: &str) -> bool {
-    std::env::var_os("PATH")
-        .is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join(name).is_file()))
+    crate::platform::find_program(name).is_some()
 }
 
 /// Split a command line on spaces, honouring double quotes.

@@ -70,6 +70,12 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
 - `src/obsidian.rs`: resolving `[[wiki links]]` and `![[embeds]]` (by name
   anywhere in the vault, closest first). Obsidian mode turns on inside a
   vault; the served root then becomes the vault so linked notes open.
+- `src/platform.rs`: everything OS-specific: `Canonical::canonical()`
+  (use it instead of `canonicalize()`: Windows' `\\?\` paths break
+  comparisons and URLs), `file_url`, `home()` (`HOME`, else
+  `USERPROFILE`), `detach` for launched programs, `find_program` (finds
+  `.cmd` editors on Windows; Rust's std quotes their arguments safely), and
+  Windows browser lookup (registry and install folders).
 - `src/editor.rs`: opening a file at a line in the user's editor
   (click-to-source). Commands run without a shell.
 - `src/instances.rs`: registry of running viewers (next to the state file),
@@ -159,12 +165,21 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   completions and man page; `.deb` and `.rpm` on Linux), used by both the
   release workflow and CI.
 - `packaging/homebrew/formula.sh`: generates the Homebrew formula for a release.
+- `packaging/package.ps1`: the Windows counterpart of `package.sh` (a zip).
+- `packaging/scoop/manifest.sh`: generates the Scoop manifest for
+  `mdellavo/scoop-bucket`.
 - `packaging/aur/pkgbuild.sh`: generates the AUR package
   (`markdown-viewer-bin`: PKGBUILD and .SRCINFO) from a release's
   archives; `packaging/aur/test.sh` builds and installs it in an
   `archlinux` container (CI does this for the latest release).
-- `.github/workflows/`: `ci.yml` (fmt, clippy, tests on macOS and Linux, release builds, the AUR package) and
-  `release.yml` (binaries, GitHub release, Homebrew tap, crates.io, AUR).
+- `.github/workflows/`: `ci.yml` (fmt, clippy, tests on macOS, Linux and
+  Windows, release builds, the AUR package) and `release.yml` (binaries,
+  GitHub release, Homebrew tap, crates.io, AUR, Scoop). Steps run in bash,
+  Git Bash on Windows.
+- Windows: check locally with
+  `cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings`;
+  behaviour is only tested in CI. Test helpers `fake_editor` and `file_url`
+  (tests/common) keep tests cross-platform.
 
 ## Commands
 
@@ -249,6 +264,10 @@ The release workflow fails if the tag doesn't match `Cargo.toml`. It then:
   only);
 - publishes the crate to crates.io as `markdown-viewer-rs` if the
   `CARGO_REGISTRY_TOKEN` secret is set;
+- installs the release with Scoop on a Windows runner, then updates
+  `bucket/markdown-viewer.json` in `mdellavo/scoop-bucket` if the
+  `SCOOP_BUCKET_DEPLOY_KEY` secret is set (a deploy key with write access
+  to that repository only);
 - tests the AUR package on Arch and pushes it to
   `aur.archlinux.org/markdown-viewer-bin.git` if the `AUR_SSH_PRIVATE_KEY`
   secret is set (a key on the maintaining AUR account). The optional

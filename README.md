@@ -36,6 +36,19 @@ sudo apt install ./markdown-viewer_*_amd64.deb      # Debian, Ubuntu
 sudo dnf install ./markdown-viewer-*.x86_64.rpm     # Fedora, RHEL
 ```
 
+On Windows, with [Scoop](https://scoop.sh) (x64 and ARM64):
+
+```powershell
+scoop bucket add mdellavo https://github.com/mdellavo/scoop-bucket
+scoop install mdellavo/markdown-viewer
+```
+
+or download `markdown-viewer-x86_64-pc-windows-msvc.zip` from a
+[release](https://github.com/mdellavo/markdown-viewer/releases) and put
+`markdown-viewer.exe` on your `PATH`. The zip includes PowerShell
+completions (`completions\_markdown-viewer.ps1`; dot-source it from your
+`$PROFILE`).
+
 On Arch Linux, from the AUR (prebuilt, x86_64 and ARM64):
 
 ```sh
@@ -301,8 +314,9 @@ your editor at that line (when serving). The editor is the first of:
 2. `$MARKDOWN_VIEWER_EDITOR`.
 3. `$VISUAL` or `$EDITOR`, if it's a known graphical editor.
 4. The first one found of Zed, VS Code, Cursor, Windsurf, VSCodium, Sublime
-   Text, TextMate or IntelliJ IDEA.
-5. On macOS, the default text editor (without jumping to the line).
+   Text, TextMate or IntelliJ IDEA (or Notepad++, if you name it).
+5. On macOS, the default text editor; on Windows, Notepad (neither jumps to
+   the line).
 
 Terminal editors such as vim can't be used, as there's no terminal to run
 them in.
@@ -310,7 +324,8 @@ them in.
 ### Settings file
 
 Put defaults for any of these options in
-`~/.config/markdown-viewer/config.toml` (or `$XDG_CONFIG_HOME/markdown-viewer/config.toml`).
+`~/.config/markdown-viewer/config.toml` (or `$XDG_CONFIG_HOME/markdown-viewer/config.toml`;
+on Windows, `%APPDATA%\markdown-viewer\config.toml`).
 Command-line options override it, and a theme you pick in the viewer
 overrides its `theme`.
 
@@ -339,7 +354,9 @@ Unknown keys are reported as errors, so typos don't go unnoticed. Set
 
 By default the page opens as a minimal app window, with no tabs, address bar
 or toolbar, so the preview can sit next to your editor. It uses your default
-browser, or the one given with `--browser`.
+browser, or the one given with `--browser`. On Windows, `--browser` takes
+a name (`chrome`, `edge`, `brave`, `vivaldi`, `firefox`) or a path to the
+browser's `.exe`.
 
 | Browser | Default (`--app`) | `--window` |
 |---|---|---|
@@ -475,6 +492,8 @@ following the cursor in VS Code.
 You need Rust 1.91 or newer. Install it with [rustup](https://rustup.rs/), or
 run `rustup update` to upgrade. No other tools or system libraries are needed:
 the stylesheets, fonts, icons, KaTeX and mermaid.js are built into the binary.
+On Windows, rustup also needs Visual Studio's C++ build tools (it offers to
+install them).
 
 ```sh
 git clone https://github.com/mdellavo/markdown-viewer
@@ -497,8 +516,8 @@ cargo run -- --watch examples/example.md
 
 ### Packages
 
-Release packages are built by `packaging/package.sh`, the script the
-release workflow uses. Build for a target first, then package it. The output
+Release packages are built by `packaging/package.sh` (`packaging/package.ps1`
+on Windows), the scripts the release workflow uses. Build for a target first, then package it. The output
 goes to `dist/`, with a `.sha256` checksum next to each file.
 
 ```sh
@@ -522,8 +541,17 @@ Their contents are set in `Cargo.toml`, under `[package.metadata.deb]` and
 sudo dpkg -i dist/markdown-viewer_*.deb && markdown-viewer --version
 ```
 
-The Homebrew formula and the AUR package download a published GitHub
-release, so they're generated from that release's checksums:
+On Windows, build and package from PowerShell; this makes
+`dist\markdown-viewer-<target>.zip` with its checksum:
+
+```powershell
+cargo build --release --locked --target x86_64-pc-windows-msvc
+pwsh packaging/package.ps1 x86_64-pc-windows-msvc
+```
+
+The Homebrew formula, the AUR package and the Scoop manifest download a
+published GitHub release, so they're generated from that release's
+checksums:
 
 ```sh
 v=0.5.0
@@ -531,6 +559,9 @@ gh release download v$v --pattern '*.sha256' --dir /tmp/sums
 
 # Homebrew: the formula for mdellavo/homebrew-tap
 packaging/homebrew/formula.sh $v /tmp/sums > markdown-viewer.rb
+
+# Scoop: the manifest for mdellavo/scoop-bucket
+packaging/scoop/manifest.sh $v /tmp/sums > markdown-viewer.json
 
 # AUR: PKGBUILD and .SRCINFO for markdown-viewer-bin, then build and
 # install it in an Arch Linux container to check it (needs Docker)
