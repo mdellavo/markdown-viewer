@@ -20,6 +20,36 @@ For a tour of every feature, run:
 markdown-viewer --watch examples/example.md
 ```
 
+## Install
+
+With Homebrew (macOS and Linux), including shell completions and a man page:
+
+```sh
+brew install mdellavo/tap/markdown-viewer
+```
+
+Debian, Ubuntu and Fedora packages (x86_64 and ARM64) are attached to each
+[release](https://github.com/mdellavo/markdown-viewer/releases):
+
+```sh
+sudo apt install ./markdown-viewer_*_amd64.deb      # Debian, Ubuntu
+sudo dnf install ./markdown-viewer-*.x86_64.rpm     # Fedora, RHEL
+```
+
+On Arch Linux, from the AUR (prebuilt, x86_64 and ARM64):
+
+```sh
+yay -S markdown-viewer-bin    # or paru, or makepkg by hand
+```
+
+With Rust's tools (the crate is `markdown-viewer-rs`; the command is still
+`markdown-viewer`):
+
+```sh
+cargo binstall markdown-viewer-rs    # prebuilt binary
+cargo install markdown-viewer-rs     # build from source (see Building)
+```
+
 ## Features
 
 **Rendering**
@@ -173,36 +203,6 @@ markdown-viewer --watch examples/example.md
   mermaid.js. Pages never contact the network, though images that link to
   the web still load. KaTeX and Mermaid are only added to pages that use them.
 - Scripts inside the Markdown are blocked (see [Security](#security)).
-
-## Install
-
-With Homebrew (macOS and Linux), including shell completions and a man page:
-
-```sh
-brew install mdellavo/tap/markdown-viewer
-```
-
-Debian, Ubuntu and Fedora packages (x86_64 and ARM64) are attached to each
-[release](https://github.com/mdellavo/markdown-viewer/releases):
-
-```sh
-sudo apt install ./markdown-viewer_*_amd64.deb      # Debian, Ubuntu
-sudo dnf install ./markdown-viewer-*.x86_64.rpm     # Fedora, RHEL
-```
-
-On Arch Linux, from the AUR (prebuilt, x86_64 and ARM64):
-
-```sh
-yay -S markdown-viewer-bin    # or paru, or makepkg by hand
-```
-
-With Rust's tools (the crate is `markdown-viewer-rs`; the command is still
-`markdown-viewer`):
-
-```sh
-cargo binstall markdown-viewer-rs    # prebuilt binary
-cargo install markdown-viewer-rs     # build from source (see Building)
-```
 
 ## Usage
 
