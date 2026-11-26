@@ -64,6 +64,8 @@ jobs:
           markdown-viewer --version
           test -f /usr/share/man/man1/markdown-viewer.1.gz
           test -f /usr/share/bash-completion/completions/markdown-viewer
+          test -f /usr/share/applications/markdown-viewer.desktop
+          test -f /usr/share/icons/hicolor/scalable/apps/markdown-viewer.svg
           printf '# Hello\n' | markdown-viewer - -o - | grep -q '<h1'
       - name: Check the Homebrew formula generator
         if: matrix.target == 'x86_64-unknown-linux-gnu'

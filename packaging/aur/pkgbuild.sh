@@ -63,6 +63,11 @@ package() {
   install -Dm644 completions/markdown-viewer.bash "$pkgdir/usr/share/bash-completion/completions/markdown-viewer"
   install -Dm644 completions/_markdown-viewer "$pkgdir/usr/share/zsh/site-functions/_markdown-viewer"
   install -Dm644 completions/markdown-viewer.fish "$pkgdir/usr/share/fish/vendor_completions.d/markdown-viewer.fish"
+  # The desktop entry (in releases from 0.7.0 on).
+  if [ -d desktop ]; then
+    install -Dm644 desktop/markdown-viewer.desktop -t "$pkgdir/usr/share/applications/"
+    install -Dm644 desktop/markdown-viewer.svg -t "$pkgdir/usr/share/icons/hicolor/scalable/apps/"
+  fi
 }
 PKG
 } > "$out/PKGBUILD"
