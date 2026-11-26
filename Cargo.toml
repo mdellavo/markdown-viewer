@@ -1,6 +1,6 @@
 [package]
 name = "markdown-viewer-rs"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2024"
 rust-version = "1.91"
 description = "Render a Markdown file with GitHub styling and live-reload it in your browser"

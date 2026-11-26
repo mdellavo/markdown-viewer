@@ -6,6 +6,8 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-26
+
 ### Added
 
 - [Writing custom CSS](docs/custom-css.md), a guide to `--css`, and an
@@ -193,7 +195,8 @@ and this project uses [Semantic Versioning](https://semver.org/).
 - Stopping `--watch` with Ctrl-C closes the window markdown-viewer opened.
   Tabs, and pages opened by hand, stay open with a "stopped" banner.
 
-[Unreleased]: https://github.com/mdellavo/markdown-viewer/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/mdellavo/markdown-viewer/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/mdellavo/markdown-viewer/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.4.0...v0.5.0

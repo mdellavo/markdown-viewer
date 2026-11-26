@@ -2,7 +2,7 @@
   "name": "markdown-viewer",
   "displayName": "markdown-viewer",
   "description": "Preview Markdown with markdown-viewer, scrolling the preview as your cursor moves.",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "publisher": "mdellavo",
   "license": "MIT",
   "repository": {
