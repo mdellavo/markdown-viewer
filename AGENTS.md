@@ -161,6 +161,11 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
 - `docs/screenshot.md` and `docs/screenshots.sh`: the README screenshots.
   Run `cargo build && docs/screenshots.sh` after visible UI changes and
   check the images before committing them.
+- `docs/demo.sh`: the README demo GIFs (`docs/demo-{light,dark}.gif`), an
+  editor and the viewer side by side. `tests/demo.rs` (an ignored test)
+  records the frames: it types `docs/demo/typed.md` into a copy of
+  `docs/demo/notes.md` on the stage `docs/demo/desktop.html`, saving at
+  each `<!-- save -->`; ffmpeg makes the GIFs. Needs Chrome and ffmpeg.
 - `packaging/package.sh`: packages a release build (tarball with
   completions and man page; `.deb` and `.rpm` on Linux), used by both the
   release workflow and CI.
@@ -253,7 +258,9 @@ Check the tarball against the `integrity` hash from
 
 1. Move `[Unreleased]` entries in `CHANGELOG.md` to a new version section.
 2. Bump `version` in `Cargo.toml`, run `cargo build` to update `Cargo.lock`.
-3. Commit, then `git tag vX.Y.Z && git push --tags`.
+3. Refresh the README images: `cargo build && docs/screenshots.sh &&
+   docs/demo.sh`, and look at them before committing.
+4. Commit, then `git tag vX.Y.Z && git push --tags`.
 
 The release workflow fails if the tag doesn't match `Cargo.toml`. It then:
 

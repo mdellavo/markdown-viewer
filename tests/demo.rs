@@ -39,7 +39,12 @@ impl Frames {
             scale: 1.0,
         };
         let png = tab
-            .capture_screenshot(Page::CaptureScreenshotFormatOption::Png, None, Some(clip), true)
+            .capture_screenshot(
+                Page::CaptureScreenshotFormatOption::Png,
+                None,
+                Some(clip),
+                true,
+            )
             .unwrap();
         self.count += 1;
         let name = format!("{:05}.png", self.count);
@@ -118,22 +123,24 @@ fn record_demo() {
         .unwrap();
     let browser = Browser::new(options).unwrap();
     let tab = browser.new_tab().unwrap();
-    tab.call_method(headless_chrome::protocol::cdp::Emulation::SetDeviceMetricsOverride {
-        width: WIDTH,
-        height: HEIGHT,
-        device_scale_factor: 1.0,
-        mobile: false,
-        scale: None,
-        screen_width: None,
-        screen_height: None,
-        position_x: None,
-        position_y: None,
-        dont_set_visible_size: None,
-        screen_orientation: None,
-        viewport: None,
-        display_feature: None,
-        device_posture: None,
-    })
+    tab.call_method(
+        headless_chrome::protocol::cdp::Emulation::SetDeviceMetricsOverride {
+            width: WIDTH,
+            height: HEIGHT,
+            device_scale_factor: 1.0,
+            mobile: false,
+            scale: None,
+            screen_width: None,
+            screen_height: None,
+            position_x: None,
+            position_y: None,
+            dont_set_visible_size: None,
+            screen_orientation: None,
+            viewport: None,
+            display_feature: None,
+            device_posture: None,
+        },
+    )
     .unwrap();
     tab.navigate_to(&format!(
         "http://{}/desktop.html?file=notes.md&theme={theme}",
@@ -178,4 +185,3 @@ fn record_demo() {
     frames.capture(&tab, 2.5);
     frames.finish();
 }
-

@@ -4,10 +4,16 @@ Render a Markdown file with GitHub styling and view it in your browser, with
 live reload while you edit. A small, fast, offline alternative to
 [grip](https://github.com/joeyespo/grip) and Marked 2.
 
+<p>
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshot-dark.png">
-  <img alt="markdown-viewer showing a document with a contents sidebar, a tip alert, a Mermaid flowchart, a math formula and highlighted Rust code" src="docs/screenshot-light.png">
+  <img width="49%" alt="markdown-viewer showing a document with a contents sidebar, a tip alert, a Mermaid flowchart, a math formula and highlighted Rust code" src="docs/screenshot-light.png">
 </picture>
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/demo-dark.gif">
+  <img width="49%" alt="An editor and markdown-viewer side by side: each time the file is saved, the page updates with the new task list, alert, Mermaid diagram and formula" src="docs/demo-light.gif">
+</picture>
+</p>
 
 ```sh
 markdown-viewer --watch README.md
@@ -599,6 +605,13 @@ Review and accept the new snapshot with
 
 ```sh
 cargo insta review
+```
+
+The screenshots and the demo at the top of this README are generated, and
+are refreshed for each release (needs Chrome, and ffmpeg for the demo):
+
+```sh
+cargo build && docs/screenshots.sh && docs/demo.sh
 ```
 
 Releases are built by GitHub Actions when a `v*` tag is pushed; see
