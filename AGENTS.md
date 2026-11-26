@@ -67,6 +67,20 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   `absolutize` (relative links against the page, images against the raw
   file). In main.rs a `Source::Url` is a virtual document served from an
   empty temp folder (`web_root`), re-fetched every 10 s (`follow_url`).
+- `src/source.rs`: the source view (`v`): Markdown highlighted with
+  syntect's `hl-` classes (the theme's code colours) and split into
+  `.mdv-line` spans with `codeblocks::split_lines`; served at
+  `/__mdv/source-html?doc=` for Markdown files inside the root, and for
+  the virtual page at `/` (stdin, clipboard, web address) from the text
+  `Docs::set_source` keeps (`doc_source` in server.rs, also used for
+  copying). Pages get `data-source` when either applies. The page asks
+  for `?plain=1` first (instant) and then the highlighted version
+  (`source::render`, cached by content; the `source_highlighting` setting
+  turns it off). Lines come in `.mdv-chunk`s of 200 with
+  `content-visibility: auto`, so only visible ones are laid out; keep line
+  numbers on `data-line`, not CSS counters, which chunks would cut off. ui.js
+  shows it in a second `.markdown-body` (`.mdv-source-view`) after the
+  article, switched by `<html data-mdv-view="source">`.
 - `src/tasks.rs`: ticking task boxes (`POST /__mdv/task`): changes the
   `[ ]` at the item's source position, only if it is still a task item in
   the state the page showed.

@@ -169,6 +169,14 @@ cargo install markdown-viewer-rs     # build from source (see Building)
 - A sidebar with the document's contents, which follows your place as you
   scroll, and, when serving, a list of the folder's Markdown files with a
   filter that also searches their text.
+- View the Markdown source (<kbd>v</kbd>, or the toolbar's code button):
+  syntax highlighted, with line numbers, kept up to date as the file
+  changes. Switching keeps your place in both directions, and
+  double-clicking a line opens it in your editor. It works for web
+  addresses, standard input and the clipboard too (without the editor,
+  as there's no file to open). It opens at once with the plain source and
+  highlights it in the background, so long files stay quick;
+  `source_highlighting = false` keeps it plain.
 - Double-click a paragraph (or press <kbd>e</kbd>) to open the source in your
   editor at that line (see [Editor](#editor)). The other way round,
   `markdown-viewer --goto file.md:42` scrolls the preview to a line; the
@@ -340,6 +348,7 @@ button.
 | <kbd>d</kbd> / <kbd>u</kbd> | Half a page down / up |
 | <kbd>g</kbd> / <kbd>G</kbd> | Top / bottom |
 | <kbd>n</kbd> / <kbd>p</kbd> | Next / previous heading |
+| <kbd>v</kbd> | View the Markdown source, syntax highlighted with line numbers (when serving); <kbd>v</kbd> again goes back, at the same place |
 | <kbd>w</kbd> | Show or hide the word count and reading time |
 | <kbd>,</kbd> | Settings: change and save the [settings file](#settings-file) (when serving) |
 | <kbd>?</kbd> | Show the shortcuts, and About: the version and build, bundled Mermaid and KaTeX, and (when serving) where the settings and state files are, the editor in use and the served folder. **Copy details** copies it all, for bug reports. Then credits for the projects markdown-viewer is built on |
@@ -400,6 +409,7 @@ lint_ignore = ["multiple-h1", "duplicate-heading"]   # --lint rules to skip
 recent = false          # don't remember opened files for the Recent page
 word_count = false      # hide the word count and reading time (w toggles it)
 exit_when_closed = false  # keep serving after the window closes (until Ctrl-C)
+source_highlighting = false  # show the source view (v) without highlighting
 ```
 
 Unknown keys are reported as errors, so typos don't go unnoticed. Set

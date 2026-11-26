@@ -6,6 +6,17 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- View a page's Markdown source (`v`, or the code button in the toolbar):
+  syntax highlighted with line numbers, updated as the file changes.
+  Switching keeps your place, and double-clicking a line opens the
+  editor there. It works for web addresses, standard input and the
+  clipboard too, and copying those pages now includes their Markdown. It
+  opens at once with the plain source, then highlights it (with a busy
+  indicator); `source_highlighting = false` (also in the settings dialog)
+  turns highlighting off.
+
 ## [0.9.0] - 2026-11-26
 
 ### Added
