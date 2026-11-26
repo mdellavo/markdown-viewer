@@ -146,20 +146,27 @@ mod tests {
 
     #[test]
     fn page_links_what_it_can() {
+        // A folder name that needs escaping in both Markdown and URLs
+        // (Windows doesn't allow `|` in names).
+        let (folder, url, shown) = if cfg!(windows) {
+            ("notes [x]", "notes%20%5Bx%5D", "notes \\[x\\]")
+        } else {
+            ("notes|x", "notes%7Cx", "notes\\|x")
+        };
         let dir = tempfile::tempdir().unwrap();
         let home = dir.path().canonical().unwrap();
-        std::fs::create_dir_all(home.join("notes|x")).unwrap();
-        std::fs::write(home.join("notes|x/a b.md"), "# A").unwrap();
+        std::fs::create_dir_all(home.join(folder)).unwrap();
+        std::fs::write(home.join(folder).join("a b.md"), "# A").unwrap();
         let outside = tempfile::tempdir().unwrap();
         let out = outside.path().canonical().unwrap().join("o.md");
         std::fs::write(&out, "# O").unwrap();
         let list = vec![
             RecentItem {
-                path: home.join("notes|x/a b.md").to_string_lossy().into(),
+                path: home.join(folder).join("a b.md").to_string_lossy().into(),
                 at: 10_000,
             },
             RecentItem {
-                path: home.join("notes|x").to_string_lossy().into(),
+                path: home.join(folder).to_string_lossy().into(),
                 at: 10_000 - 7200,
             },
             RecentItem {
@@ -173,11 +180,13 @@ mod tests {
         ];
         let md = page_at(&list, &home, 10_030, Some(&home));
         assert!(
-            md.contains("| [a b\\.md](/notes%7Cx/a%20b.md) | \\~/notes\\|x | just now |"),
+            md.contains(&format!(
+                "| [a b\\.md](/{url}/a%20b.md) | \\~/{shown} | just now |"
+            )),
             "{md}"
         );
         assert!(
-            md.contains("| [📁 notes\\|x/](/notes%7Cx/) | \\~ | 2 hours ago |"),
+            md.contains(&format!("| [📁 {shown}/](/{url}/) | \\~ | 2 hours ago |")),
             "{md}"
         );
         assert!(md.contains("| o\\.md | "), "{md}");
