@@ -82,6 +82,8 @@ pub struct PageOptions {
     pub site_root: Option<String>,
     /// The viewer can change settings (the settings dialog).
     pub settings: bool,
+    /// The viewer can show the page's Markdown source.
+    pub source: bool,
 }
 
 /// Files of a static site, under `_mdv/` at its root.
@@ -382,7 +384,12 @@ impl Renderer {
                 out,
                 "<script nonce=\"{nonce}\" data-served=\"{}\" data-doc=\"{doc}\"{site_attr}{} data-about=\"{}\">\n{UI_JS}</script>\n",
                 page.served,
-                if page.settings { " data-settings" } else { "" },
+                match (page.settings, page.source) {
+                    (true, true) => " data-settings data-source",
+                    (true, false) => " data-settings",
+                    (false, true) => " data-source",
+                    (false, false) => "",
+                },
                 escape_attr(crate::about::build_json())
             );
         }

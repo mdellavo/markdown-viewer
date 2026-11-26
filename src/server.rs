@@ -42,6 +42,7 @@ const GOTO_PATH: &str = "/__mdv/goto";
 const TASK_PATH: &str = "/__mdv/task";
 const ABOUT_PATH: &str = "/__mdv/about";
 const SETTINGS_PATH: &str = "/__mdv/settings";
+const SOURCE_HTML_PATH: &str = "/__mdv/source-html";
 const SOURCE_PATH: &str = "/__mdv/source";
 const GITDIFF_PATH: &str = "/__mdv/gitdiff";
 const CHECK_PATH: &str = "/__mdv/check";
@@ -72,6 +73,8 @@ pub struct ServeOptions {
     pub reconfigure: Option<Reconfigure>,
     /// Settings that command-line options override in this run.
     pub overridden: Vec<String>,
+    /// Highlight the source view.
+    pub source_highlighting: bool,
 }
 
 /// What a viewer uses from the settings, recomputed when they change.
@@ -81,6 +84,7 @@ pub struct Reconfigured {
     pub page: PageOptions,
     pub custom_css: Option<PathBuf>,
     pub editor: Option<String>,
+    pub source_highlighting: bool,
 }
 
 pub type Reconfigure = Arc<dyn Fn(&crate::config::Config) -> Result<Reconfigured> + Send + Sync>;
@@ -93,6 +97,8 @@ struct Live {
     custom_css: Option<PathBuf>,
     /// Editor setting for click-to-source (see editor.rs).
     editor: Option<String>,
+    /// Highlight the source view.
+    source_highlighting: bool,
 }
 
 #[derive(Clone)]
@@ -214,6 +220,7 @@ impl Server {
                 page: opts.page,
                 custom_css: opts.custom_css,
                 editor: opts.editor,
+                source_highlighting: opts.source_highlighting,
             })),
             prefs: Arc::new(Mutex::new(opts.prefs)),
             remember: opts.remember,
@@ -239,6 +246,7 @@ impl Server {
             .route(TASK_PATH, post(set_task))
             .route(ABOUT_PATH, get(about))
             .route(SETTINGS_PATH, get(get_settings).post(set_setting))
+            .route(SOURCE_HTML_PATH, get(source_html))
             .route(SOURCE_PATH, get(source))
             .route(GITDIFF_PATH, get(gitdiff))
             .route(CHECK_PATH, get(check_links))
@@ -342,6 +350,10 @@ fn doc_page(state: &AppState, doc: &Path) -> Response {
         close_on_exit: state.close_on_exit.load(Ordering::Relaxed),
         custom_css: custom_css.or_else(|| template.custom_css.clone()),
         settings: state.reconfigure.is_some(),
+        // The source view: Markdown files, and documents with no file that
+        // the viewer keeps the text of.
+        source: docs::is_markdown(doc)
+            || state.main.as_deref() == Some(doc) && state.docs.source(doc).is_some(),
         ..template
     };
     no_store(Html(state.docs.renderer().wrap_page(&body, &page)).into_response())
@@ -654,6 +666,7 @@ async fn set_setting(
             live.page = next.page;
             live.custom_css = next.custom_css;
             live.editor = next.editor;
+            live.source_highlighting = next.source_highlighting;
             reload
         };
         if state.docs.renderer().options() != &next.render {
@@ -713,13 +726,59 @@ async fn about(State(state): State<AppState>) -> Response {
     }
 }
 
+/// The document's Markdown, syntax highlighted (the source view).
+/// `?plain=1` asks for it unhighlighted (instant, shown while the
+/// highlighted version is made); so does the `source_highlighting` setting.
+async fn source_html(State(state): State<AppState>, Query(q): Query<SourceQuery>) -> Response {
+    let Some(text) = doc_source(&state, &q.doc).await else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let plain = q.plain.as_deref().is_some_and(|v| v != "0" && v != "false");
+    let highlighted = !plain && state.live.lock().unwrap().source_highlighting;
+    match tokio::task::spawn_blocking(move || crate::source::render(&text, highlighted)).await {
+        Ok(html) => no_store(
+            (
+                [(
+                    header::HeaderName::from_static("x-mdv-highlighted"),
+                    if highlighted { "true" } else { "false" },
+                )],
+                Html(html.as_str().to_string()),
+            )
+                .into_response(),
+        ),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct SourceQuery {
+    #[serde(default)]
+    doc: String,
+    /// `plain=1`: without highlighting.
+    #[serde(default)]
+    plain: Option<String>,
+}
+
+/// A document's Markdown: its file, or for the page shown at `/` with no
+/// file behind it (standard input, the clipboard, a web address), the text
+/// the viewer keeps for it.
+async fn doc_source(state: &AppState, doc: &str) -> Option<String> {
+    if let Some(file) = doc_file(state, doc) {
+        return tokio::fs::read_to_string(&file).await.ok();
+    }
+    virtual_source(state, doc)
+}
+
+fn virtual_source(state: &AppState, doc: &str) -> Option<String> {
+    let main = state.main.as_ref()?;
+    (doc.is_empty() || is_main(state, doc))
+        .then(|| state.docs.source(main))
+        .flatten()
+}
+
 /// The document's Markdown (for copying the page).
 async fn source(State(state): State<AppState>, Query(q): Query<EventsQuery>) -> Response {
-    let text = match doc_file(&state, &q.doc) {
-        Some(file) => tokio::fs::read_to_string(&file).await.ok(),
-        // Standard input and the clipboard have no file.
-        None => None,
-    };
+    let text = doc_source(&state, &q.doc).await;
     match text {
         Some(text) => {
             no_store(([(header::CONTENT_TYPE, "text/plain; charset=utf-8")], text).into_response())

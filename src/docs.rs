@@ -46,6 +46,9 @@ pub struct Docs {
     /// Swapped when settings change (see `set_renderer`).
     renderer: std::sync::RwLock<Arc<Renderer>>,
     channels: Mutex<HashMap<PathBuf, watch::Sender<String>>>,
+    /// The Markdown of documents with no file (standard input, the
+    /// clipboard, web addresses), for the source view and copying.
+    sources: Mutex<HashMap<PathBuf, String>>,
     watched: Mutex<HashSet<PathBuf>>,
     debouncer: Mutex<Debouncer<RecommendedWatcher, RecommendedCache>>,
 }
@@ -67,6 +70,7 @@ impl Docs {
             root,
             renderer: std::sync::RwLock::new(renderer),
             channels: Mutex::default(),
+            sources: Mutex::default(),
             watched: Mutex::default(),
             debouncer: Mutex::new(debouncer),
         });
@@ -213,6 +217,20 @@ impl Docs {
 
     /// Register a document with no file behind it (stdin, the clipboard),
     /// shown under `key`. Update it with [`Docs::set_virtual`].
+    /// Remember a virtual document's Markdown (set it before its HTML, so a
+    /// page reacting to the update reads the new text).
+    pub fn set_source(&self, key: &Path, text: &str) {
+        self.sources
+            .lock()
+            .unwrap()
+            .insert(key.to_path_buf(), text.to_string());
+    }
+
+    /// A virtual document's Markdown, if it has one.
+    pub fn source(&self, key: &Path) -> Option<String> {
+        self.sources.lock().unwrap().get(key).cloned()
+    }
+
     pub fn add_virtual(&self, key: &Path, html: String) {
         let (tx, _) = watch::channel(html);
         self.channels.lock().unwrap().insert(key.to_path_buf(), tx);

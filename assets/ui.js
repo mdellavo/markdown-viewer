@@ -16,6 +16,7 @@
 
   // Icons: Primer Octicons (MIT), see assets/LICENSE-octicons.
   var ICONS = {
+    "code": ["m11.28 3.22 4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734L13.94 8l-3.72-3.72a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215Zm-6.56 0a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L2.06 8l3.72 3.72a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L.47 8.53a.75.75 0 0 1 0-1.06Z"],
     "gear": ["M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.088.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 0 1-.704 1.217c-.428.61-1.176.807-1.82.63l-1.102-.302c-.067-.019-.177-.011-.3.071a5.909 5.909 0 0 1-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 0 1-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 0 1-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 0 1 0-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 0 1 .704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071.214-.143.437-.272.668-.386.133-.066.194-.158.211-.224l.29-1.106C6.009.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.045-.22.312-.412.644-.573.99-.014.031-.021.11.059.19l.815.806c.411.406.562.957.53 1.456a4.709 4.709 0 0 0 0 .582c.032.499-.119 1.05-.53 1.456l-.815.806c-.081.08-.073.159-.059.19.162.346.353.677.573.989.02.03.085.076.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.161.107.328.204.501.29.447.222.85.629.997 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.029.175-.016.195-.045.22-.313.411-.644.573-.99.014-.031.021-.11-.059-.19l-.815-.806c-.411-.406-.562-.957-.53-1.456a4.709 4.709 0 0 0 0-.582c-.032-.499.119-1.05.53-1.456l.815-.806c.081-.08.073-.159.059-.19a6.464 6.464 0 0 0-.573-.989c-.02-.03-.085-.076-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.501-.29c-.447-.222-.85-.629-.997-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z"],
     "copy": ["M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z", "M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"],
     "check": ["M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"],
@@ -86,6 +87,11 @@
   toolbar.append(stats, contentsBtn);
   if (hasFiles) toolbar.append(filesBtn);
   if (canEdit) toolbar.append(editBtn);
+  // The source view: pages whose Markdown the viewer has (files, and
+  // standard input, the clipboard and web addresses).
+  var canSource = served && script.hasAttribute("data-source");
+  var sourceBtn = el("button", { type: "button", title: "View the Markdown source (v)", "aria-label": "View the Markdown source", "aria-pressed": "false" }, icon("code"));
+  if (canSource) toolbar.append(sourceBtn);
   var copyPageBtn = el("button", { type: "button", title: "Copy the page (c)", "aria-label": "Copy the page" }, icon("copy"));
   var canSettings = served && script.hasAttribute("data-settings");
   var settingsBtn = el("button", { type: "button", title: "Settings (,)", "aria-label": "Settings" }, icon("gear"));
@@ -119,6 +125,7 @@
     hasFiles ? ["f", "Find a file"] : null,
     served ? ["/", "Search the text of every file"] : null,
     canEdit ? ["e", "Edit the source here (or double-click a paragraph)"] : null,
+    canSource ? ["v", "View the Markdown source, highlighted (v again to go back)"] : null,
     ["s", "Present as slides (arrows to move, Esc to stop)"],
     ["+ / -", "Larger / smaller text (0 resets)"],
     ["c", "Copy the page (rich text, and Markdown as plain text)"],
@@ -234,6 +241,8 @@
       help: "Applied after the built-in styles." },
     { key: "number_headings", label: "Number headings (1, 1.1, …)", type: "bool", def: false },
     { key: "line_numbers", label: "Number the lines of code blocks", type: "bool", def: false },
+    { key: "source_highlighting", label: "Highlight the Markdown in the source view (v)", type: "bool", def: true,
+      help: "Off shows it plain, which is quicker for very long files." },
     { key: "word_count", label: "Show the word count and reading time", type: "bool", def: true,
       help: "w in the viewer shows or hides it too." },
     { key: "front_matter", label: "Front matter", type: "select", def: "table",
@@ -390,6 +399,7 @@
             ? "Saved, for next time" : "Saved";
         if (f.key === "theme") applyTheme(next || "auto");
         if (f.key === "word_count") showWordCount(next !== false);
+        if (f.key === "source_highlighting" && sourceShown()) loadSource().catch(function () {});
         if (res.reload) {
           status.textContent = "Saved, reloading…";
           setTimeout(function () { location.reload(); }, 300);
@@ -995,7 +1005,8 @@
       // "Find a file" always opens the list and focuses the filter.
       case "f": if (!hasFiles) return; openSidebar("files", true); break;
       case "/": if (!served) return; openSidebar("files", true); break;
-      case "e": if (!canEdit) return; editAt(blockAtTop()); break;
+      case "e": if (!canEdit) return; if (sourceShown()) editLine(firstSourceLine()); else editAt(blockAtTop()); break;
+      case "v": if (!canSource) return; showSource(!sourceShown()); break;
       case "s": startPresenting(); break;
       case "+": case "=": stepScale(1); break;
       case "-": case "_": stepScale(-1); break;
@@ -1052,8 +1063,8 @@
   }
   // The block at the top of the window: the deepest element that spans the
   // reading line, else the first one below it.
-  function blockAtTop() {
-    var y = 80, found = null;
+  function blockAtTop(offset) {
+    var y = offset === undefined ? 80 : offset, found = null;
     var nodes = body.querySelectorAll("[data-sourcepos]");
     for (var i = 0; i < nodes.length; i++) {
       var r = nodes[i].getBoundingClientRect();
@@ -1077,8 +1088,8 @@
   }
 
   // ---- Click to jump to source -------------------------------------------
-  function editAt(node) {
-    var line = lineOf(node) || 1;
+  function editAt(node) { editLine(lineOf(node) || 1); }
+  function editLine(line) {
     fetch("/__mdv/open", {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-MDV": "1" },
@@ -1330,7 +1341,117 @@
     target.classList.add("mdv-flash");
     setTimeout(function () { target.classList.remove("mdv-flash"); }, 1700);
   }
-  document.addEventListener("mdv:goto", function (e) { revealLine(e.detail.line); });
+  document.addEventListener("mdv:goto", function (e) {
+    if (sourceShown()) showSource(false);
+    revealLine(e.detail.line);
+  });
+
+  // ---- Source view -----------------------------------------------------------
+  // The file's Markdown, highlighted by the viewer, in place of the page.
+  // Switching keeps your place: the source opens at the line of the block
+  // at the top, and going back shows the block for the line at the top.
+  var sourceView = el("div", { "class": "markdown-body mdv-source-view" });
+  body.after(sourceView);
+  function sourceShown() { return root.getAttribute("data-mdv-view") === "source"; }
+  // Two steps, so the view is instant: the plain source (fast), then the
+  // highlighted one (slow for long files) swapped in, keeping the scroll.
+  // `sourceSeq` drops answers that arrive after a newer request.
+  var sourceSeq = 0;
+  var sourceStatus = el("div", { "class": "mdv-ui mdv-source-status", role: "status" });
+  function fetchSource(plain) {
+    return fetch("/__mdv/source-html?doc=" + encodeURIComponent(currentDoc) + (plain ? "&plain=1" : ""))
+      .then(function (r) {
+        if (!r.ok) throw new Error("error " + r.status);
+        return r.text().then(function (html) {
+          return { html: html, highlighted: r.headers.get("X-MDV-Highlighted") === "true" };
+        });
+      });
+  }
+  function busy(text) {
+    sourceStatus.textContent = text || "";
+    sourceBtn.classList.toggle("mdv-busy", !!text);
+    if (text && !sourceStatus.isConnected) document.body.append(sourceStatus);
+    sourceStatus.hidden = !text;
+  }
+  // Load (or reload) the source; `atLine` scrolls there after the first step.
+  function loadSource(atLine) {
+    var seq = ++sourceSeq;
+    var first = atLine ? fetchSource(true).then(function (res) {
+      if (seq !== sourceSeq) return;
+      sourceView.innerHTML = res.html;
+      scrollToSourceLine(atLine);
+    }) : Promise.resolve();
+    return first.then(function () {
+      if (seq !== sourceSeq) return;
+      busy("Highlighting…");
+      return fetchSource(false).then(function (res) {
+        if (seq !== sourceSeq) return;
+        // Same text and line heights, so the scroll position carries over.
+        var y = window.scrollY;
+        sourceView.innerHTML = res.html;
+        window.scrollTo(0, y);
+      });
+    }).finally(function () { if (seq === sourceSeq) busy(""); });
+  }
+  function scrollToSourceLine(line) {
+    var target = sourceView.querySelector('.mdv-line[data-line="' + line + '"]');
+    if (target) scrollToTop(target); else window.scrollTo(0, 0);
+  }
+  function sourceLines() { return sourceView.querySelectorAll(".mdv-line"); }
+  // The first source line at the top of the window (binary search: files
+  // can be long).
+  function firstSourceLine() {
+    var lines = sourceLines(), lo = 0, hi = lines.length - 1, y = 20;
+    if (!lines.length) return 1;
+    while (lo < hi) {
+      var mid = (lo + hi) >> 1;
+      if (lines[mid].getBoundingClientRect().bottom <= y) lo = mid + 1; else hi = mid;
+    }
+    return +lines[lo].getAttribute("data-line") || 1;
+  }
+  function scrollToTop(el) {
+    window.scrollTo(0, Math.max(0, el.getBoundingClientRect().top + window.scrollY - 16));
+  }
+  function showSource(on) {
+    if (on) {
+      // The block right at the top of the window (not under the toolbar
+      // margin), so the two views line up.
+      var line = lineOf(blockAtTop(20)) || 1;
+      // Switch at once, with feedback, rather than after loading.
+      sourceView.replaceChildren(el("p", { "class": "mdv-source-loading" }, "Loading the source…"));
+      root.setAttribute("data-mdv-view", "source");
+      sourceBtn.setAttribute("aria-pressed", "true");
+      window.scrollTo(0, 0);
+      busy("Loading the source…");
+      loadSource(line).catch(function (err) {
+        console.error("markdown-viewer:", err);
+        if (sourceShown() && !sourceView.querySelector(".mdv-line")) showSource(false);
+        showToast("Couldn't load the source");
+      });
+    } else {
+      ++sourceSeq;
+      busy("");
+      var at = firstSourceLine();
+      root.removeAttribute("data-mdv-view");
+      sourceBtn.setAttribute("aria-pressed", "false");
+      var block = blockForLine(at);
+      if (block) scrollToTop(block); else window.scrollTo(0, 0);
+    }
+  }
+  sourceBtn.addEventListener("click", function () { showSource(!sourceShown()); });
+  // Keep the source current as the file changes.
+  document.addEventListener("mdv:updated", function () {
+    if (sourceShown()) loadSource().catch(function () {});
+  });
+  // Double-click a line to edit the file there.
+  sourceView.addEventListener("dblclick", function (e) {
+    if (!canEdit) return;
+    var line = e.target.closest && e.target.closest(".mdv-line");
+    if (!line) return;
+    var sel = window.getSelection && window.getSelection();
+    if (sel) sel.removeAllRanges();
+    editLine(+line.getAttribute("data-line") || 1);
+  });
 
   // ---- Text size ----------------------------------------------------------
   // Served pages get a new port each run, so the browser's own zoom isn't

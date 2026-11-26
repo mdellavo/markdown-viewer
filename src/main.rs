@@ -32,6 +32,7 @@ mod remote;
 mod render;
 mod server;
 mod site;
+mod source;
 mod tables;
 mod tasks;
 mod theme;
@@ -234,6 +235,8 @@ struct Settings {
     word_count: bool,
     /// Stop serving when the window we opened closes.
     exit_when_closed: bool,
+    /// Highlight the source view.
+    source_highlighting: bool,
     line_numbers: bool,
     front_matter: FrontMatter,
     /// `None`: decide by whether the file is in an Obsidian vault.
@@ -285,6 +288,7 @@ impl Settings {
             number_headings: cli.number_headings || config.number_headings.unwrap_or(false),
             word_count: config.word_count.unwrap_or(true),
             exit_when_closed: config.exit_when_closed.unwrap_or(true),
+            source_highlighting: config.source_highlighting.unwrap_or(true),
             line_numbers: cli.line_numbers || config.line_numbers.unwrap_or(false),
             front_matter: cli.front_matter.or(config.front_matter).unwrap_or_default(),
             obsidian,
@@ -822,13 +826,18 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
     rt.block_on(async move {
         let renderer = Arc::new(Renderer::with_options(settings.render_options(true, &root)));
         let docs = docs::Docs::new(root.clone(), renderer)?;
-        if let (Source::Text { text, .. }, Some(key)) = (source, &main) {
+        if let (Source::Text { name, text, .. }, Some(key)) = (source, &main) {
+            // The Recent page is generated; it has no source worth showing.
+            if *name != "Recent" {
+                docs.set_source(key, text);
+            }
             docs.add_virtual(key, docs.render_text(text, &root));
             if cli.clipboard && cli.watch && !cli.background {
                 follow_clipboard(docs.clone(), key.clone(), root.clone(), text.clone());
             }
         }
         if let (Source::Url { remote, text, .. }, Some(key)) = (source, &main) {
+            docs.set_source(key, text);
             docs.add_virtual(
                 key,
                 remote::absolutize(&docs.render_text(text, &root), remote),
@@ -846,6 +855,10 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
             theme: Some(settings.viewing_theme(&saved)),
             ..saved
         };
+        // Load the source view's syntax definitions in the background.
+        if settings.source_highlighting {
+            std::thread::spawn(source::warm_up);
+        }
         let page = served_page(settings);
         // The settings dialog: a changed settings file, merged with this
         // run's command-line options exactly as at startup.
@@ -859,6 +872,7 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
                     page: served_page(&settings),
                     custom_css: settings.css_path.clone(),
                     editor: settings.editor.clone(),
+                    source_highlighting: settings.source_highlighting,
                 })
             })
         };
@@ -877,6 +891,7 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
                 .unwrap_or_default(),
             reconfigure: Some(reconfigure),
             overridden: overridden_settings(cli),
+            source_highlighting: settings.source_highlighting,
         })
         .await?;
         let url = server.url();
@@ -1080,6 +1095,7 @@ fn follow_clipboard(docs: Arc<docs::Docs>, key: PathBuf, root: PathBuf, mut last
             };
             if text != last && !text.trim().is_empty() {
                 let html = docs.render_text(&text, &root);
+                docs.set_source(&key, &text);
                 docs.set_virtual(&key, html);
                 last = text;
             }
@@ -1105,6 +1121,7 @@ fn follow_url(
             };
             if text != last {
                 let html = remote::absolutize(&docs.render_text(&text, &root), &remote);
+                docs.set_source(&key, &text);
                 docs.set_virtual(&key, html);
                 last = text;
             }

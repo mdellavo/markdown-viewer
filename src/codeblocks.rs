@@ -97,7 +97,7 @@ fn process_block(block: &str, number_all: bool) -> Option<String> {
 
 /// Split highlighted HTML into lines, closing any `<span>`s open at a line
 /// break and reopening them on the next line, so each line stands alone.
-fn split_lines(html: &str) -> Vec<String> {
+pub fn split_lines(html: &str) -> Vec<String> {
     let mut lines = Vec::new();
     let mut open: Vec<&str> = Vec::new();
     let mut line = String::new();

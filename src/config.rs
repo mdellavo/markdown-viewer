@@ -58,6 +58,8 @@ pub struct Config {
     /// Stop serving once the window markdown-viewer opened has been closed
     /// (default: on).
     pub exit_when_closed: Option<bool>,
+    /// Syntax highlight the Markdown in the source view (default: on).
+    pub source_highlighting: Option<bool>,
 }
 
 impl Config {

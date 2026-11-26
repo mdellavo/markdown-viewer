@@ -1047,3 +1047,85 @@ fn diagrams_show_in_presentation_slides() {
     );
     assert_eq!(icon, 16);
 }
+
+#[test]
+fn source_view_keeps_your_place() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    let mut text = String::from("# Top\n\n");
+    for i in 1..=40 {
+        text.push_str(&format!(
+            "## Section {i}\n\nParagraph {i} with **bold** text.\n\n"
+        ));
+    }
+    std::fs::write(&md, &text).unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    let top_source_line = "const l = [...document.querySelectorAll('.mdv-source-view .mdv-line')]
+        .find(l => l.getBoundingClientRect().bottom > 60);
+        return l ? +l.dataset.line : 0;";
+
+    // From section 20 (line 79) into the source: it opens there.
+    js(
+        &tab,
+        "document.getElementById('section-20').scrollIntoView(); return null;",
+    );
+    press(&tab, "v");
+    until(
+        &tab,
+        "document.documentElement.dataset.mdvView === 'source' && document.querySelector('.mdv-source-view .mdv-line')",
+        "the source",
+    );
+    let line = js(&tab, top_source_line).as_i64().unwrap();
+    assert!((78..=81).contains(&line), "source opened at line {line}");
+    // The plain source shows first; the highlighted one follows, in place.
+    until(
+        &tab,
+        "document.querySelector('.mdv-source-view [class*=\"hl-\"]')",
+        "the highlighted source",
+    );
+    until(
+        &tab,
+        "!document.querySelector('.mdv-toolbar button.mdv-busy')",
+        "the busy indicator to clear",
+    );
+    let line = js(&tab, top_source_line).as_i64().unwrap();
+    assert!(
+        (78..=81).contains(&line),
+        "still at line {line} after highlighting"
+    );
+
+    // Scroll the source to section 30 (line 119), go back: the page is there.
+    js(
+        &tab,
+        "const l = document.querySelector('.mdv-source-view .mdv-line[data-line=\"119\"]');
+         window.scrollTo(0, l.getBoundingClientRect().top + window.scrollY - 10); return null;",
+    );
+    // An edit while the source is shown updates it.
+    std::fs::write(
+        &md,
+        text.replace("Paragraph 35 with", "Paragraph 35 EDITED with"),
+    )
+    .unwrap();
+    until(
+        &tab,
+        "document.querySelector('.mdv-source-view').textContent.includes('EDITED')",
+        "the source to update",
+    );
+    press(&tab, "v");
+    until(
+        &tab,
+        "!document.documentElement.dataset.mdvView",
+        "the page",
+    );
+    let heading = js(
+        &tab,
+        "return [...document.querySelectorAll('.markdown-body h2')]
+           .find(h => h.getBoundingClientRect().bottom > 0).textContent;",
+    );
+    assert!(
+        heading.as_str().unwrap().contains("Section 30"),
+        "{heading}"
+    );
+}

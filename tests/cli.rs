@@ -1370,6 +1370,10 @@ fn recent_files_are_remembered_and_listed() {
     let a = &server.addr;
     let page = http_get(a, "/", a);
     assert!(page.contains("<title>(Recent)</title>"), "{page}");
+    assert!(
+        !page.contains(" data-source data-about="),
+        "the generated Recent page has no source view"
+    );
     assert!(page.contains("href=\"/notes/todo%20list.md\""), "{page}");
     assert!(http_get(a, "/notes/todo%20list.md", a).contains("Todo"));
 }
@@ -1760,4 +1764,117 @@ fn renders_markdown_from_a_web_address() {
         .unwrap();
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("is a web page, not a Markdown file"));
+}
+
+#[test]
+fn highlighted_source_of_served_files_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let folder = dir.path().join("notes");
+    std::fs::create_dir(&folder).unwrap();
+    std::fs::write(folder.join("a.md"), "# A\n\n<script>x</script>\n").unwrap();
+    std::fs::write(dir.path().join("secret.md"), "# Secret\n").unwrap();
+    let server = start({
+        let mut c = mdv();
+        c.arg("--watch").arg(&folder);
+        c
+    });
+    let a = &server.addr;
+    let html = http_get(a, "/__mdv/source-html?doc=a.md", a);
+    assert!(html.starts_with("HTTP/1.1 200"), "{html}");
+    assert!(html.contains("data-line=\"3\"") && !html.contains("data-line=\"4\""));
+    assert!(!html.contains("<script>"), "source is escaped");
+    for doc in ["../secret.md", "missing.md"] {
+        let refused = http_get(a, &format!("/__mdv/source-html?doc={doc}"), a);
+        assert!(refused.starts_with("HTTP/1.1 404"), "{doc}: {refused}");
+    }
+}
+
+#[test]
+fn source_of_standard_input_and_web_addresses() {
+    // Standard input, served (as `markdown-viewer - --watch`).
+    let mut child = mdv()
+        .args(["-", "--watch", "--no-open"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"# Piped\n\nFrom *stdin*.\n")
+        .unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let child = Running(child);
+    let mut first = String::new();
+    stdout.read_line(&mut first).unwrap();
+    let a = first
+        .split(" at http://")
+        .nth(1)
+        .unwrap()
+        .trim()
+        .trim_end_matches('/')
+        .to_string();
+    assert!(
+        http_get(&a, "/", &a).contains(" data-source data-about="),
+        "offers the source view"
+    );
+    let html = http_get(&a, "/__mdv/source-html?doc=(stdin)", &a);
+    assert!(
+        html.starts_with("HTTP/1.1 200") && html.contains("data-line=\"3\""),
+        "{html}"
+    );
+    let text = http_get(&a, "/__mdv/source?doc=(stdin)", &a);
+    assert!(
+        text.ends_with("# Piped\n\nFrom *stdin*.\n"),
+        "copying gets the Markdown: {text}"
+    );
+    drop(child);
+
+    // A web address.
+    let web = serve_once_per_request("# Remote\n\nText.\n", "text/markdown");
+    let server = start({
+        let mut c = mdv();
+        c.arg("--watch").arg(format!("http://{web}/notes.md"));
+        c
+    });
+    let a = &server.addr;
+    assert!(http_get(a, "/", a).contains(" data-source data-about="));
+    let html = http_get(a, "/__mdv/source-html?doc=(notes.md)", a);
+    assert!(
+        html.contains("Remote") && html.contains("data-line=\"3\""),
+        "{html}"
+    );
+}
+
+#[test]
+fn source_highlighting_can_be_turned_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Title\n\n**bold**\n").unwrap();
+    let server = start({
+        let mut c = mdv();
+        c.arg("--watch").arg(&md);
+        c
+    });
+    let a = &server.addr;
+    let highlighted = http_get(a, "/__mdv/source-html?doc=doc.md", a);
+    assert!(highlighted.contains("x-mdv-highlighted: true") && highlighted.contains("hl-"));
+    let plain = http_get(a, "/__mdv/source-html?doc=doc.md&plain=1", a);
+    assert!(
+        plain.contains("data-line=\"3\"") && !plain.contains("hl-"),
+        "{plain}"
+    );
+    // The setting turns it off, at once.
+    post(
+        a,
+        "/__mdv/settings",
+        r#"{"key":"source_highlighting","value":false}"#,
+    );
+    let off = http_get(a, "/__mdv/source-html?doc=doc.md", a);
+    assert!(
+        off.contains("x-mdv-highlighted: false") && !off.contains("hl-"),
+        "{off}"
+    );
+    let _ = std::fs::remove_file(test_dir().join("config.toml"));
 }
