@@ -2,7 +2,7 @@ name: Release
 
 # Push a tag like v0.4.0 to build binaries and Linux packages, publish a
 # GitHub release, update the Homebrew formula in mdellavo/homebrew-tap, and
-# publish the crate to crates.io.
+# publish the crate to crates.io and the AUR package markdown-viewer-bin.
 on:
   push:
     tags: ["v*"]
@@ -25,7 +25,7 @@ jobs:
           - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -40,7 +40,7 @@ jobs:
           tool: cargo-deb,cargo-generate-rpm
       - run: cargo build --release --locked --target ${{ matrix.target }}
       - run: packaging/package.sh ${{ matrix.target }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}
           path: dist/*
@@ -49,8 +49,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -71,8 +71,8 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
@@ -106,7 +106,7 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       # CARGO_REGISTRY_TOKEN: a crates.io API token with publish rights.
       - name: Publish to crates.io
@@ -118,3 +118,45 @@ jobs:
             exit 0
           fi
           cargo publish --locked
+
+  aur:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Generate and test the AUR package
+        env:
+          AUR_MAINTAINER: ${{ vars.AUR_MAINTAINER }}
+        run: |
+          packaging/aur/pkgbuild.sh "${GITHUB_REF_NAME#v}" dist aur
+          docker run --rm -v "$PWD/aur:/pkg:ro" -v "$PWD/packaging/aur/test.sh:/test.sh:ro" \
+            archlinux:latest bash /test.sh /pkg
+      # AUR_SSH_PRIVATE_KEY: the private half of an SSH key added to the
+      # AUR account that maintains markdown-viewer-bin.
+      - name: Publish to the AUR
+        env:
+          AUR_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          if [ -z "$AUR_KEY" ]; then
+            echo "::warning::AUR_SSH_PRIVATE_KEY not set; skipping the AUR"
+            exit 0
+          fi
+          key="$RUNNER_TEMP/aur_key"
+          printf '%s\n' "$AUR_KEY" > "$key"
+          chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          # Cloning a package that doesn't exist yet gives an empty repository;
+          # the first push creates it.
+          git clone ssh://aur@aur.archlinux.org/markdown-viewer-bin.git aur-repo
+          cp aur/PKGBUILD aur/.SRCINFO aur-repo/
+          cd aur-repo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          git commit -m "Update to ${GITHUB_REF_NAME#v}"
+          git push origin HEAD:master
+          rm -f "$key"

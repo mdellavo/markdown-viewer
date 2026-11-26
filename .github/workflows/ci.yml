@@ -19,7 +19,7 @@ jobs:
       # Both runners have Chrome; fail rather than skip the browser tests.
       MARKDOWN_VIEWER_BROWSER_TESTS: required
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -43,7 +43,7 @@ jobs:
           - { target: aarch64-unknown-linux-gnu, os: ubuntu-22.04-arm }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -74,3 +74,18 @@ jobs:
           done
           packaging/homebrew/formula.sh 0.0.0 fake > formula.rb
           ruby -c formula.rb
+
+  # The AUR package for the latest release, built and installed on Arch.
+  aur:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Generate and test the AUR package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --json tagName --jq .tagName)
+          gh release download "$tag" --pattern '*linux-gnu.tar.gz.sha256' --dir dist
+          packaging/aur/pkgbuild.sh "${tag#v}" dist aur
+          docker run --rm -v "$PWD/aur:/pkg:ro" -v "$PWD/packaging/aur/test.sh:/test.sh:ro" \
+            archlinux:latest bash /test.sh /pkg
