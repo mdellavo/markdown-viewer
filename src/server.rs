@@ -38,6 +38,7 @@ const SEARCH_PATH: &str = "/__mdv/search";
 const OPEN_PATH: &str = "/__mdv/open";
 const POSITION_PATH: &str = "/__mdv/position";
 const GOTO_PATH: &str = "/__mdv/goto";
+const TASK_PATH: &str = "/__mdv/task";
 const SOURCE_PATH: &str = "/__mdv/source";
 const GITDIFF_PATH: &str = "/__mdv/gitdiff";
 const CHECK_PATH: &str = "/__mdv/check";
@@ -201,6 +202,7 @@ impl Server {
             .route(POSITION_PATH, post(save_position))
             .route(crate::instances::WHOAMI_PATH, get(whoami))
             .route(GOTO_PATH, post(goto))
+            .route(TASK_PATH, post(set_task))
             .route(SOURCE_PATH, get(source))
             .route(GITDIFF_PATH, get(gitdiff))
             .route(CHECK_PATH, get(check_links))
@@ -494,6 +496,38 @@ async fn goto(
     // Pages compare this with their own document (data-doc).
     let _ = state.goto.send((rel_path(root, &file), req.line.max(1)));
     StatusCode::NO_CONTENT
+}
+
+#[derive(Deserialize)]
+struct TaskRequest {
+    doc: String,
+    line: u32,
+    col: u32,
+    done: bool,
+}
+
+/// Tick or untick a task list item: changes its `[ ]` in the file, and the
+/// page updates like after any other edit.
+async fn set_task(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(req): Json<TaskRequest>,
+) -> Response {
+    if headers.get("x-mdv").is_none() {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Some(file) = doc_file(&state, &req.doc) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let done = tokio::task::spawn_blocking(move || {
+        crate::tasks::set_in_file(&file, req.line, req.col, req.done)
+    })
+    .await;
+    match done {
+        Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
+        Ok(Err(msg)) => (StatusCode::CONFLICT, msg).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
 }
 
 /// The document's Markdown (for copying the page).

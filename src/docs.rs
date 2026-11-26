@@ -382,7 +382,7 @@ pub fn readme(dir: &Path) -> Option<PathBuf> {
 }
 
 /// A generated page listing a folder's subfolders and Markdown files.
-fn listing_markdown(root: &Path, dir: &Path) -> String {
+pub fn listing_markdown(root: &Path, dir: &Path) -> String {
     let title = if dir == root {
         dir.file_name()
             .map(|n| n.to_string_lossy().into_owned())

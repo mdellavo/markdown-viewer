@@ -620,3 +620,130 @@ fn git_changes_backlinks_links_and_wrapping() {
         "wrapping",
     );
 }
+
+#[test]
+fn task_boxes_update_the_file() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("todo.md");
+    std::fs::write(
+        &md,
+        "---\ntitle: Todo\n---\n\n# Todo\n\n- [ ] write\n- [x] test\n  1. [ ] nested\n",
+    )
+    .unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    let boxes = "[...document.querySelectorAll('.task-list-item-checkbox')]";
+    until(
+        &tab,
+        &format!("{boxes}.every(b => !b.disabled)"),
+        "enabled boxes",
+    );
+
+    js(&tab, &format!("{boxes}[0].click(); return null;"));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !std::fs::read_to_string(&md)
+        .unwrap()
+        .contains("- [x] write")
+    {
+        assert!(Instant::now() < deadline, "the file wasn't updated");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    js(&tab, &format!("{boxes}[2].click(); return null;"));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !std::fs::read_to_string(&md)
+        .unwrap()
+        .contains("1. [x] nested")
+    {
+        assert!(Instant::now() < deadline, "the nested item wasn't updated");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert_eq!(
+        std::fs::read_to_string(&md).unwrap(),
+        "---\ntitle: Todo\n---\n\n# Todo\n\n- [x] write\n- [x] test\n  1. [x] nested\n"
+    );
+    // After the live update, the new boxes are ticked and still clickable.
+    until(
+        &tab,
+        &format!("{boxes}.every(b => b.checked && !b.disabled)"),
+        "the updated page",
+    );
+}
+
+#[test]
+fn static_site_works_from_disk() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("docs");
+    std::fs::create_dir_all(src.join("guide")).unwrap();
+    std::fs::write(
+        src.join("README.md"),
+        "# Home\n\nSee [the guide](guide/math.md).\n",
+    )
+    .unwrap();
+    std::fs::write(
+        src.join("guide/math.md"),
+        "# Math\n\n$$e^{i\\pi} + 1 = 0$$\n\n```mermaid\ngraph LR\n  A --> B\n```\n\n- [ ] read-only here\n",
+    )
+    .unwrap();
+    let out = dir.path().join("site");
+    let status = mdv().arg(&src).arg("-o").arg(&out).status().unwrap();
+    assert!(status.success());
+
+    let url = format!(
+        "file://{}",
+        out.join("index.html").canonicalize().unwrap().display()
+    );
+    let tab = open(&browser, &url);
+    // The Files sidebar lists the site's pages; following a link works.
+    press(&tab, "f");
+    until(
+        &tab,
+        "document.querySelectorAll('.mdv-panel:not([hidden]) a[title]').length === 2",
+        "the file list",
+    );
+    let hrefs = js(
+        &tab,
+        "return JSON.stringify([...document.querySelectorAll('.mdv-panel:not([hidden]) a[title]')].map(a => a.getAttribute('href')));",
+    );
+    assert_eq!(
+        hrefs,
+        serde_json::json!("[\"README.html\",\"guide/math.html\"]")
+    );
+    js(
+        &tab,
+        "document.querySelector('.markdown-body a[href=\"guide/math.html\"]').click(); return null;",
+    );
+    until(
+        &tab,
+        "location.pathname.endsWith('/guide/math.html')",
+        "the guide page",
+    );
+    until(
+        &tab,
+        "document.querySelector('.mdv-toolbar')",
+        "the viewer UI",
+    );
+    // Math and diagrams load from the shared _mdv/ copies.
+    until(&tab, "document.querySelector('.katex-html')", "math");
+    until(
+        &tab,
+        "document.querySelector('.mermaid svg')",
+        "the diagram",
+    );
+    let font = js(
+        &tab,
+        "return getComputedStyle(document.querySelector('.katex')).fontFamily;",
+    );
+    assert!(
+        font.as_str().unwrap().contains("KaTeX"),
+        "KaTeX CSS not applied: {font}"
+    );
+    assert_eq!(
+        js(
+            &tab,
+            "return document.querySelector('.task-list-item-checkbox').disabled;"
+        ),
+        serde_json::json!(true)
+    );
+}

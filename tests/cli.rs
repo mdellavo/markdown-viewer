@@ -934,3 +934,88 @@ fn vault_embeds_backlinks_git_source_and_text_size() {
     assert!(post(a, "/__mdv/prefs", r#"{"font_scale":1.25}"#).starts_with("HTTP/1.1 204"));
     assert!(http_get(a, "/", a).contains("style=\"--mdv-scale: 1.25\""));
 }
+
+#[test]
+fn task_endpoint_checks_before_writing() {
+    let dir = tempfile::tempdir().unwrap();
+    let folder = dir.path().join("notes");
+    std::fs::create_dir(&folder).unwrap();
+    let md = folder.join("todo.md");
+    let outside = dir.path().join("outside.md");
+    std::fs::write(&md, "- [ ] one\n- [ ] two\n").unwrap();
+    std::fs::write(&outside, "- [ ] secret\n").unwrap();
+    let server = start({
+        let mut c = mdv();
+        c.arg("--watch").arg(&folder);
+        c
+    });
+    let a = &server.addr;
+    let set = |doc: &str, line: u32, done: bool| {
+        post(
+            a,
+            "/__mdv/task",
+            &format!(r#"{{"doc":"{doc}","line":{line},"col":1,"done":{done}}}"#),
+        )
+    };
+    // Without the X-MDV header (a cross-site form post can't add one).
+    let body = r#"{"doc":"todo.md","line":1,"col":1,"done":true}"#;
+    let forbidden = http(
+        a,
+        &format!(
+            "POST /__mdv/task HTTP/1.1\r\nHost: {a}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        ),
+    );
+    assert!(forbidden.starts_with("HTTP/1.1 403"), "{forbidden}");
+
+    assert!(set("todo.md", 2, true).starts_with("HTTP/1.1 204"));
+    assert_eq!(
+        std::fs::read_to_string(&md).unwrap(),
+        "- [ ] one\n- [x] two\n"
+    );
+    // Already in that state: nothing to do.
+    assert!(set("todo.md", 2, true).starts_with("HTTP/1.1 204"));
+    // Not a task item any more (the page is stale): refused, file unchanged.
+    std::fs::write(&md, "# Changed\n- [ ] one\n").unwrap();
+    let stale = set("todo.md", 1, true);
+    assert!(stale.starts_with("HTTP/1.1 409"), "{stale}");
+    assert_eq!(
+        std::fs::read_to_string(&md).unwrap(),
+        "# Changed\n- [ ] one\n"
+    );
+    // Nothing outside the served folder.
+    assert!(set("../outside.md", 1, true).starts_with("HTTP/1.1 404"));
+    assert_eq!(std::fs::read_to_string(&outside).unwrap(), "- [ ] secret\n");
+}
+
+#[test]
+fn folder_export_writes_a_site() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("README.md"), "# Home\n\n[A](a.md)\n").unwrap();
+    std::fs::write(dir.path().join("a.md"), "# A\n").unwrap();
+    let out = dir.path().join("site");
+    let run = mdv().arg(dir.path()).arg("-o").arg(&out).output().unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let home = std::fs::read_to_string(out.join("index.html")).unwrap();
+    assert!(home.contains("href=\"a.html\""), "{home}");
+    assert!(out.join("a.html").is_file() && out.join("_mdv/files.js").is_file());
+    // Not to stdout, and not into a folder with other things in it.
+    assert!(
+        !mdv()
+            .arg(dir.path())
+            .args(["-o", "-"])
+            .status()
+            .unwrap()
+            .success()
+    );
+    let busy = dir.path().join("busy");
+    std::fs::create_dir(&busy).unwrap();
+    std::fs::write(busy.join("keep.txt"), "mine").unwrap();
+    let refused = mdv().arg(dir.path()).arg("-o").arg(&busy).output().unwrap();
+    assert!(!refused.status.success());
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("isn't empty"));
+}

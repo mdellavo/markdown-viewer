@@ -15,8 +15,8 @@ _markdown-viewer() {
 
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
-'(-w --watch --pdf)-o+[Write the rendered HTML to this file ("-" for stdout) instead of opening it]:PATH:_files' \
-'(-w --watch --pdf)--output=[Write the rendered HTML to this file ("-" for stdout) instead of opening it]:PATH:_files' \
+'(-w --watch --pdf)-o+[Write the rendered HTML to this file ("-" for stdout) instead of opening it. For a folder, write a static site into this folder]:PATH:_files' \
+'(-w --watch --pdf)--output=[Write the rendered HTML to this file ("-" for stdout) instead of opening it. For a folder, write a static site into this folder]:PATH:_files' \
 '(-w --watch)--pdf=[Write a PDF to this file instead of opening it (needs Chrome, Chromium, Edge, Brave or Vivaldi)]:PATH:_files' \
 '(--clipboard -o --output --pdf)--goto=[Scroll a running viewer to FILE\:LINE, starting one if needed. For editor commands (see editors/ in the repository)]:FILE:LINE:_default' \
 '-p+[Port for --watch (default\: any free port)]:PORT:_default' \

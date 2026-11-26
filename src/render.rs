@@ -73,7 +73,15 @@ pub struct PageOptions {
     /// Optional `<base href>` so relative links resolve somewhere else
     /// (used when the page is written to a temp dir).
     pub base_href: Option<String>,
+    /// A page of a static site (`-o DIR` for a folder): the path from this
+    /// page up to the site's root (`""` or `"../…"`). Libraries load from
+    /// `_mdv/` there, and the Files sidebar lists the site's pages from
+    /// `_mdv/files.js`.
+    pub site_root: Option<String>,
 }
+
+/// Files of a static site, under `_mdv/` at its root.
+pub const SITE_DIR: &str = "_mdv";
 
 /// Reusable renderer. Building the syntax highlighter is relatively
 /// expensive, so create one and keep it around.
@@ -328,7 +336,7 @@ impl Renderer {
         }
         let has_mermaid = body.contains(MERMAID_MARKER);
         let has_math = body.contains(MATH_MARKER);
-        if has_math && !page.served {
+        if has_math && !page.served && page.site_root.is_none() {
             out.push_str(KATEX_CSS);
         }
         out.push_str("</style>\n");
@@ -342,16 +350,43 @@ impl Renderer {
         out.push_str("</article>\n");
         // The UI goes first so a remembered theme is applied before
         // diagrams are drawn.
+        let site = page.site_root.as_deref().map(escape_attr);
         if page.ui {
             let doc = page.doc.as_deref().map(escape_attr).unwrap_or_default();
+            let site_attr = match &site {
+                Some(root) => {
+                    let _ = writeln!(
+                        out,
+                        "<script nonce=\"{nonce}\" src=\"{root}{SITE_DIR}/files.js\"></script>"
+                    );
+                    format!(" data-site-root=\"{root}\"")
+                }
+                None => String::new(),
+            };
             let _ = write!(
                 out,
-                "<script nonce=\"{nonce}\" data-served=\"{}\" data-doc=\"{doc}\">\n{UI_JS}</script>\n",
+                "<script nonce=\"{nonce}\" data-served=\"{}\" data-doc=\"{doc}\"{site_attr}>\n{UI_JS}</script>\n",
                 page.served
             );
         }
+        // Static site pages share one copy of each library.
+        if let Some(root) = &site {
+            if has_math {
+                let _ = write!(
+                    out,
+                    "<script nonce=\"{nonce}\" data-katex-js=\"{root}{SITE_DIR}/katex.js\" \
+                     data-katex-css=\"{root}{SITE_DIR}/katex.css\">\n{MATH_INIT_JS}</script>\n"
+                );
+            }
+            if has_mermaid {
+                let _ = write!(
+                    out,
+                    "<script nonce=\"{nonce}\" data-mermaid-src=\"{root}{SITE_DIR}/mermaid.js\">\n{MERMAID_INIT_JS}</script>\n"
+                );
+            }
+        }
         // Math: same pattern as Mermaid below.
-        if page.served {
+        else if page.served {
             if page.live || has_math {
                 let v = KATEX_VERSION.trim();
                 let _ = write!(
@@ -366,7 +401,9 @@ impl Renderer {
                 "<script nonce=\"{nonce}\">\n{KATEX_JS}\n</script>\n<script nonce=\"{nonce}\">\n{MATH_INIT_JS}</script>\n"
             );
         }
-        if page.served {
+        if site.is_some() {
+            // Done above.
+        } else if page.served {
             // Live pages may gain a diagram later, so they always get the
             // (small) init script; it fetches mermaid.js only when needed.
             if page.live || has_mermaid {

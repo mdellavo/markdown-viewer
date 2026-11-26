@@ -283,7 +283,7 @@ fn attr(tag: &str, name: &str) -> Option<String> {
     Some(tag[at..end].to_string())
 }
 
-fn unescape(s: &str) -> String {
+pub fn unescape(s: &str) -> String {
     s.replace("&quot;", "\"")
         .replace("&#39;", "'")
         .replace("&lt;", "<")

@@ -182,3 +182,6 @@ html.mdv-sidebar-open .mdv-sidebar { transform: none; box-shadow: 0 0 24px rgba(
 }
 .mdv-broken-item:hover { background: var(--bgColor-neutral-muted); }
 .mdv-broken .mdv-hit-text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+
+/* Task boxes that update the file (served pages). */
+.markdown-body input.task-list-item-checkbox:not([disabled]) { cursor: pointer; }

@@ -24,6 +24,8 @@ mod obsidian;
 mod pdf;
 mod render;
 mod server;
+mod site;
+mod tasks;
 mod theme;
 mod toc;
 
@@ -43,7 +45,8 @@ struct Cli {
     #[arg(short, long)]
     watch: bool,
 
-    /// Write the rendered HTML to this file ("-" for stdout) instead of opening it.
+    /// Write the rendered HTML to this file ("-" for stdout) instead of
+    /// opening it. For a folder, write a static site into this folder.
     #[arg(short, long, value_name = "PATH", conflicts_with_all = ["watch", "pdf"])]
     output: Option<PathBuf>,
 
@@ -361,9 +364,15 @@ fn run(cli: Cli) -> Result<()> {
 
     let (markdown, dir, title) = match &source {
         Source::Folder(path) => {
-            if cli.output.is_some() || cli.pdf.is_some() {
+            if let Some(out) = &cli.output {
+                if out.as_os_str() == "-" {
+                    bail!("{} is a folder; -o - needs a Markdown file", path.display());
+                }
+                return export_site(&settings, path, out);
+            }
+            if cli.pdf.is_some() {
                 bail!(
-                    "{} is a folder; -o and --pdf need a Markdown file",
+                    "{} is a folder; --pdf needs a Markdown file",
                     path.display()
                 );
             }
@@ -462,6 +471,29 @@ fn render_standalone(settings: &Settings, markdown: &str, dir: &Path) -> (Render
         renderer.render_body(markdown)
     };
     (renderer, body)
+}
+
+/// `-o DIR` for a folder: a static site.
+fn export_site(settings: &Settings, root: &Path, out: &Path) -> Result<()> {
+    let options = settings.render_options(false, root);
+    let renderer = Renderer::with_options(options.clone());
+    let page = |title: String| settings.page(title, settings.export_theme());
+    let summary = site::export(&renderer, options.obsidian, root, out, &page)?;
+    if summary.truncated {
+        say("Only the first 2,000 Markdown files were exported.");
+    }
+    let files = match summary.files {
+        0 => String::new(),
+        1 => " and 1 file".into(),
+        n => format!(" and {n} files"),
+    };
+    say(&format!(
+        "Wrote {} pages{files} to {} (start at {})",
+        summary.pages,
+        out.display(),
+        out.join("index.html").display()
+    ));
+    Ok(())
 }
 
 /// `path/to/file.md:42` → (canonical file, 42). Without a line, line 1.

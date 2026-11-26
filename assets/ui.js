@@ -6,6 +6,10 @@
   "use strict";
   var script = document.currentScript;
   var served = script.dataset.served === "true";
+  // Static site pages (-o DIR for a folder): the way up to the site's root.
+  // They get the Files sidebar, from the list in _mdv/files.js.
+  var siteRoot = script.getAttribute("data-site-root");
+  var hasFiles = served || siteRoot !== null;
   var currentDoc = script.dataset.doc || "";
   var root = document.documentElement;
   var body = document.querySelector(".markdown-body");
@@ -78,7 +82,7 @@
   var canEdit = served && !!body.querySelector("[data-sourcepos]") &&
     /\.(md|markdown|mdown|mkd|mkdn)$/i.test(currentDoc);
   toolbar.append(stats, contentsBtn);
-  if (served) toolbar.append(filesBtn);
+  if (hasFiles) toolbar.append(filesBtn);
   if (canEdit) toolbar.append(editBtn);
   var copyPageBtn = el("button", { type: "button", title: "Copy the page (c)", "aria-label": "Copy the page" }, icon("copy"));
   toolbar.append(copyPageBtn, presentBtn, themeBtn, helpBtn);
@@ -90,11 +94,13 @@
   var closeBtn = el("button", { type: "button", "class": "mdv-close", title: "Close (Esc)", "aria-label": "Close sidebar" }, icon("x"));
   tabs.append(contentsTab);
   var linksTab = el("button", { type: "button", role: "tab", "aria-selected": "false" }, "Backlinks");
-  if (served) tabs.append(filesTab, linksTab);
+  if (hasFiles) tabs.append(filesTab);
+  if (served) tabs.append(linksTab);
   tabs.append(closeBtn);
   var contentsPanel = el("div", { "class": "mdv-panel", role: "tabpanel" });
   var filesPanel = el("div", { "class": "mdv-panel", role: "tabpanel", hidden: "" });
-  var filter = el("input", { "class": "mdv-filter", type: "search", placeholder: "Find files or text…", "aria-label": "Find files or text" });
+  var filterLabel = served ? "Find files or text" : "Find files";
+  var filter = el("input", { "class": "mdv-filter", type: "search", placeholder: filterLabel + "…", "aria-label": filterLabel });
   var fileList = el("div");
   var hitList = el("div");
   filesPanel.append(filter, fileList, hitList);
@@ -104,7 +110,7 @@
   var KEYS = [
     ["t", "Switch theme: auto, light, dark"],
     ["o", "Show or hide the contents"],
-    served ? ["f", "Find a file"] : null,
+    hasFiles ? ["f", "Find a file"] : null,
     served ? ["/", "Search the text of every file"] : null,
     canEdit ? ["e", "Edit the source here (or double-click a paragraph)"] : null,
     ["s", "Present as slides (arrows to move, Esc to stop)"],
@@ -169,7 +175,8 @@
   function sidebarOpen() { return root.classList.contains("mdv-sidebar-open"); }
   var currentTab = "contents";
   function selectTab(name) {
-    if (!served || ["contents", "files", "links"].indexOf(name) === -1) name = "contents";
+    if ((name === "files" && !hasFiles) || (name === "links" && !served) ||
+        ["contents", "files", "links"].indexOf(name) === -1) name = "contents";
     currentTab = name;
     var panels = { contents: [contentsPanel, contentsTab], files: [filesPanel, filesTab], links: [linksPanel, linksTab] };
     for (var n in panels) {
@@ -264,6 +271,12 @@
   var files = null;
   function loadFiles() {
     if (files) return;
+    if (siteRoot !== null) {
+      files = window.mdvSiteFiles || [];
+      filesLoaded = true;
+      renderFiles();
+      return;
+    }
     files = [];
     fileList.append(el("div", { "class": "mdv-empty" }, "Loading…"));
     fetch("/__mdv/files").then(function (r) { return r.json(); }).then(function (data) {
@@ -297,11 +310,15 @@
         }
         lastDir = dir;
       }
-      var a = el("a", { href: "/" + f.split("/").map(encodeURIComponent).join("/"), title: f });
+      var a = el("a", { href: fileHref(f), title: f });
       a.textContent = f.slice(slash + 1);
       if (f === currentDoc) a.classList.add("mdv-active");
       fileList.append(a);
     });
+  }
+  function fileHref(f) {
+    if (siteRoot === null) return "/" + f.split("/").map(encodeURIComponent).join("/");
+    return siteRoot + f.replace(/\.(md|markdown|mdown|mkd|mkdn)$/i, ".html").split("/").map(encodeURIComponent).join("/");
   }
   var filesLoaded = false;
   var searchTimer, searchSeq = 0;
@@ -319,6 +336,7 @@
 
   // Text matches across every file, below the file-name matches.
   function searchText() {
+    if (!served) return;
     var q = filter.value.trim();
     var seq = ++searchSeq;
     if (q.length < 2) { hitList.textContent = ""; return; }
@@ -363,7 +381,7 @@
 
   // Restore the sidebar the way it was last left.
   var initialSidebar = root.getAttribute("data-mdv-sidebar");
-  if ((initialSidebar === "files" || initialSidebar === "links") && !served) initialSidebar = "contents";
+  if ((initialSidebar === "files" && !hasFiles) || (initialSidebar === "links" && !served)) initialSidebar = "contents";
   if (initialSidebar === "contents" || initialSidebar === "files" || initialSidebar === "links") {
     root.classList.add("mdv-sidebar-open");
     selectTab(initialSidebar);
@@ -420,6 +438,39 @@
   }
   (window.mdvEnhancers = window.mdvEnhancers || []).push(addCopyButtons);
 
+  // ---- Task lists ----------------------------------------------------------
+  // On served Markdown files, ticking a box changes its [ ] in the file;
+  // the page then updates as after any other edit. Boxes without a source
+  // position (embedded notes, exports) stay read-only.
+  function enableTasks(container) {
+    if (!canEdit) return;
+    container.querySelectorAll("input.task-list-item-checkbox").forEach(function (box) {
+      var li = box.closest("li");
+      if (!li || !li.hasAttribute("data-sourcepos") || box.closest(".mdv-embed-note")) return;
+      box.removeAttribute("disabled");
+      box.title = "Tick to update the file";
+    });
+  }
+  enableTasks(body);
+  (window.mdvEnhancers = window.mdvEnhancers || []).push(enableTasks);
+  body.addEventListener("change", function (e) {
+    var box = e.target;
+    if (!box.classList || !box.classList.contains("task-list-item-checkbox")) return;
+    var li = box.closest("li");
+    var pos = li && /^(\d+):(\d+)/.exec(li.getAttribute("data-sourcepos") || "");
+    if (!pos) return;
+    fetch("/__mdv/task", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-MDV": "1" },
+      body: JSON.stringify({ doc: currentDoc, line: +pos[1], col: +pos[2], done: box.checked }),
+    }).then(function (r) {
+      if (!r.ok) return r.text().then(function (t) { throw new Error(t || "error " + r.status); });
+    }).catch(function (err) {
+      box.checked = !box.checked;
+      showToast("Couldn't update the file: " + err.message);
+    });
+  });
+
   // ---- Word count --------------------------------------------------------
   function updateStats() {
     var copy = body.cloneNode(true);
@@ -466,7 +517,7 @@
       case "t": cycleTheme(); break;
       case "o": toggleSidebar("contents"); break;
       // "Find a file" always opens the list and focuses the filter.
-      case "f": if (!served) return; openSidebar("files", true); break;
+      case "f": if (!hasFiles) return; openSidebar("files", true); break;
       case "/": if (!served) return; openSidebar("files", true); break;
       case "e": if (!canEdit) return; editAt(blockAtTop()); break;
       case "s": startPresenting(); break;

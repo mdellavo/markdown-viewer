@@ -1,4 +1,4 @@
-complete -c markdown-viewer -s o -l output -d 'Write the rendered HTML to this file ("-" for stdout) instead of opening it' -r -F
+complete -c markdown-viewer -s o -l output -d 'Write the rendered HTML to this file ("-" for stdout) instead of opening it. For a folder, write a static site into this folder' -r -F
 complete -c markdown-viewer -l pdf -d 'Write a PDF to this file instead of opening it (needs Chrome, Chromium, Edge, Brave or Vivaldi)' -r -F
 complete -c markdown-viewer -l goto -d 'Scroll a running viewer to FILE:LINE, starting one if needed. For editor commands (see editors/ in the repository)' -r
 complete -c markdown-viewer -s p -l port -d 'Port for --watch (default: any free port)' -r

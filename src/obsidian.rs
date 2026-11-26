@@ -11,7 +11,7 @@ use crate::render::{escape_attr, escape_text};
 
 const IMAGE_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "svg", "webp", "avif", "bmp"];
 
-const SEGMENT: &AsciiSet = &CONTROLS
+pub const SEGMENT: &AsciiSet = &CONTROLS
     .add(b' ')
     .add(b'"')
     .add(b'#')
