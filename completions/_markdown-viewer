@@ -46,7 +46,9 @@ hide\:"Leave it out"))' \
 '--app[Open as a minimal app window with no tabs or address bar (default). Chrome, Edge, Brave, Chromium and Vivaldi only; other browsers get a new window]' \
 '--window[Open in a normal new browser window]' \
 '--tab[Open in a tab of an existing browser window]' \
-'--exit-when-closed[With --watch\: exit once the page has been closed (used by the Finder integration, where there'\''s no terminal to press Ctrl-C in)]' \
+'(--keep-running)--exit-when-closed[With --watch\: exit once the page has been closed, even with --no-open (used by the Finder integration). Without --no-open, this is the default]' \
+'--keep-running[With --watch\: keep serving after the window is closed (until Ctrl-C)]' \
+'--background[Internal\: this is the background viewer started for a page opened without --watch (see \`launch_in_background\`)]' \
 '--number-headings[Number headings (1, 1.1, 1.2, …)]' \
 '--line-numbers[Number the lines of every code block (or per block, with \`showLineNumbers\` in its info string)]' \
 '--obsidian[Obsidian notes\: \[\[wiki links\]\], !\[\[embeds\]\], callouts, ==highlights== and %%comments%%. On by default inside a vault (a .obsidian folder)]' \
@@ -60,7 +62,7 @@ hide\:"Leave it out"))' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '-V[Print version]' \
 '--version[Print version]' \
-'::file -- Markdown file to render, a folder to browse (default\: the current folder), or "-" to read standard input. Folders are always served with live reload:_files' \
+'::file -- Markdown file to render, a folder to browse (default\: the current folder), a web address (https\://…, including GitHub and GitLab file and repository pages), or "-" to read standard input. Folders are always served with live reload:_files' \
 && ret=0
 }
 

@@ -102,6 +102,68 @@ fn watch_serves_and_pushes_updates() {
     wait_for(&mut reader, "Second");
 }
 
+/// examples/slides.md is the presentation example: seven `---` rules (eight
+/// slides) after the front matter, with code, a diagram and math.
+#[test]
+fn slides_example_renders() {
+    let out = mdv()
+        .args(["examples/slides.md", "-o", "-"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let html = String::from_utf8(out.stdout).unwrap();
+    let body = &html[html.find("<article").unwrap()..html.find("</article>").unwrap()];
+    assert!(body.contains("class=\"mdv-front-matter\""), "front matter");
+    assert_eq!(body.matches("<hr").count(), 7, "slide rules");
+    assert!(body.contains("<pre class=\"mermaid\">"), "diagram");
+    assert!(body.contains("data-math-style=\"display\""), "math");
+}
+
+/// examples/vault is the Obsidian example: Obsidian mode turns on by itself
+/// there, and every wiki link, embed and callout in Home.md resolves.
+#[test]
+fn vault_example_renders() {
+    let out = mdv()
+        .args(["examples/vault/Home.md", "-o", "-"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let html = String::from_utf8(out.stdout).unwrap();
+    let body = &html[html.find("<article").unwrap()..html.find("</article>").unwrap()];
+    let count = |needle: &str| body.matches(needle).count();
+
+    assert!(
+        body.contains("href=\"Projects/Garden.md\" data-wikilink"),
+        "a note found by name"
+    );
+    assert!(body.contains("href=\"Ideas.md#someday\""), "a heading link");
+    assert_eq!(count("mdv-wikilink-missing"), 1, "one missing note");
+    assert!(
+        body.contains("src=\"attachments/logo.svg\" alt=\"logo.svg\" width=\"120\""),
+        "image embed"
+    );
+    assert_eq!(
+        count("class=\"mdv-embed-note\""),
+        2,
+        "note and section embeds"
+    );
+    assert_eq!(count("class=\"callout\""), 4, "callouts");
+    assert!(
+        body.contains("data-callout-fold=\"collapsed\""),
+        "folded callout"
+    );
+    assert!(body.contains("<mark>Highlighted text</mark>"), "highlight");
+    assert!(!body.contains("You can't see this"), "comment hidden");
+}
+
 /// examples/example.md is the feature tour; make sure every feature in it
 /// still renders.
 #[test]
@@ -553,6 +615,16 @@ fn generated_files_are_up_to_date() {
         (&["--generate-man"], "man/markdown-viewer.1"),
     ];
     let update = std::env::var_os("UPDATE_GENERATED").is_some();
+    // Credits for the help: from Cargo's view of the dependencies.
+    let credits = credits_json();
+    if update {
+        std::fs::write("assets/credits.json", &credits).unwrap();
+    } else {
+        assert!(
+            std::fs::read_to_string("assets/credits.json").unwrap_or_default() == credits,
+            "assets/credits.json is out of date; run: UPDATE_GENERATED=1 cargo test --test cli generated_files"
+        );
+    }
     for (args, path) in files {
         let out = mdv().args(args).output().unwrap();
         assert!(out.status.success());
@@ -567,6 +639,83 @@ fn generated_files_are_up_to_date() {
             );
         }
     }
+}
+
+/// The crates markdown-viewer is built with: the direct dependencies
+/// (name, version, license, link), and how many crates are compiled in
+/// altogether. Dev and build dependencies aren't part of the program.
+fn credits_json() -> String {
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".into());
+    let out = Command::new(cargo)
+        // Not --offline: a build only downloads its own platform's crates,
+        // and the credits cover every platform's.
+        .args(["metadata", "--format-version", "1", "--locked"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let meta: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let packages: std::collections::HashMap<&str, &serde_json::Value> = meta["packages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| (p["id"].as_str().unwrap(), p))
+        .collect();
+    let nodes: std::collections::HashMap<&str, &serde_json::Value> = meta["resolve"]["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| (n["id"].as_str().unwrap(), n))
+        .collect();
+    let root = meta["resolve"]["root"].as_str().unwrap();
+    // Dependencies of `id` that end up in the program (normal ones).
+    let normal = |id: &str| -> Vec<String> {
+        nodes[id]["deps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|d| {
+                d["dep_kinds"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|k| k["kind"].is_null())
+            })
+            .map(|d| d["pkg"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let mut direct: Vec<serde_json::Value> = normal(root)
+        .iter()
+        .map(|id| {
+            let p = packages[id.as_str()];
+            let url = p["repository"]
+                .as_str()
+                .or(p["homepage"].as_str())
+                .map(|u| u.trim_end_matches(".git").trim_end_matches('/').to_string())
+                .unwrap_or_else(|| {
+                    format!("https://crates.io/crates/{}", p["name"].as_str().unwrap())
+                });
+            serde_json::json!({
+                "name": p["name"],
+                "version": p["version"],
+                "license": p["license"],
+                "url": url,
+            })
+        })
+        .collect();
+    direct.sort_by_key(|c| c["name"].as_str().unwrap().to_string());
+    let mut seen = std::collections::HashSet::new();
+    let mut todo = normal(root);
+    while let Some(id) = todo.pop() {
+        if seen.insert(id.clone()) {
+            todo.extend(normal(&id));
+        }
+    }
+    let credits = serde_json::json!({ "crates": direct, "total": seen.len() });
+    serde_json::to_string_pretty(&credits).unwrap() + "\n"
 }
 
 fn post(addr: &str, path: &str, json: &str) -> String {
@@ -1223,4 +1372,392 @@ fn recent_files_are_remembered_and_listed() {
     assert!(page.contains("<title>(Recent)</title>"), "{page}");
     assert!(page.contains("href=\"/notes/todo%20list.md\""), "{page}");
     assert!(http_get(a, "/notes/todo%20list.md", a).contains("Todo"));
+}
+
+#[test]
+fn about_shows_the_build_and_where_files_are() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Doc\n").unwrap();
+
+    // --version has the build details; -V is just the version.
+    let long = mdv().arg("--version").output().unwrap();
+    let long = String::from_utf8_lossy(&long.stdout);
+    assert!(
+        long.contains("built for ") && long.contains("Mermaid "),
+        "{long}"
+    );
+    let short = mdv().arg("-V").output().unwrap();
+    assert_eq!(String::from_utf8_lossy(&short.stdout).lines().count(), 1);
+
+    // Static site pages (which have the viewer UI) carry the build, but
+    // nothing about this computer.
+    let site = dir.path().join("site");
+    assert!(
+        mdv()
+            .arg(dir.path())
+            .arg("-o")
+            .arg(&site)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let page = std::fs::read_to_string(site.join("doc.html")).unwrap();
+    assert!(
+        page.contains(&format!(
+            "&quot;version&quot;:&quot;{}&quot;",
+            env!("CARGO_PKG_VERSION")
+        )),
+        "build info in the page"
+    );
+    let dir_name = dunce::canonicalize(dir.path()).unwrap();
+    assert!(
+        !page.contains(&*dir_name.to_string_lossy()),
+        "no local paths"
+    );
+    assert!(!page.contains("state.json") && !page.contains("config.toml"));
+
+    // Served pages can ask the viewer for the rest.
+    let server = start({
+        let mut c = mdv();
+        c.arg("--watch").arg(&md).args(["--editor", "zed"]);
+        c
+    });
+    let a = &server.addr;
+    let about = http_get(a, "/__mdv/about", a);
+    let json: serde_json::Value =
+        serde_json::from_str(about.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+    assert_eq!(json["root"], dir_name.to_string_lossy().as_ref());
+    assert_eq!(json["editor"], "zed");
+    assert!(
+        json["settings"][0]
+            .as_str()
+            .unwrap()
+            .ends_with("config.toml")
+    );
+    assert_eq!(json["settings"][1], false, "no settings file yet");
+}
+
+#[test]
+fn settings_are_changed_saved_and_applied() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Doc\n\n```rust\nfn main() {}\n```\n").unwrap();
+    let config = test_dir().join("config.toml");
+    std::fs::write(&config, "# mine\neditor = \"zed\"  # keep me\n").unwrap();
+    let server = start({
+        let mut c = mdv();
+        c.arg("--watch").arg(&md).args(["--style", "wide"]);
+        c
+    });
+    let a = &server.addr;
+    let body = |response: &str| response.split("\r\n\r\n").nth(1).unwrap_or("").to_string();
+
+    let info: serde_json::Value =
+        serde_json::from_str(&body(&http_get(a, "/__mdv/settings", a))).unwrap();
+    assert_eq!(info["values"]["editor"], "zed");
+    assert_eq!(info["overridden"], serde_json::json!(["style"]));
+
+    // Without the X-MDV header (which other websites can't send): refused.
+    let json = r#"{"key":"line_numbers","value":true}"#;
+    let forbidden = http(
+        a,
+        &format!(
+            "POST /__mdv/settings HTTP/1.1\r\nHost: {a}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{json}",
+            json.len()
+        ),
+    );
+    assert!(forbidden.starts_with("HTTP/1.1 403"), "{forbidden}");
+
+    // Saved (keeping the file's comments) and applied to the page.
+    let set = post(a, "/__mdv/settings", json);
+    assert!(set.starts_with("HTTP/1.1 200"), "{set}");
+    assert_eq!(body(&set), r#"{"reload":false}"#);
+    assert_eq!(
+        std::fs::read_to_string(&config).unwrap(),
+        "# mine\neditor = \"zed\"  # keep me\nline_numbers = true\n"
+    );
+    assert!(
+        http_get(a, "/", a).contains("mdv-numbered"),
+        "code lines numbered"
+    );
+
+    // Page-level settings ask pages to reload.
+    let set = post(
+        a,
+        "/__mdv/settings",
+        r#"{"key":"number_headings","value":true}"#,
+    );
+    assert_eq!(body(&set), r#"{"reload":true}"#);
+
+    // Invalid values are refused, and the file is left alone.
+    let before = std::fs::read_to_string(&config).unwrap();
+    for bad in [
+        r#"{"key":"style","value":"fancy"}"#,
+        r#"{"key":"nope","value":1}"#,
+        r#"{"key":"css","value":"/no/such/file.css"}"#,
+    ] {
+        let refused = post(a, "/__mdv/settings", bad);
+        assert!(refused.starts_with("HTTP/1.1 400"), "{bad}: {refused}");
+    }
+    assert_eq!(std::fs::read_to_string(&config).unwrap(), before);
+
+    // null removes a setting.
+    post(a, "/__mdv/settings", r#"{"key":"editor","value":null}"#);
+    assert!(!std::fs::read_to_string(&config).unwrap().contains("editor"));
+    std::fs::remove_file(&config).unwrap();
+}
+
+#[test]
+fn word_count_setting() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Doc\n").unwrap();
+    let config = test_dir().join("config.toml");
+    std::fs::write(&config, "word_count = false\n").unwrap();
+    let server = start({
+        let mut c = mdv();
+        c.arg("--watch").arg(&md);
+        c
+    });
+    let a = &server.addr;
+    // The page's <html> tag (the page's CSS and scripts mention the
+    // attribute too).
+    let html_tag = || {
+        let page = http_get(a, "/", a);
+        let start = page.find("<html").unwrap();
+        page[start..start + page[start..].find('>').unwrap()].to_string()
+    };
+    assert!(
+        html_tag().contains("data-mdv-stats=\"off\""),
+        "hidden by the setting"
+    );
+    // The viewer's own choice (the w key) wins over the setting.
+    post(a, "/__mdv/prefs", r#"{"word_count":true}"#);
+    assert!(
+        !html_tag().contains("data-mdv-stats=\"off\""),
+        "shown by the viewer's choice"
+    );
+    std::fs::remove_file(&config).unwrap();
+}
+
+/// By default, a viewer that opened its own window stops once that window
+/// closes; with --keep-running it doesn't. Linux only: a fake browser
+/// stands in for opening a window (on macOS --browser must be an app).
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn watch_mode_exits_when_its_window_closes() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Hi\n").unwrap();
+    let browser = dir.path().join("fake-browser");
+    std::fs::write(&browser, "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(&browser, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let launch = |extra: &[&str]| {
+        let mut child = mdv()
+            .args(["--watch", "--tab", "--browser"])
+            .arg(&browser)
+            .args(extra)
+            .arg(&md)
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stdout = BufReader::new(child.stdout.take().unwrap());
+        let mut first = String::new();
+        stdout.read_line(&mut first).unwrap();
+        let addr = first
+            .split(" at http://")
+            .nth(1)
+            .unwrap()
+            .trim()
+            .trim_end_matches('/')
+            .to_string();
+        (child, stdout, addr)
+    };
+    let connect = |addr: &str| {
+        let mut sse = TcpStream::connect(addr).unwrap();
+        sse.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        write!(sse, "GET /__mdv/events HTTP/1.1\r\nHost: {addr}\r\n\r\n").unwrap();
+        let mut reader = BufReader::new(sse);
+        wait_for(&mut reader, "Hi");
+        reader
+    };
+
+    // Default: the page connects, closes, and the run ends by itself.
+    let (mut child, _out, addr) = launch(&[]);
+    let page = connect(&addr);
+    drop(page);
+    let deadline = Instant::now() + Duration::from_secs(15);
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            break status;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "didn't exit after the window closed"
+        );
+        std::thread::sleep(Duration::from_millis(200));
+    };
+    assert!(status.success());
+
+    // --keep-running: still serving after the page has gone.
+    let (child, _out, addr) = launch(&["--keep-running"]);
+    let mut child = Running(child);
+    drop(connect(&addr));
+    std::thread::sleep(Duration::from_secs(7));
+    assert!(
+        child.0.try_wait().unwrap().is_none(),
+        "exited despite --keep-running"
+    );
+}
+
+/// Without --watch, opening a page starts a viewer in the background: the
+/// command returns at once, the page is served (with settings and live
+/// reload), and the viewer stops when the window closes. Linux only: a
+/// fake browser stands in for opening the window.
+#[cfg(all(unix, not(target_os = "macos")))]
+#[test]
+fn opening_a_page_runs_a_background_viewer() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Hi\n").unwrap();
+    let browser = dir.path().join("fake-browser");
+    std::fs::write(&browser, "#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(&browser, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    let started = Instant::now();
+    let out = mdv()
+        .args(["--tab", "--browser"])
+        .arg(&browser)
+        .arg(&md)
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "{text}{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "returned at once"
+    );
+    let addr = text
+        .split(" at http://")
+        .nth(1)
+        .unwrap_or_else(|| panic!("no address in {text:?}"))
+        .trim()
+        .trim_end_matches('/')
+        .to_string();
+
+    // A served page: the settings dialog is there.
+    assert!(http_get(&addr, "/", &addr).contains("data-settings"));
+
+    // The window opens and closes: the background viewer stops.
+    let mut sse = TcpStream::connect(&addr).unwrap();
+    write!(sse, "GET /__mdv/events HTTP/1.1\r\nHost: {addr}\r\n\r\n").unwrap();
+    sse.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+    wait_for(&mut BufReader::new(sse.try_clone().unwrap()), "Hi");
+    drop(sse);
+    // Still ours? (Under load, another test's viewer may get the freed
+    // port, so ask who's there.)
+    let ours = || {
+        let Ok(mut s) = TcpStream::connect(&addr) else {
+            return false;
+        };
+        let _ = s.set_read_timeout(Some(Duration::from_secs(5)));
+        let _ = write!(
+            s,
+            "GET /__mdv/whoami HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n"
+        );
+        let mut reply = String::new();
+        let _ = s.read_to_string(&mut reply);
+        reply.contains("doc.md")
+    };
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while ours() {
+        assert!(
+            Instant::now() < deadline,
+            "the background viewer kept running"
+        );
+        std::thread::sleep(Duration::from_millis(250));
+    }
+}
+
+/// If the background viewer can't start (here, its port is taken), the
+/// command says why. It fails before opening any window.
+#[test]
+fn background_viewer_errors_are_reported() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Hi\n").unwrap();
+    let taken = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = taken.local_addr().unwrap().port().to_string();
+    let out = mdv().arg(&md).args(["--port", &port]).output().unwrap();
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        err.contains(&format!("could not listen on 127.0.0.1:{port}")),
+        "{err}"
+    );
+}
+
+/// Serve `body` (as `content_type`) for every request, from a thread.
+fn serve_once_per_request(body: &'static str, content_type: &'static str) -> String {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    std::thread::spawn(move || {
+        for stream in listener.incoming().flatten() {
+            let mut stream = stream;
+            let mut buf = [0u8; 2048];
+            let _ = stream.read(&mut buf);
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+        }
+    });
+    addr
+}
+
+#[test]
+fn renders_markdown_from_a_web_address() {
+    let addr = serve_once_per_request(
+        "# From the web\n\n[Next](next.md) ![logo](img/logo.png) [top](#from-the-web)\n",
+        "text/markdown; charset=utf-8",
+    );
+    let out = mdv()
+        .arg(format!("http://{addr}/docs/intro.md"))
+        .args(["-o", "-"])
+        .output()
+        .unwrap();
+    let html = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(html.contains("<title>intro.md</title>"), "{html}");
+    assert!(html.contains("From the web</h1>") || html.contains(">From the web<"));
+    // Relative links and images point back at the web, not at this computer.
+    assert!(
+        html.contains(&format!("href=\"http://{addr}/docs/next.md\"")),
+        "{html}"
+    );
+    assert!(html.contains(&format!("src=\"http://{addr}/docs/img/logo.png\"")));
+    assert!(html.contains("href=\"#from-the-web\""));
+
+    // An HTML page isn't Markdown.
+    let page = serve_once_per_request("<!DOCTYPE html><html></html>", "text/html");
+    let out = mdv()
+        .arg(format!("http://{page}/"))
+        .args(["-o", "-"])
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("is a web page, not a Markdown file"));
 }

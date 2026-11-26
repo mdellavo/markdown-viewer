@@ -110,6 +110,63 @@ fn text_of(inner: &str) -> String {
     out.trim().to_string()
 }
 
+/// A heading in the contents, with the headings under it.
+struct Node<'a> {
+    id: &'a str,
+    text: &'a str,
+    children: Vec<Node<'a>>,
+}
+
+/// Nest headings by level (a skipped level just nests one deeper).
+fn tree<'a>(items: &[&'a (usize, String, String)]) -> Vec<Node<'a>> {
+    let mut roots = Vec::new();
+    let mut stack: Vec<(usize, Node<'a>)> = Vec::new();
+    let attach =
+        |node: Node<'a>, stack: &mut Vec<(usize, Node<'a>)>, roots: &mut Vec<Node<'a>>| match stack
+            .last_mut()
+        {
+            Some((_, parent)) => parent.children.push(node),
+            None => roots.push(node),
+        };
+    for (level, id, text) in items.iter().map(|i| (i.0, &i.1, &i.2)) {
+        while stack.last().is_some_and(|(l, _)| *l >= level) {
+            let (_, done) = stack.pop().unwrap();
+            attach(done, &mut stack, &mut roots);
+        }
+        stack.push((
+            level,
+            Node {
+                id,
+                text,
+                children: Vec::new(),
+            },
+        ));
+    }
+    while let Some((_, done)) = stack.pop() {
+        attach(done, &mut stack, &mut roots);
+    }
+    roots
+}
+
+/// A list of headings; one with headings under it can be folded (its
+/// chevron folds it, its text jumps to it).
+fn write_list(nodes: &[Node], out: &mut String) {
+    out.push_str("<ul>");
+    for node in nodes {
+        let link = format!("<a href=\"#{}\">{}</a>", node.id, node.text);
+        if node.children.is_empty() {
+            out.push_str(&format!("<li>{link}</li>"));
+        } else {
+            out.push_str(&format!("<li><details open><summary>{link}</summary>"));
+            write_list(&node.children, out);
+            out.push_str("</details></li>");
+        }
+    }
+    out.push_str("</ul>");
+}
+
+/// The contents: a `<details>` (so it folds, with or without scripts)
+/// holding the nested list.
 fn render(headings: &[(usize, String, String)], depth: usize, sourcepos: Option<&str>) -> String {
     let h1s = headings.iter().filter(|(l, _, _)| *l == 1).count();
     let top = if h1s <= 1 {
@@ -129,38 +186,14 @@ fn render(headings: &[(usize, String, String)], depth: usize, sourcepos: Option<
     let pos = sourcepos
         .map(|p| format!(" data-sourcepos=\"{p}\""))
         .unwrap_or_default();
-    let mut out = format!("<nav class=\"mdv-toc\" aria-label=\"Contents\"{pos}>");
-    // Levels with an open <ul>; each item's <li> stays open until the next
-    // item at the same or a shallower level.
-    let mut stack: Vec<usize> = Vec::new();
-    for (l, id, text) in items {
-        let l = *l;
-        if stack.last().is_none_or(|top| l > *top) {
-            out.push_str("<ul>");
-            stack.push(l);
-        } else {
-            out.push_str("</li>");
-            while stack.last().is_some_and(|top| *top > l) {
-                out.push_str("</ul></li>");
-                stack.pop();
-            }
-            if stack.last().is_none_or(|top| *top < l) {
-                out.push_str("<ul>");
-                stack.push(l);
-            }
-        }
-        out.push_str(&format!("<li><a href=\"#{id}\">{text}</a>"));
+    let mut out = format!(
+        "<nav class=\"mdv-toc\" aria-label=\"Contents\"{pos}><details open><summary>Contents</summary>"
+    );
+    let nodes = tree(&items);
+    if !nodes.is_empty() {
+        write_list(&nodes, &mut out);
     }
-    if !stack.is_empty() {
-        out.push_str("</li>");
-    }
-    while stack.pop().is_some() {
-        out.push_str("</ul>");
-        if !stack.is_empty() {
-            out.push_str("</li>");
-        }
-    }
-    out.push_str("</nav>\n");
+    out.push_str("</details></nav>\n");
     out
 }
 
@@ -183,11 +216,20 @@ mod tests {
         let out = finish(DOC.into());
         assert!(!out.contains("[TOC]"));
         assert!(out.contains(
-            "<nav class=\"mdv-toc\" aria-label=\"Contents\" data-sourcepos=\"3:1-3:5\">"
+            "<nav class=\"mdv-toc\" aria-label=\"Contents\" data-sourcepos=\"3:1-3:5\">\
+             <details open><summary>Contents</summary><ul>"
         ));
-        assert!(out.contains("<ul><li><a href=\"#a\">A</a><ul><li><a href=\"#a1\">A &amp; 1</a><ul><li><a href=\"#deep\">Deep</a>"), "{out}");
+        // Headings with headings under them fold; the rest are plain items.
         assert!(
-            out.contains("<li><a href=\"#b\">B</a></li></ul></nav>"),
+            out.contains(
+                "<li><details open><summary><a href=\"#a\">A</a></summary>\
+                 <ul><li><details open><summary><a href=\"#a1\">A &amp; 1</a></summary>\
+                 <ul><li><a href=\"#deep\">Deep</a></li></ul></details></li></ul></details></li>"
+            ),
+            "{out}"
+        );
+        assert!(
+            out.contains("<li><a href=\"#b\">B</a></li></ul></details></nav>"),
             "{out}"
         );
         assert!(!out.contains("#title\""), "a lone h1 is the title");

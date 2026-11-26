@@ -1074,6 +1074,8 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "toml",
+ "toml_edit",
+ "url",
  "winreg",
  "yaml-rust2",
 ]
@@ -1946,6 +1948,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "toml_edit"
+version = "0.25.21+spec-1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88497dab46de5bf343ec66b05c251e48c6213f3e9170c70a70a823f7abe886a4"
+dependencies = [
+ "indexmap",
+ "toml_datetime",
+ "toml_parser",
+ "toml_writer",
+ "winnow",
+]
+
+[[package]]
 name = "toml_parser"
 version = "1.1.7+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2362,6 +2377,9 @@ name = "winnow"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3b93199df0ab874cdf0c6a94f0a0dc3423fe41f1cafb62b8bd7b1deb277aef"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "winreg"

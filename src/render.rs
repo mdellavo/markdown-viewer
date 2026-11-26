@@ -57,6 +57,8 @@ pub struct PageOptions {
     pub font_scale: Option<f32>,
     /// Show what changed since the last git commit.
     pub git_changes: bool,
+    /// Leave the word count and reading time out of the toolbar.
+    pub hide_word_count: bool,
     /// The theme was given with `--theme`; a standalone page shouldn't
     /// replace it with one remembered in the browser.
     pub fixed_theme: bool,
@@ -78,6 +80,8 @@ pub struct PageOptions {
     /// `_mdv/` there, and the Files sidebar lists the site's pages from
     /// `_mdv/files.js`.
     pub site_root: Option<String>,
+    /// The viewer can change settings (the settings dialog).
+    pub settings: bool,
 }
 
 /// Files of a static site, under `_mdv/` at its root.
@@ -104,7 +108,7 @@ pub enum FrontMatter {
 }
 
 /// Options that change the rendered HTML itself.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct RenderOptions {
     /// Tag elements with their source lines (`data-sourcepos`), for
     /// click-to-source and reading positions. Served pages only.
@@ -313,6 +317,11 @@ impl Renderer {
         } else {
             ""
         };
+        let git = if page.hide_word_count {
+            format!("{git} data-mdv-stats=\"off\"")
+        } else {
+            git.to_string()
+        };
         let numbering = match (page.number_headings, body.matches("<h1").count()) {
             (false, _) => "",
             // A single h1 is the title; number from h2 down.
@@ -371,8 +380,10 @@ impl Renderer {
             };
             let _ = write!(
                 out,
-                "<script nonce=\"{nonce}\" data-served=\"{}\" data-doc=\"{doc}\"{site_attr}>\n{UI_JS}</script>\n",
-                page.served
+                "<script nonce=\"{nonce}\" data-served=\"{}\" data-doc=\"{doc}\"{site_attr}{} data-about=\"{}\">\n{UI_JS}</script>\n",
+                page.served,
+                if page.settings { " data-settings" } else { "" },
+                escape_attr(crate::about::build_json())
             );
         }
         // Static site pages share one copy of each library.

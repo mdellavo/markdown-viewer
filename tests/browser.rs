@@ -814,3 +814,236 @@ fn custom_css_overrides_theme_colours() {
     );
     assert_eq!(js(&tab, colours), "rgb(224, 149, 92) rgb(31, 26, 20)");
 }
+
+#[test]
+fn toc_folds_and_stays_folded_across_edits() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    let body = "# Doc\n\n[TOC]\n\n## Alpha\n\n### Alpha one\n\n## Beta\n\n### Beta one\n\nText.\n";
+    std::fs::write(&md, body).unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    let open_state = "return [...document.querySelectorAll('.mdv-toc details')].map(d => d.open ? 1 : 0).join('');";
+    until(
+        &tab,
+        "document.querySelector('.mdv-toc details')",
+        "the contents",
+    );
+    assert_eq!(js(&tab, open_state), "111", "whole list, Alpha, Beta");
+
+    // A section's text jumps to it without folding; its arrow folds it.
+    js(
+        &tab,
+        "document.querySelector('.mdv-toc summary a[href=\"#beta\"]').click(); return null;",
+    );
+    until(&tab, "location.hash === '#beta'", "the jump");
+    assert_eq!(js(&tab, open_state), "111");
+    js(
+        &tab,
+        "document.querySelector('.mdv-toc summary a[href=\"#alpha\"]').parentElement.click(); return null;",
+    );
+    assert_eq!(js(&tab, open_state), "101");
+
+    // An edit (adding a section) keeps Alpha folded.
+    std::fs::write(&md, body.replace("Text.", "## Gamma\n\nText.")).unwrap();
+    until(
+        &tab,
+        "document.querySelector('.mdv-toc a[href=\"#gamma\"]')",
+        "the update",
+    );
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(js(&tab, open_state), "101");
+
+    // Folding the whole list; printing opens everything, then refolds.
+    js(
+        &tab,
+        "document.querySelector('.mdv-toc > details > summary').click(); return null;",
+    );
+    assert_eq!(js(&tab, open_state), "001");
+    js(
+        &tab,
+        "window.dispatchEvent(new Event('beforeprint')); return null;",
+    );
+    assert_eq!(js(&tab, open_state), "111");
+    js(
+        &tab,
+        "window.dispatchEvent(new Event('afterprint')); return null;",
+    );
+    assert_eq!(js(&tab, open_state), "001");
+}
+
+#[test]
+fn help_shows_about() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Doc\n").unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    press(&tab, "?");
+    until(
+        &tab,
+        "[...document.querySelectorAll('.mdv-about td')].some(td => td.textContent === 'Serving')",
+        "the viewer's details",
+    );
+    let rows = js(
+        &tab,
+        "return [...document.querySelectorAll('.mdv-about tr')].map(r => r.cells[0].textContent).join(',');",
+    );
+    let rows = rows.as_str().unwrap();
+    for label in [
+        "Version",
+        "Built for",
+        "Includes",
+        "Page",
+        "Serving",
+        "Settings",
+        "State",
+    ] {
+        assert!(rows.contains(label), "missing {label}: {rows}");
+    }
+    let credits = js(
+        &tab,
+        "return [...document.querySelectorAll('.mdv-credits a')].map(a => a.textContent).join(',');",
+    );
+    let credits = credits.as_str().unwrap();
+    for name in ["Mermaid", "KaTeX", "comrak", "syntect", "axum"] {
+        assert!(credits.contains(name), "missing credit {name}: {credits}");
+    }
+    let version = js(
+        &tab,
+        "return document.querySelector('.mdv-about a').getAttribute('href');",
+    );
+    assert!(
+        version
+            .as_str()
+            .unwrap()
+            .ends_with(&format!("/releases/tag/v{}", env!("CARGO_PKG_VERSION"))),
+        "{version}"
+    );
+}
+
+#[test]
+fn settings_dialog_changes_the_page() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Doc\n\n```rust\nfn main() {}\n```\n").unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    press(&tab, ",");
+    until(
+        &tab,
+        "document.getElementById('mdv-setting-line_numbers')",
+        "the settings dialog",
+    );
+    js(
+        &tab,
+        "const box = document.getElementById('mdv-setting-line_numbers');
+         box.checked = true; box.dispatchEvent(new Event('change')); return null;",
+    );
+    // The page updates without reloading.
+    js(&tab, "window.mdvNotReloaded = true; return null;");
+    until(
+        &tab,
+        "document.querySelector('.markdown-body pre.mdv-numbered')",
+        "numbered code",
+    );
+    assert_eq!(js(&tab, "return window.mdvNotReloaded === true;"), true);
+    // The word count setting hides it at once.
+    js(
+        &tab,
+        "const box = document.getElementById('mdv-setting-word_count');
+         box.checked = false; box.dispatchEvent(new Event('change')); return null;",
+    );
+    until(
+        &tab,
+        "getComputedStyle(document.querySelector('.mdv-stats')).display === 'none'",
+        "the word count to hide",
+    );
+    let saved = std::fs::read_to_string(test_dir().join("config.toml")).unwrap_or_default();
+    assert!(saved.contains("line_numbers = true"), "{saved}");
+    assert!(saved.contains("word_count = false"), "{saved}");
+    let _ = std::fs::remove_file(test_dir().join("config.toml"));
+}
+
+#[test]
+fn word_count_can_be_hidden_and_stays_hidden() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Doc\n\nSome words to count.\n").unwrap();
+    let server = serve(&md, &[]);
+    let url = format!("http://{}/", server.addr);
+    let tab = open(&browser, &url);
+    let shown = "return getComputedStyle(document.querySelector('.mdv-stats')).display !== 'none';";
+    until(
+        &tab,
+        "document.querySelector('.mdv-stats').textContent.includes('words')",
+        "the count",
+    );
+    assert_eq!(js(&tab, shown), true);
+
+    press(&tab, "w");
+    assert_eq!(js(&tab, shown), false);
+    // Remembered: a reload starts with it hidden.
+    std::thread::sleep(Duration::from_millis(300));
+    let tab = open(&browser, &url);
+    assert_eq!(
+        js(
+            &tab,
+            "return document.documentElement.getAttribute('data-mdv-stats');"
+        ),
+        "off"
+    );
+    assert_eq!(js(&tab, shown), false);
+    press(&tab, "w");
+    assert_eq!(js(&tab, shown), true);
+    // Clicking it hides it too.
+    js(
+        &tab,
+        "document.querySelector('.mdv-stats').click(); return null;",
+    );
+    assert_eq!(js(&tab, shown), false);
+}
+
+#[test]
+fn diagrams_show_in_presentation_slides() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("deck.md");
+    std::fs::write(
+        &md,
+        "# Deck\n\n---\n\n## Flow\n\n```mermaid\nflowchart LR\n  A --> B --> C\n```\n",
+    )
+    .unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    until(
+        &tab,
+        "document.querySelector('div.mermaid svg')",
+        "the diagram",
+    );
+    press(&tab, "s");
+    press(&tab, "ArrowRight");
+    until(
+        &tab,
+        "document.querySelector('.mdv-slide div.mermaid svg')",
+        "the diagram slide",
+    );
+    // Drawn at a real size, not shrunk to an icon (a toolbar icon rule
+    // once caught every SVG in the presentation).
+    let size = js(
+        &tab,
+        "const r = document.querySelector('.mdv-slide div.mermaid svg').getBoundingClientRect();
+         return JSON.stringify([Math.round(r.width), Math.round(r.height)]);",
+    );
+    let size: Vec<i64> = serde_json::from_str(size.as_str().unwrap()).unwrap();
+    assert!(size[0] > 200 && size[1] > 30, "{size:?}");
+    let icon = js(
+        &tab,
+        "return Math.round(document.querySelector('.mdv-toolbar button svg').getBoundingClientRect().width);",
+    );
+    assert_eq!(icon, 16);
+}

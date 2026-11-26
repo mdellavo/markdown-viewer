@@ -43,7 +43,8 @@ pub struct Hit {
 
 pub struct Docs {
     root: PathBuf,
-    renderer: Arc<Renderer>,
+    /// Swapped when settings change (see `set_renderer`).
+    renderer: std::sync::RwLock<Arc<Renderer>>,
     channels: Mutex<HashMap<PathBuf, watch::Sender<String>>>,
     watched: Mutex<HashSet<PathBuf>>,
     debouncer: Mutex<Debouncer<RecommendedWatcher, RecommendedCache>>,
@@ -64,7 +65,7 @@ impl Docs {
         let vault = renderer.options().obsidian;
         let docs = Arc::new(Self {
             root,
-            renderer,
+            renderer: std::sync::RwLock::new(renderer),
             channels: Mutex::default(),
             watched: Mutex::default(),
             debouncer: Mutex::new(debouncer),
@@ -87,6 +88,19 @@ impl Docs {
             }
         });
         Ok(docs)
+    }
+
+    /// The renderer in use.
+    pub fn renderer(&self) -> Arc<Renderer> {
+        self.renderer.read().unwrap().clone()
+    }
+
+    /// Render with new options from now on, and re-render every page being
+    /// viewed (pages update as after an edit).
+    pub fn set_renderer(&self, renderer: Arc<Renderer>) {
+        *self.renderer.write().unwrap() = renderer;
+        let all: Vec<PathBuf> = self.channels.lock().unwrap().keys().cloned().collect();
+        self.refresh(all);
     }
 
     pub fn root(&self) -> &Path {
@@ -128,7 +142,7 @@ impl Docs {
     /// file itself, or the folder it's in (for listings).
     fn changed(&self, paths: &[PathBuf]) {
         // In a vault, any note can change what another page shows.
-        if self.renderer.options().obsidian && paths.iter().any(|p| is_markdown(p)) {
+        if self.renderer().options().obsidian && paths.iter().any(|p| is_markdown(p)) {
             let all: Vec<PathBuf> = self.channels.lock().unwrap().keys().cloned().collect();
             return self.refresh(all);
         }
@@ -169,7 +183,7 @@ impl Docs {
     fn render(&self, doc: &Path) -> Result<String> {
         if doc.is_dir() {
             return Ok(self
-                .renderer
+                .renderer()
                 .render_body(&listing_markdown(&self.root, doc)));
         }
         let text = std::fs::read_to_string(doc)
@@ -182,8 +196,9 @@ impl Docs {
 
     /// Render Markdown that lives in `dir` (for resolving Obsidian links).
     pub fn render_text(&self, text: &str, dir: &Path) -> String {
-        if !self.renderer.options().obsidian {
-            return self.renderer.render_body(text);
+        let renderer = self.renderer();
+        if !renderer.options().obsidian {
+            return renderer.render_body(text);
         }
         let (files, _) = self.list_files();
         let ctx = crate::obsidian::LinkContext {
@@ -193,7 +208,7 @@ impl Docs {
             served: true,
             depth: 0,
         };
-        self.renderer.render_doc(text, Some(&ctx))
+        renderer.render_doc(text, Some(&ctx))
     }
 
     /// Register a document with no file behind it (stdin, the clipboard),

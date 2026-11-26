@@ -16,7 +16,11 @@ markdown-viewer --watch examples/example.md
 In the viewer, press <kbd>?</kbd> for keyboard shortcuts, <kbd>o</kbd> for the
 contents, and <kbd>t</kbd> to switch between auto, light and dark.
 
-**Contents** (generated from the headings by a `[TOC]` line):
+Two more examples: [slides.md](slides.md) is a deck for presentation mode
+(<kbd>s</kbd>), and [vault/Home.md](vault/Home.md) shows Obsidian notes.
+
+A `[TOC]` line makes the table of contents below from the headings. Click
+its title to fold it, or a section's arrow to fold just that section.
 
 [TOC]
 

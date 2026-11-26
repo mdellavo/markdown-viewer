@@ -29,7 +29,7 @@ use crate::config::{Position, Prefs};
 use crate::docs::{self, Docs};
 use crate::render::{
     KATEX_CSS, KATEX_CSS_PATH, KATEX_JS, KATEX_JS_PATH, MERMAID_JS_GZ, MERMAID_PATH, PageOptions,
-    Renderer,
+    RenderOptions, Renderer,
 };
 
 pub const EVENTS_PATH: &str = "/__mdv/events";
@@ -40,6 +40,8 @@ const OPEN_PATH: &str = "/__mdv/open";
 const POSITION_PATH: &str = "/__mdv/position";
 const GOTO_PATH: &str = "/__mdv/goto";
 const TASK_PATH: &str = "/__mdv/task";
+const ABOUT_PATH: &str = "/__mdv/about";
+const SETTINGS_PATH: &str = "/__mdv/settings";
 const SOURCE_PATH: &str = "/__mdv/source";
 const GITDIFF_PATH: &str = "/__mdv/gitdiff";
 const CHECK_PATH: &str = "/__mdv/check";
@@ -49,7 +51,6 @@ const BACKLINKS_PATH: &str = "/__mdv/backlinks";
 pub struct ServeOptions {
     pub port: u16,
     pub docs: Arc<Docs>,
-    pub renderer: Arc<Renderer>,
     /// The file given on the command line, shown at `/`. `None` in folder
     /// mode, where `/` shows the folder's README or a listing.
     pub main: Option<PathBuf>,
@@ -66,19 +67,44 @@ pub struct ServeOptions {
     /// What this server serves, reported at `/__mdv/whoami` so a second
     /// launch for the same target can find it.
     pub identity: String,
+    /// Turns a settings file into what this viewer uses (command-line
+    /// options still win), for the settings dialog. `None`: no dialog.
+    pub reconfigure: Option<Reconfigure>,
+    /// Settings that command-line options override in this run.
+    pub overridden: Vec<String>,
+}
+
+/// What a viewer uses from the settings, recomputed when they change.
+pub struct Reconfigured {
+    pub render: RenderOptions,
+    /// The page template (style, numbered headings).
+    pub page: PageOptions,
+    pub custom_css: Option<PathBuf>,
+    pub editor: Option<String>,
+}
+
+pub type Reconfigure = Arc<dyn Fn(&crate::config::Config) -> Result<Reconfigured> + Send + Sync>;
+
+/// Settings that can change while serving.
+struct Live {
+    /// Template for every page (style etc.); per-page fields are filled in.
+    page: PageOptions,
+    /// `--css` file, re-read for each page so edits apply on reload.
+    custom_css: Option<PathBuf>,
+    /// Editor setting for click-to-source (see editor.rs).
+    editor: Option<String>,
 }
 
 #[derive(Clone)]
 struct AppState {
     docs: Arc<Docs>,
-    renderer: Arc<Renderer>,
     main: Option<PathBuf>,
-    page: PageOptions,
-    custom_css: Option<PathBuf>,
+    live: Arc<Mutex<Live>>,
     prefs: Arc<Mutex<Prefs>>,
     remember: bool,
-    editor: Option<String>,
     identity: Arc<String>,
+    reconfigure: Option<Reconfigure>,
+    overridden: Arc<Vec<String>>,
     /// "Go to this line" requests (`--goto`), as (root-relative doc, line).
     goto: tokio::sync::broadcast::Sender<(String, u32)>,
     port: u16,
@@ -113,13 +139,17 @@ impl ServerHandle {
     /// every page has been gone for `grace` (long enough to ride out a
     /// reload or following a link). Also resolves if no page connects within
     /// `first_connect`, e.g. because the browser never opened.
-    pub async fn abandoned(&self, grace: Duration, first_connect: Duration) {
+    pub async fn abandoned(&self, grace: Duration, first_connect: Option<Duration>) {
         let mut clients = self.clients.clone();
         // Each wait yields only whether the condition was met, so no borrow
-        // of the channel outlives its statement.
-        let connected = tokio::time::timeout(first_connect, clients.wait_for(|n| *n > 0))
-            .await
-            .is_ok_and(|r| r.is_ok());
+        // of the channel outlives its statement. With no first_connect limit,
+        // wait for a page however long it takes.
+        let connected = match first_connect {
+            Some(limit) => tokio::time::timeout(limit, clients.wait_for(|n| *n > 0))
+                .await
+                .is_ok_and(|r| r.is_ok()),
+            None => clients.wait_for(|n| *n > 0).await.is_ok(),
+        };
         if !connected {
             return;
         }
@@ -179,14 +209,17 @@ impl Server {
         };
         let state = AppState {
             docs: opts.docs,
-            renderer: opts.renderer,
             main: opts.main,
-            page: opts.page,
-            custom_css: opts.custom_css,
+            live: Arc::new(Mutex::new(Live {
+                page: opts.page,
+                custom_css: opts.custom_css,
+                editor: opts.editor,
+            })),
             prefs: Arc::new(Mutex::new(opts.prefs)),
             remember: opts.remember,
-            editor: opts.editor,
             identity: Arc::new(opts.identity),
+            reconfigure: opts.reconfigure,
+            overridden: Arc::new(opts.overridden),
             goto: tokio::sync::broadcast::channel(16).0,
             port: addr.port(),
             closing,
@@ -204,6 +237,8 @@ impl Server {
             .route(crate::instances::WHOAMI_PATH, get(whoami))
             .route(GOTO_PATH, post(goto))
             .route(TASK_PATH, post(set_task))
+            .route(ABOUT_PATH, get(about))
+            .route(SETTINGS_PATH, get(get_settings).post(set_setting))
             .route(SOURCE_PATH, get(source))
             .route(GITDIFF_PATH, get(gitdiff))
             .route(CHECK_PATH, get(check_links))
@@ -281,8 +316,11 @@ fn doc_page(state: &AppState, doc: &Path) -> Response {
     };
     let body = rx.borrow().clone();
     let prefs = state.prefs.lock().unwrap().clone();
-    let custom_css = state
-        .custom_css
+    let (template, css_path) = {
+        let live = state.live.lock().unwrap();
+        (live.page.clone(), live.custom_css.clone())
+    };
+    let custom_css = css_path
         .as_ref()
         .and_then(|p| std::fs::read_to_string(p).ok());
     let resume_line = prefs
@@ -291,17 +329,22 @@ fn doc_page(state: &AppState, doc: &Path) -> Response {
         .map(|p| p.line);
     let page = PageOptions {
         title: file_title(doc),
-        theme: prefs.theme.unwrap_or(state.page.theme),
+        theme: prefs.theme.unwrap_or(template.theme),
         sidebar: prefs.sidebar,
         resume_line,
         font_scale: prefs.font_scale,
         git_changes: prefs.git.unwrap_or(false),
+        // The viewer's own choice (w), else the setting.
+        hide_word_count: prefs
+            .word_count
+            .map_or(template.hide_word_count, |show| !show),
         doc: Some(rel_path(state.docs.root(), doc)),
         close_on_exit: state.close_on_exit.load(Ordering::Relaxed),
-        custom_css: custom_css.or_else(|| state.page.custom_css.clone()),
-        ..state.page.clone()
+        custom_css: custom_css.or_else(|| template.custom_css.clone()),
+        settings: state.reconfigure.is_some(),
+        ..template
     };
-    no_store(Html(state.renderer.wrap_page(&body, &page)).into_response())
+    no_store(Html(state.docs.renderer().wrap_page(&body, &page)).into_response())
 }
 
 #[derive(Deserialize)]
@@ -426,7 +469,8 @@ async fn open_in_editor(
     let Some(file) = doc_file(&state, &req.doc) else {
         return (StatusCode::NOT_FOUND, "no file to open").into_response();
     };
-    match crate::editor::open(&file, req.line, state.editor.as_deref()) {
+    let editor = state.live.lock().unwrap().editor.clone();
+    match crate::editor::open(&file, req.line, editor.as_deref()) {
         Ok(()) => StatusCode::NO_CONTENT.into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{e:#}")).into_response(),
     }
@@ -531,6 +575,144 @@ async fn set_task(
     }
 }
 
+/// The settings file, for the settings dialog: its values, where it is,
+/// which settings command-line options override, and what the viewer
+/// found by itself (for "default" hints).
+async fn get_settings(State(state): State<AppState>) -> Response {
+    if state.reconfigure.is_none() {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    let root = state.docs.root().to_path_buf();
+    let overridden = state.overridden.clone();
+    let info = tokio::task::spawn_blocking(move || {
+        let path = crate::config::config_path();
+        let text = path
+            .as_ref()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .unwrap_or_default();
+        let (values, error) = match toml::from_str::<toml::Table>(&text) {
+            Ok(table) => (serde_json::to_value(table).unwrap_or_default(), None),
+            Err(e) => (serde_json::json!({}), Some(e.to_string())),
+        };
+        let editor = crate::editor::command(Path::new("FILE"), 1, None)
+            .ok()
+            .map(|(program, _)| program);
+        serde_json::json!({
+            "path": path.as_ref().map(|p| p.display().to_string()),
+            "exists": path.as_ref().is_some_and(|p| p.is_file()),
+            "values": values,
+            "error": error,
+            "overridden": *overridden,
+            "lint_rules": crate::lint::RULES,
+            "detected": {
+                "github": crate::references::detect(&root),
+                "editor": editor,
+                "obsidian": crate::obsidian::in_vault(&root),
+            },
+        })
+    })
+    .await;
+    match info {
+        Ok(info) => no_store(Json(info).into_response()),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct SettingUpdate {
+    key: String,
+    /// `null` removes the setting (back to the default).
+    value: serde_json::Value,
+}
+
+/// Change one setting: write it to the settings file (if the result is
+/// valid) and apply it to this viewer. Answers `{"reload": true}` when
+/// pages must reload to show it (style, custom CSS, numbered headings);
+/// rendering changes reach pages as live updates.
+async fn set_setting(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(update): Json<SettingUpdate>,
+) -> Response {
+    if headers.get("x-mdv").is_none() {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    let Some(reconfigure) = state.reconfigure.clone() else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let value = match toml_value(&update.value) {
+        Ok(v) => v,
+        Err(msg) => return (StatusCode::BAD_REQUEST, msg).into_response(),
+    };
+    let applied = tokio::task::spawn_blocking(move || -> Result<bool> {
+        let next = crate::config::update_file(&update.key, value, |config| reconfigure(config))?;
+        let reload = {
+            let mut live = state.live.lock().unwrap();
+            let reload = live.page.style != next.page.style
+                || live.page.number_headings != next.page.number_headings
+                || live.custom_css != next.custom_css;
+            live.page = next.page;
+            live.custom_css = next.custom_css;
+            live.editor = next.editor;
+            reload
+        };
+        if state.docs.renderer().options() != &next.render {
+            state
+                .docs
+                .set_renderer(Arc::new(Renderer::with_options(next.render)));
+        }
+        Ok(reload)
+    })
+    .await;
+    match applied {
+        Ok(Ok(reload)) => no_store(Json(serde_json::json!({ "reload": reload })).into_response()),
+        Ok(Err(e)) => (StatusCode::BAD_REQUEST, format!("{e:#}")).into_response(),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// A setting's value from the page, as TOML: true/false, a whole number,
+/// text, a list of text, or null (remove it).
+fn toml_value(value: &serde_json::Value) -> Result<Option<toml_edit::Value>, String> {
+    Ok(Some(match value {
+        serde_json::Value::Null => return Ok(None),
+        serde_json::Value::Bool(b) => (*b).into(),
+        serde_json::Value::Number(n) => n.as_i64().ok_or("expected a whole number")?.into(),
+        serde_json::Value::String(s) if s.trim().is_empty() => return Ok(None),
+        serde_json::Value::String(s) => s.trim().into(),
+        serde_json::Value::Array(items) => {
+            let mut list = toml_edit::Array::new();
+            for item in items {
+                list.push(item.as_str().ok_or("expected a list of text")?);
+            }
+            list.into()
+        }
+        serde_json::Value::Object(_) => return Err("unexpected value".into()),
+    }))
+}
+
+/// About this viewer, for the help's About section: where its files are
+/// and how it's set up. Only pages it serves can read it.
+async fn about(State(state): State<AppState>) -> Response {
+    let local = tokio::task::spawn_blocking(move || {
+        let (editor, css) = {
+            let live = state.live.lock().unwrap();
+            (live.editor.clone(), live.custom_css.clone())
+        };
+        crate::about::Local::gather(
+            state.docs.root(),
+            editor.as_deref(),
+            state.docs.renderer().options(),
+            css.as_deref(),
+        )
+    })
+    .await;
+    match local {
+        Ok(local) => no_store(Json(local).into_response()),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
 /// The document's Markdown (for copying the page).
 async fn source(State(state): State<AppState>, Query(q): Query<EventsQuery>) -> Response {
     let text = match doc_file(&state, &q.doc) {
@@ -562,7 +744,7 @@ async fn check_links(State(state): State<AppState>, Query(q): Query<EventsQuery>
     let Some(file) = doc_file(&state, &q.doc) else {
         return StatusCode::NOT_FOUND.into_response();
     };
-    let renderer = state.renderer.clone();
+    let renderer = state.docs.renderer();
     let root = state.docs.root().to_path_buf();
     let result = tokio::task::spawn_blocking(move || {
         let checker = crate::links::Checker::new(renderer, root);

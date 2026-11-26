@@ -4,7 +4,7 @@
 .SH NAME
 markdown\-viewer \- Render a Markdown file with GitHub styling and live\-reload it in your browser
 .SH SYNOPSIS
-\fBmarkdown\-viewer\fR [\fB\-w\fR|\fB\-\-watch\fR] [\fB\-o\fR|\fB\-\-output\fR] [\fB\-\-pdf\fR] [\fB\-\-clipboard\fR] [\fB\-\-goto\fR] [\fB\-\-if\-running\fR] [\fB\-\-check\-links\fR] [\fB\-\-recent\fR] [\fB\-\-online\fR] [\fB\-\-lint\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-\-no\-open\fR] [\fB\-\-browser\fR] [\fB\-\-app\fR] [\fB\-\-window\fR] [\fB\-\-tab\fR] [\fB\-\-exit\-when\-closed\fR] [\fB\-\-install\-finder\fR] [\fB\-\-uninstall\-finder\fR] [\fB\-\-install\-desktop\fR] [\fB\-\-uninstall\-desktop\fR] [\fB\-\-theme\fR] [\fB\-\-style\fR] [\fB\-\-css\fR] [\fB\-\-number\-headings\fR] [\fB\-\-line\-numbers\fR] [\fB\-\-front\-matter\fR] [\fB\-\-obsidian\fR] [\fB\-\-no\-obsidian\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIFILE\fR] 
+\fBmarkdown\-viewer\fR [\fB\-w\fR|\fB\-\-watch\fR] [\fB\-o\fR|\fB\-\-output\fR] [\fB\-\-pdf\fR] [\fB\-\-clipboard\fR] [\fB\-\-goto\fR] [\fB\-\-if\-running\fR] [\fB\-\-check\-links\fR] [\fB\-\-recent\fR] [\fB\-\-online\fR] [\fB\-\-lint\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-\-no\-open\fR] [\fB\-\-browser\fR] [\fB\-\-app\fR] [\fB\-\-window\fR] [\fB\-\-tab\fR] [\fB\-\-exit\-when\-closed\fR] [\fB\-\-keep\-running\fR] [\fB\-\-install\-finder\fR] [\fB\-\-uninstall\-finder\fR] [\fB\-\-install\-desktop\fR] [\fB\-\-uninstall\-desktop\fR] [\fB\-\-theme\fR] [\fB\-\-style\fR] [\fB\-\-css\fR] [\fB\-\-number\-headings\fR] [\fB\-\-line\-numbers\fR] [\fB\-\-front\-matter\fR] [\fB\-\-obsidian\fR] [\fB\-\-no\-obsidian\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIFILE\fR] 
 .SH DESCRIPTION
 Render a Markdown file with GitHub styling and live\-reload it in your browser
 .SH OPTIONS
@@ -58,7 +58,10 @@ Open in a normal new browser window
 Open in a tab of an existing browser window
 .TP
 \fB\-\-exit\-when\-closed\fR
-With \-\-watch: exit once the page has been closed (used by the Finder integration, where there\*(Aqs no terminal to press Ctrl\-C in)
+With \-\-watch: exit once the page has been closed, even with \-\-no\-open (used by the Finder integration). Without \-\-no\-open, this is the default
+.TP
+\fB\-\-keep\-running\fR
+With \-\-watch: keep serving after the window is closed (until Ctrl\-C)
 .TP
 \fB\-\-install\-finder\fR
 macOS: add "Markdown Viewer" to Finder (Open With, double\-click and a right\-click Quick Action) for the current user
@@ -142,6 +145,6 @@ Print help (see a summary with \*(Aq\-h\*(Aq)
 Print version
 .TP
 [\fIFILE\fR]
-Markdown file to render, a folder to browse (default: the current folder), or "\-" to read standard input. Folders are always served with live reload
+Markdown file to render, a folder to browse (default: the current folder), a web address (https://…, including GitHub and GitLab file and repository pages), or "\-" to read standard input. Folders are always served with live reload
 .SH VERSION
 v0.8.0

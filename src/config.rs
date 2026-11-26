@@ -20,7 +20,7 @@ const MAX_POSITIONS: usize = 300;
 
 /// `~/.config/markdown-viewer/config.toml`. Every key is optional; command
 /// line options override them.
-#[derive(Debug, Default, Deserialize, PartialEq)]
+#[derive(Debug, Default, Clone, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub theme: Option<Theme>,
@@ -52,6 +52,12 @@ pub struct Config {
     /// Remember the files and folders you open, for the Recent page
     /// (default: on).
     pub recent: Option<bool>,
+    /// Show the word count and reading time in the toolbar (default: on;
+    /// `w` in the viewer toggles it for you).
+    pub word_count: Option<bool>,
+    /// Stop serving once the window markdown-viewer opened has been closed
+    /// (default: on).
+    pub exit_when_closed: Option<bool>,
 }
 
 impl Config {
@@ -119,6 +125,9 @@ pub struct Prefs {
     /// Show what changed since the last git commit (the D key).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub git: Option<bool>,
+    /// Show the word count and reading time in the toolbar (the w key).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub word_count: Option<bool>,
     /// Where you were reading, per file (absolute path → position).
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub positions: BTreeMap<String, Position>,
@@ -170,6 +179,9 @@ impl Prefs {
         if update.git.is_some() {
             self.git = update.git;
         }
+        if update.word_count.is_some() {
+            self.word_count = update.word_count;
+        }
         for (file, pos) in update.positions {
             self.positions.insert(file, pos);
         }
@@ -197,6 +209,49 @@ impl Prefs {
         std::fs::write(&path, serde_json::to_string_pretty(self)?)
             .with_context(|| format!("cannot write {}", path.display()))
     }
+}
+
+/// Change one setting in the settings file (`None` removes it, going back
+/// to the default), keeping everything else in the file as it was,
+/// comments included. The result must be a valid settings file that
+/// `check` accepts, or nothing is written. Returns what `check` returned.
+pub fn update_file<T>(
+    key: &str,
+    value: Option<toml_edit::Value>,
+    check: impl FnOnce(&Config) -> Result<T>,
+) -> Result<T> {
+    let path = config_path().context("no place for a settings file (HOME isn't set)")?;
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(e).with_context(|| format!("cannot read {}", path.display())),
+    };
+    let new = set_key(&text, key, value)
+        .with_context(|| format!("{} isn't a valid settings file", path.display()))?;
+    let checked = check(&Config::parse(&new)?)?;
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    std::fs::write(&path, new).with_context(|| format!("cannot write {}", path.display()))?;
+    Ok(checked)
+}
+
+/// `text` with `key` set to `value` (or removed).
+fn set_key(text: &str, key: &str, value: Option<toml_edit::Value>) -> Result<String> {
+    let mut doc: toml_edit::DocumentMut = text.parse()?;
+    match value {
+        Some(mut value) => {
+            // Keep the old value's spacing and trailing comment.
+            if let Some(old) = doc.get(key).and_then(|item| item.as_value()) {
+                *value.decor_mut() = old.decor().clone();
+            }
+            doc[key] = toml_edit::Item::Value(value);
+        }
+        None => {
+            doc.remove(key);
+        }
+    }
+    Ok(doc.to_string())
 }
 
 /// `$MARKDOWN_VIEWER_CONFIG`, else `$XDG_CONFIG_HOME/markdown-viewer/config.toml`,
@@ -245,6 +300,34 @@ fn expand_home(path: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn setting_a_key_keeps_the_rest_of_the_file() {
+        let text = "# My settings\ntheme = \"dark\"   # at night\n\n# Editor\neditor = \"zed\"\n";
+        let out = set_key(text, "style", Some("book".into())).unwrap();
+        assert_eq!(
+            out,
+            "# My settings\ntheme = \"dark\"   # at night\n\n# Editor\neditor = \"zed\"\nstyle = \"book\"\n"
+        );
+        let out = set_key(&out, "theme", Some("light".into())).unwrap();
+        assert!(
+            out.starts_with("# My settings\ntheme = \"light\"   # at night\n"),
+            "{out}"
+        );
+        let out = set_key(&out, "editor", None).unwrap();
+        assert!(!out.contains("editor ="), "{out}");
+        let mut list = toml_edit::Array::new();
+        list.push("multiple-h1");
+        let out = set_key("", "lint_ignore", Some(list.into())).unwrap();
+        assert_eq!(
+            Config::parse(&out).unwrap().lint_ignore,
+            Some(vec!["multiple-h1".into()])
+        );
+        // Values the settings file doesn't accept are caught by parsing.
+        let bad = set_key("", "style", Some("fancy".into())).unwrap();
+        assert!(Config::parse(&bad).is_err());
+        assert!(set_key("not = [valid", "style", None).is_err());
+    }
 
     #[test]
     fn parses_settings() {

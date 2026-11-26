@@ -8,7 +8,9 @@
 .mdv-ui button {
   font: inherit; color: inherit; background: none; border: 0; cursor: pointer;
 }
-.mdv-ui svg { width: 16px; height: 16px; fill: currentColor; display: block; }
+/* Icons. Only in buttons: the slides of presentation mode are .mdv-ui
+   too, and their diagrams (and math) are SVGs that must keep their size. */
+.mdv-ui button svg { width: 16px; height: 16px; fill: currentColor; display: block; }
 
 /* Toolbar */
 .mdv-toolbar {
@@ -23,6 +25,8 @@
 .mdv-toolbar button[aria-pressed="true"] { color: var(--fgColor-accent); }
 .mdv-stats { padding: 0 8px 0 6px; color: var(--fgColor-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 @media (max-width: 600px) { .mdv-stats { display: none; } }
+.mdv-stats { cursor: pointer; }
+:root[data-mdv-stats="off"] .mdv-stats { display: none; }
 
 /* Sidebar */
 .mdv-sidebar {
@@ -65,7 +69,8 @@ html.mdv-sidebar-open .mdv-sidebar { transform: none; box-shadow: 0 0 24px rgba(
 }
 .mdv-overlay[hidden] { display: none; }
 .mdv-help {
-  min-width: 320px; max-width: 90vw; padding: 16px 20px; border-radius: 10px;
+  min-width: 320px; max-width: min(620px, 90vw); max-height: 88vh; overflow-y: auto;
+  padding: 16px 20px; border-radius: 10px;
   background: var(--bgColor-default); border: 1px solid var(--borderColor-default);
   box-shadow: 0 12px 40px rgba(0,0,0,.25);
 }
@@ -137,6 +142,8 @@ html.mdv-sidebar-open .mdv-sidebar { transform: none; box-shadow: 0 0 24px rgba(
 }
 .mdv-present .mdv-slide-inner { flex-shrink: 0; }
 .mdv-present .mdv-slide h1, .mdv-present .mdv-slide h2 { border-bottom: none; }
+/* Diagrams fill the slide (Mermaid caps them at their natural width). */
+.mdv-present .mdv-slide div.mermaid svg { width: 100%; max-width: 100% !important; height: auto; max-height: 65vh; }
 .mdv-present-bar { padding: 8px 18px; text-align: right; color: var(--fgColor-muted); font-variant-numeric: tabular-nums; }
 
 /* Text size (+ / -), remembered between runs */
@@ -193,3 +200,55 @@ html.mdv-sidebar-open .mdv-sidebar { transform: none; box-shadow: 0 0 24px rgba(
   content: "▲"; display: inline-block; margin-left: 4px; font-size: 0.7em; color: var(--fgColor-muted);
 }
 .markdown-body table.mdv-sortable th[aria-sort="descending"]::after { content: "▼"; }
+
+/* About, in the help */
+.mdv-help h2:not(:first-child) { margin-top: 18px; }
+.mdv-help .mdv-about td { padding: 2px 0; vertical-align: top; }
+.mdv-help .mdv-about td:first-child { padding-right: 16px; color: var(--fgColor-muted); white-space: nowrap; }
+.mdv-help .mdv-about td:last-child { overflow-wrap: anywhere; }
+.mdv-help .mdv-about a, .mdv-help .mdv-about-links a { color: var(--fgColor-accent); text-decoration: none; }
+.mdv-help .mdv-about a:hover, .mdv-help .mdv-about-links a:hover { text-decoration: underline; }
+.mdv-help .mdv-about-links { margin: 10px 0 8px; color: var(--fgColor-muted); }
+.mdv-help .mdv-about-copy {
+  padding: 3px 10px; font: inherit; font-size: 12px; color: inherit; cursor: pointer;
+  background: var(--bgColor-muted); border: 1px solid var(--borderColor-default); border-radius: 6px;
+}
+.mdv-help .mdv-about-copy:hover { border-color: var(--fgColor-muted); }
+
+/* Credits, in the help */
+.mdv-help h3 { font-size: 13px; margin: 12px 0 4px; color: var(--fgColor-muted); font-weight: 600; }
+.mdv-help .mdv-credits-intro { margin: 0 0 6px; color: var(--fgColor-muted); }
+.mdv-help .mdv-credits { list-style: none; margin: 0; padding: 0; }
+.mdv-help .mdv-credits li { padding: 1px 0; }
+.mdv-help .mdv-credits-crates { columns: 2; column-gap: 24px; }
+.mdv-help .mdv-credits-crates li { break-inside: avoid; }
+.mdv-help .mdv-credits a { color: var(--fgColor-accent); text-decoration: none; }
+.mdv-help .mdv-credits a:hover { text-decoration: underline; }
+.mdv-help .mdv-credit-version { color: var(--fgColor-muted); font-size: 12px; }
+.mdv-help .mdv-credit-license {
+  margin-left: 6px; padding: 0 5px; font-size: 11px; border-radius: 8px; white-space: nowrap;
+  color: var(--fgColor-muted); border: 1px solid var(--borderColor-default);
+}
+@media (max-width: 520px) { .mdv-help .mdv-credits-crates { columns: 1; } }
+
+/* Settings dialog */
+.mdv-settings { width: min(560px, 92vw); }
+.mdv-settings .mdv-settings-file { margin: 0 0 6px; color: var(--fgColor-muted); font-size: 12px; overflow-wrap: anywhere; }
+.mdv-settings .mdv-settings-note { color: var(--fgColor-muted); font-size: 12px; margin: 0; }
+.mdv-settings .mdv-settings-error { color: var(--fgColor-danger); }
+.mdv-settings h3 { margin-top: 16px; padding-bottom: 4px; border-bottom: 1px solid var(--borderColor-muted); }
+.mdv-setting {
+  display: grid; grid-template-columns: 1fr minmax(180px, 46%); gap: 2px 12px; align-items: center;
+  padding: 6px 0;
+}
+.mdv-setting .mdv-setting-status { grid-column: 1 / -1; font-size: 12px; color: var(--fgColor-success); min-height: 0; }
+.mdv-setting .mdv-setting-status:empty { display: none; }
+.mdv-setting.mdv-setting-check { grid-template-columns: auto 1fr; }
+.mdv-setting input[type="checkbox"] { margin: 0; width: 16px; height: 16px; }
+.mdv-setting select, .mdv-setting input[type="text"], .mdv-setting input[type="number"] {
+  width: 100%; padding: 4px 8px; font: inherit; color: inherit;
+  background: var(--bgColor-default); border: 1px solid var(--borderColor-default); border-radius: 6px;
+}
+.mdv-setting select:focus, .mdv-setting input:focus { outline: 2px solid var(--focus-outlineColor, #0969da); outline-offset: -1px; }
+.mdv-setting-rules { display: flex; flex-direction: column; gap: 2px; }
+.mdv-setting-rules label { display: flex; align-items: center; gap: 4px; }

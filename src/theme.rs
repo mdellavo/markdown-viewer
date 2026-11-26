@@ -171,9 +171,28 @@ const CODE_AND_TOC: &str = "\
 .markdown-body pre.mdv-lines .mdv-hl { background: var(--bgColor-attention-muted); \
   margin: 0 -16px; padding: 0 16px; }\n\
 .markdown-body pre.mdv-wrapped, .markdown-body pre.mdv-wrapped code { white-space: pre-wrap; word-break: break-word; }\n\
-.markdown-body .mdv-toc { margin-bottom: 16px; padding: 8px 16px; border-left: 3px solid var(--borderColor-default); }\n\
-.markdown-body .mdv-toc ul { margin: 0; padding-left: 1.4em; }\n\
-.markdown-body .mdv-toc > ul { padding-left: 0; list-style: none; }\n\
+.markdown-body .mdv-toc { margin-bottom: 16px; border: 1px solid var(--borderColor-default); \
+  border-radius: 6px; background: var(--bgColor-muted); font-size: 14px; line-height: 1.5; }\n\
+.markdown-body .mdv-toc summary { list-style: none; cursor: pointer; display: flex; align-items: center; }\n\
+.markdown-body .mdv-toc summary::-webkit-details-marker { display: none; }\n\
+.markdown-body .mdv-toc summary::before { content: \"\"; flex: none; width: 5px; height: 5px; \
+  margin: 0 7px 0 3px; border-right: 1.5px solid var(--fgColor-muted); \
+  border-bottom: 1.5px solid var(--fgColor-muted); transform: rotate(-45deg); transition: transform .15s; }\n\
+.markdown-body .mdv-toc details[open] > summary::before { transform: rotate(45deg); }\n\
+.markdown-body .mdv-toc > details > summary { padding: 8px 12px; font-weight: 600; user-select: none; }\n\
+.markdown-body .mdv-toc > details[open] > summary { border-bottom: 1px solid var(--borderColor-muted); }\n\
+.markdown-body .mdv-toc > details > ul { padding: 6px 12px 8px; }\n\
+.markdown-body .mdv-toc ul { list-style: none; margin: 0; padding-left: 0; }\n\
+.markdown-body .mdv-toc ul ul { margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--borderColor-muted); }\n\
+.markdown-body .mdv-toc li, .markdown-body .mdv-toc li + li, .markdown-body .mdv-toc details { margin: 0; }\n\
+.markdown-body .mdv-toc a { display: block; flex: 1; min-width: 0; padding: 2px 6px; border-radius: 4px; \
+  color: var(--fgColor-default); text-decoration: none; }\n\
+.markdown-body .mdv-toc li > a { margin-left: 15px; }\n\
+.markdown-body .mdv-toc a:hover { background: var(--bgColor-neutral-muted); color: var(--fgColor-accent); }\n\
+.markdown-body .mdv-toc > details > ul > li > a, \
+.markdown-body .mdv-toc > details > ul > li > details > summary > a { font-weight: 500; }\n\
+@media print { .markdown-body .mdv-toc { break-inside: avoid; background: none; } \
+  .markdown-body .mdv-toc summary::before { display: none; } }\n\
 .markdown-body .mdv-data-note { color: var(--fgColor-muted); font-size: 12px; }\n\
 .markdown-body table.mdv-data td { white-space: pre-wrap; }\n";
 

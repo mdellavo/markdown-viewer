@@ -57,6 +57,27 @@
     });
   }
 
+  // Folded parts of a [TOC]: the reader's choice, kept across updates.
+  // Each fold is known by the heading it's for ("" for the whole list).
+  function tocKey(details) {
+    var link = details.querySelector(":scope > summary > a");
+    return link ? link.getAttribute("href") : "";
+  }
+  function saveTocFolds(container) {
+    var closed = [];
+    container.querySelectorAll(".mdv-toc details:not([open])").forEach(function (d) {
+      closed.push(tocKey(d));
+      d.open = true;
+    });
+    return closed;
+  }
+  function restoreTocFolds(container, closed) {
+    if (!closed.length) return;
+    container.querySelectorAll(".mdv-toc details").forEach(function (d) {
+      if (closed.indexOf(tocKey(d)) !== -1) d.open = false;
+    });
+  }
+
   // Sorted tables (ui.js): back to the file's order around updates, so
   // comparisons and source positions match the server's markup.
   function saveSorts(container) {
@@ -98,12 +119,14 @@
       lastKeys = blocks.map(key);
       var folds = saveFolds(body);
       var sorts = saveSorts(body);
+      var tocFolds = saveTocFolds(body);
       clean(body);
       var same = body.children.length === next.children.length &&
         Array.prototype.every.call(body.children, function (c, i) { return c.isEqualNode(next.children[i]); });
       if (!same) body.replaceChildren.apply(body, Array.prototype.slice.call(next.childNodes));
       restoreFolds(body, folds);
       restoreSorts(body, sorts);
+      restoreTocFolds(body, tocFolds);
       document.dispatchEvent(new CustomEvent("mdv:updated", { detail: { changed: null } }));
     });
   }
@@ -126,6 +149,7 @@
       }
       var folds = saveFolds(body);
       var sorts = saveSorts(body);
+      var tocFolds = saveTocFolds(body);
       var x = window.scrollX, y = window.scrollY;
       var after = body.children[oldN - tail] || null;
       for (var i = oldN - tail - 1; i >= head; i--) body.children[i].remove();
@@ -136,6 +160,7 @@
       }
       restoreFolds(body, folds);
       restoreSorts(body, sorts);
+      restoreTocFolds(body, tocFolds);
       window.scrollTo(x, y);
       lastKeys = keys;
       var moved = head === oldN && head === newN;

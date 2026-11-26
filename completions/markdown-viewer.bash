@@ -23,7 +23,7 @@ _markdown__viewer() {
 
     case "${cmd}" in
         markdown__viewer)
-            opts="-w -o -p -h -V --watch --output --pdf --clipboard --goto --if-running --check-links --recent --online --lint --port --no-open --browser --app --window --tab --exit-when-closed --theme --style --css --number-headings --line-numbers --front-matter --obsidian --no-obsidian --editor --generate-completions --generate-man --install-finder --uninstall-finder --install-desktop --uninstall-desktop --help --version"
+            opts="-w -o -p -h -V --watch --output --pdf --clipboard --goto --if-running --check-links --recent --online --lint --port --no-open --browser --app --window --tab --exit-when-closed --keep-running --background --theme --style --css --number-headings --line-numbers --front-matter --obsidian --no-obsidian --editor --generate-completions --generate-man --install-finder --uninstall-finder --install-desktop --uninstall-desktop --help --version"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0

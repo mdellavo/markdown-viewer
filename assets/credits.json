@@ -1,0 +1,143 @@
+{
+  "crates": [
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "anyhow",
+      "url": "https://github.com/dtolnay/anyhow",
+      "version": "1.0.105"
+    },
+    {
+      "license": "MIT",
+      "name": "axum",
+      "url": "https://github.com/tokio-rs/axum",
+      "version": "0.8.9"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "clap",
+      "url": "https://github.com/clap-rs/clap",
+      "version": "4.6.10"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "clap_complete",
+      "url": "https://github.com/clap-rs/clap",
+      "version": "4.6.12"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "clap_mangen",
+      "url": "https://github.com/clap-rs/clap",
+      "version": "0.3.4"
+    },
+    {
+      "license": "BSD-2-Clause",
+      "name": "comrak",
+      "url": "https://github.com/kivikakk/comrak",
+      "version": "1.2.0"
+    },
+    {
+      "license": "CC0-1.0 OR MIT-0 OR Apache-2.0",
+      "name": "dunce",
+      "url": "https://gitlab.com/kornelski/dunce",
+      "version": "1.0.5"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "flate2",
+      "url": "https://github.com/rust-lang/flate2-rs",
+      "version": "1.1.11"
+    },
+    {
+      "license": "MIT",
+      "name": "mime_guess",
+      "url": "https://github.com/abonander/mime_guess",
+      "version": "2.0.5"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "notify-debouncer-full",
+      "url": "https://github.com/notify-rs/notify",
+      "version": "0.8.0"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "opener",
+      "url": "https://github.com/Seeker14491/opener",
+      "version": "0.9.0"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "percent-encoding",
+      "url": "https://github.com/servo/rust-url",
+      "version": "2.3.2"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "serde",
+      "url": "https://github.com/serde-rs/serde",
+      "version": "1.0.229"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "serde_json",
+      "url": "https://github.com/serde-rs/json",
+      "version": "1.0.154"
+    },
+    {
+      "license": "MIT",
+      "name": "syntect",
+      "url": "https://github.com/trishume/syntect",
+      "version": "5.3.0"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "tempfile",
+      "url": "https://github.com/Stebalien/tempfile",
+      "version": "3.27.0"
+    },
+    {
+      "license": "MIT",
+      "name": "tokio",
+      "url": "https://github.com/tokio-rs/tokio",
+      "version": "1.54.1"
+    },
+    {
+      "license": "MIT",
+      "name": "tokio-stream",
+      "url": "https://github.com/tokio-rs/tokio",
+      "version": "0.1.19"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "toml",
+      "url": "https://github.com/toml-rs/toml",
+      "version": "1.2.3+spec-1.1.0"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "toml_edit",
+      "url": "https://github.com/toml-rs/toml",
+      "version": "0.25.21+spec-1.1.0"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "url",
+      "url": "https://github.com/servo/rust-url",
+      "version": "2.5.9"
+    },
+    {
+      "license": "MIT",
+      "name": "winreg",
+      "url": "https://github.com/gentoo90/winreg-rs",
+      "version": "0.56.0"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "yaml-rust2",
+      "url": "https://github.com/Ethiraric/yaml-rust2",
+      "version": "0.13.2"
+    }
+  ],
+  "total": 203
+}

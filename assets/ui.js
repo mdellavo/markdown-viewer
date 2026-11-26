@@ -16,6 +16,7 @@
 
   // Icons: Primer Octicons (MIT), see assets/LICENSE-octicons.
   var ICONS = {
+    "gear": ["M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.088.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 0 1-.704 1.217c-.428.61-1.176.807-1.82.63l-1.102-.302c-.067-.019-.177-.011-.3.071a5.909 5.909 0 0 1-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 0 1-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 0 1-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 0 1 0-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 0 1 .704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071.214-.143.437-.272.668-.386.133-.066.194-.158.211-.224l.29-1.106C6.009.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.045-.22.312-.412.644-.573.99-.014.031-.021.11.059.19l.815.806c.411.406.562.957.53 1.456a4.709 4.709 0 0 0 0 .582c.032.499-.119 1.05-.53 1.456l-.815.806c-.081.08-.073.159-.059.19.162.346.353.677.573.989.02.03.085.076.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.161.107.328.204.501.29.447.222.85.629.997 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.029.175-.016.195-.045.22-.313.411-.644.573-.99.014-.031.021-.11-.059-.19l-.815-.806c-.411-.406-.562-.957-.53-1.456a4.709 4.709 0 0 0 0-.582c-.032-.499.119-1.05.53-1.456l.815-.806c.081-.08.073-.159.059-.19a6.464 6.464 0 0 0-.573-.989c-.02-.03-.085-.076-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.501-.29c-.447-.222-.85-.629-.997-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z"],
     "copy": ["M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z", "M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"],
     "check": ["M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0Z"],
     "list-unordered": ["M5.75 2.5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5Zm0 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5Zm0 5h8.5a.75.75 0 0 1 0 1.5h-8.5a.75.75 0 0 1 0-1.5ZM2 14a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm1-6a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM2 4a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"],
@@ -66,11 +67,12 @@
     var local = loadLocal();
     if (local.theme && !root.hasAttribute("data-mdv-fixed-theme")) root.setAttribute("data-mdv-theme", local.theme);
     if (local.sidebar !== undefined) root.setAttribute("data-mdv-sidebar", local.sidebar || "");
+    if (local.word_count === false) root.setAttribute("data-mdv-stats", "off");
   }
 
   // ---- Building the UI ---------------------------------------------------
   var toolbar = el("div", { "class": "mdv-ui mdv-toolbar", role: "toolbar", "aria-label": "Viewer" });
-  var stats = el("span", { "class": "mdv-stats", title: "Words and reading time" });
+  var stats = el("span", { "class": "mdv-stats", title: "Words and reading time (click or w to hide)" });
   var contentsBtn = el("button", { type: "button", title: "Contents (o)", "aria-label": "Contents", "aria-pressed": "false" }, icon("list-unordered"));
   var filesBtn = el("button", { type: "button", title: "Files (f)", "aria-label": "Files", "aria-pressed": "false" }, icon("file-directory"));
   var themeBtn = el("button", { type: "button" });
@@ -85,7 +87,11 @@
   if (hasFiles) toolbar.append(filesBtn);
   if (canEdit) toolbar.append(editBtn);
   var copyPageBtn = el("button", { type: "button", title: "Copy the page (c)", "aria-label": "Copy the page" }, icon("copy"));
-  toolbar.append(copyPageBtn, presentBtn, themeBtn, helpBtn);
+  var canSettings = served && script.hasAttribute("data-settings");
+  var settingsBtn = el("button", { type: "button", title: "Settings (,)", "aria-label": "Settings" }, icon("gear"));
+  toolbar.append(copyPageBtn, presentBtn, themeBtn);
+  if (canSettings) toolbar.append(settingsBtn);
+  toolbar.append(helpBtn);
 
   var sidebar = el("nav", { "class": "mdv-ui mdv-sidebar", "aria-label": "Document" });
   var tabs = el("div", { "class": "mdv-tabs", role: "tablist" });
@@ -116,6 +122,7 @@
     ["s", "Present as slides (arrows to move, Esc to stop)"],
     ["+ / -", "Larger / smaller text (0 resets)"],
     ["c", "Copy the page (rich text, and Markdown as plain text)"],
+    ["w", "Show or hide the word count and reading time"],
     served ? ["b", "Show backlinks: other files linking here"] : null,
     served ? ["l", "Check this page's links"] : null,
     served ? ["D", "Show what changed since the last git commit"] : null,
@@ -123,15 +130,379 @@
     ["d / u", "Half a page down / up"],
     ["g / G", "Top / bottom"],
     ["n / p", "Next / previous heading"],
+    canSettings ? [",", "Settings"] : null,
     ["?", "Show this help"],
     ["Esc", "Close"],
   ].filter(Boolean);
   var overlay = el("div", { "class": "mdv-ui mdv-overlay", hidden: "" });
-  overlay.append(el("div", { "class": "mdv-help", role: "dialog", "aria-label": "Keyboard shortcuts" },
+  var helpBox = el("div", { "class": "mdv-help", role: "dialog", "aria-label": "Keyboard shortcuts and about" },
     "<h2>Keyboard shortcuts</h2><table>" + KEYS.map(function (k) {
       return "<tr><td>" + k[0].split(" / ").map(function (x) { return "<kbd>" + x + "</kbd>"; }).join(" / ") +
         "</td><td>" + k[1] + "</td></tr>";
-    }).join("") + "</table>"));
+    }).join("") + "</table>");
+  overlay.append(helpBox);
+
+  // ---- About (in the help) -------------------------------------------------
+  // The build comes with the page (data-about: nothing about this computer,
+  // so it's fine in exports). Served pages also ask the viewer where its
+  // files are. Built with text nodes only.
+  var build = {};
+  try { build = JSON.parse(script.dataset.about || "{}"); } catch (e) {}
+  var aboutTable = el("table", { "class": "mdv-about" });
+  var aboutLines = [];
+  function aboutRow(label, value, href, into) {
+    if (!value) return;
+    var tr = el("tr");
+    var th = el("td");
+    th.textContent = label;
+    var td = el("td");
+    if (href) {
+      var a = el("a", { href: href, target: "_blank", rel: "noopener" });
+      a.textContent = value;
+      td.append(a);
+    } else {
+      td.textContent = value;
+    }
+    tr.append(th, td);
+    (into || aboutTable).append(tr);
+    aboutLines.push(label + ": " + value);
+  }
+  var repo = build.repository || "";
+  aboutRow("Version", build.version, repo && build.version ? repo + "/releases/tag/v" + build.version : "");
+  if (build.commit) {
+    aboutRow("Commit", build.commit.slice(0, 10) + (build.commitDate ? " (" + build.commitDate + ")" : ""),
+      repo + "/commit/" + build.commit);
+  }
+  aboutRow("Built for", [build.target, build.profile].filter(Boolean).join(", "));
+  aboutRow("Compiler", build.rustc);
+  if (build.mermaid || build.katex) {
+    aboutRow("Includes", ["Mermaid " + build.mermaid, "KaTeX " + build.katex].join(", "));
+  }
+  aboutRow("Page", served ? "served live by markdown-viewer" : siteRoot !== null ? "static site" : "standalone file");
+  var aboutLocal = el("tbody");
+  aboutTable.append(aboutLocal);
+  var aboutLinks = el("p", { "class": "mdv-about-links" });
+  [["Changelog", repo + "/blob/main/CHANGELOG.md"], ["Report an issue", repo + "/issues"],
+    ["License: " + (build.license || "MIT"), repo + "/blob/main/LICENSE"]].forEach(function (l, i) {
+    if (!repo) return;
+    if (i) aboutLinks.append(document.createTextNode(" · "));
+    var a = el("a", { href: l[1], target: "_blank", rel: "noopener" });
+    a.textContent = l[0];
+    aboutLinks.append(a);
+  });
+  var copyAbout = el("button", { type: "button", "class": "mdv-about-copy" }, "Copy details");
+  copyAbout.addEventListener("click", function () {
+    var text = "markdown-viewer\n" + aboutLines.join("\n") + "\nBrowser: " + navigator.userAgent;
+    var done = function () { showToast("Copied the details"); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text) && done(); });
+    } else if (fallbackCopy(text)) {
+      done();
+    }
+  });
+  var aboutHead = el("h2");
+  aboutHead.textContent = "About markdown-viewer";
+  helpBox.append(aboutHead, aboutTable, aboutLinks, copyAbout);
+
+  // ---- Word count ----------------------------------------------------------
+  // The word count and reading time can be hidden to save toolbar space
+  // (w, or click it); remembered like the theme.
+  function showWordCount(show) {
+    if (show) root.removeAttribute("data-mdv-stats");
+    else root.setAttribute("data-mdv-stats", "off");
+    savePrefs({ word_count: show });
+  }
+  function toggleWordCount() {
+    var show = root.getAttribute("data-mdv-stats") === "off";
+    showWordCount(show);
+    showToast(show ? "Showing the word count" : "Word count hidden (w to show it)");
+  }
+  stats.addEventListener("click", toggleWordCount);
+
+  // ---- Settings dialog -----------------------------------------------------
+  // Edits the settings file. Each change is saved at once (the viewer
+  // checks it, keeping the file's comments) and applied: rendering
+  // changes arrive as live updates, page-level ones reload the page, and
+  // the "Opening pages" ones are for the next launch.
+  var SETTINGS = [
+    { group: "Appearance" },
+    { key: "theme", label: "Theme", type: "select", def: "auto",
+      options: [["auto", "Auto (follow the system)"], ["light", "Light"], ["dark", "Dark"]] },
+    { key: "style", label: "Page style", type: "select", def: "github",
+      options: [["github", "GitHub"], ["wide", "Wide"], ["book", "Book (serif, for reading)"], ["compact", "Compact"]] },
+    { key: "css", label: "Custom CSS file", type: "text", placeholder: "~/notes.css",
+      help: "Applied after the built-in styles." },
+    { key: "number_headings", label: "Number headings (1, 1.1, …)", type: "bool", def: false },
+    { key: "line_numbers", label: "Number the lines of code blocks", type: "bool", def: false },
+    { key: "word_count", label: "Show the word count and reading time", type: "bool", def: true,
+      help: "w in the viewer shows or hides it too." },
+    { key: "front_matter", label: "Front matter", type: "select", def: "table",
+      options: [["table", "Show as a table"], ["hide", "Hide"]] },
+    { group: "Markdown" },
+    { key: "obsidian", label: "Obsidian notes", type: "select", def: null,
+      options: [[null, "Automatic (in a vault)"], [true, "Always"], [false, "Never"]] },
+    { key: "github_references", label: "Link #123, @user and commits to GitHub", type: "bool", def: true },
+    { key: "github_repo", label: "GitHub repository", type: "text", placeholder: "owner/repo",
+      detected: "github", help: "For those links, if it isn't the git remote's." },
+    { group: "Editing" },
+    { key: "editor", label: "Editor", type: "text", placeholder: "e.g. code -g {file}:{line}", detected: "editor",
+      help: "For double-click to edit." },
+    { group: "Opening pages", note: "Used the next time markdown-viewer opens a page." },
+    { key: "open", label: "Open as", type: "select", def: "app",
+      options: [["app", "App window (no tabs or address bar)"], ["window", "New window"], ["tab", "Tab"]] },
+    { key: "browser", label: "Browser", type: "text", placeholder: "Default browser" },
+    { key: "port", label: "Port", type: "number", placeholder: "Any free port" },
+    { key: "exit_when_closed", label: "Stop the viewer when its window closes", type: "bool", def: true,
+      help: "Otherwise it keeps running until Ctrl-C." },
+    { group: "Other" },
+    { key: "recent", label: "Remember opened files (the Recent page)", type: "bool", def: true },
+    { key: "lint_ignore", label: "--lint rules to skip", type: "rules" },
+  ];
+  var settingsOverlay = el("div", { "class": "mdv-ui mdv-overlay", hidden: "" });
+  var settingsBox = el("div", { "class": "mdv-help mdv-settings", role: "dialog", "aria-label": "Settings" });
+  settingsOverlay.append(settingsBox);
+  settingsOverlay.addEventListener("click", function (e) { if (e.target === settingsOverlay) settingsOverlay.hidden = true; });
+  settingsBtn.addEventListener("click", openSettings);
+
+  function openSettings() {
+    // Added on first use, after the help (which stays the first overlay).
+    if (!settingsOverlay.isConnected) document.body.append(settingsOverlay);
+    settingsOverlay.hidden = false;
+    settingsBox.textContent = "";
+    var head = el("h2");
+    head.textContent = "Settings";
+    settingsBox.append(head, el("p", { "class": "mdv-empty" }, "Loading…"));
+    fetch("/__mdv/settings").then(function (r) {
+      if (!r.ok) throw new Error("error " + r.status);
+      return r.json();
+    }).then(buildSettings).catch(function (err) {
+      settingsBox.lastChild.textContent = "Couldn't read the settings: " + err.message;
+    });
+  }
+
+  function buildSettings(info) {
+    settingsBox.textContent = "";
+    var head = el("h2");
+    head.textContent = "Settings";
+    var where = el("p", { "class": "mdv-settings-file" });
+    where.textContent = (info.exists ? "Saved in " : "Will be saved in ") + (info.path || "the settings file");
+    settingsBox.append(head, where);
+    if (info.error) {
+      var bad = el("p", { "class": "mdv-settings-error" });
+      bad.textContent = "The settings file has an error, so it can't be changed here: " + info.error;
+      settingsBox.append(bad);
+      return;
+    }
+    var values = info.values || {};
+    var detected = info.detected || {};
+    var overridden = info.overridden || [];
+    var form = el("div", { "class": "mdv-settings-form" });
+    settingsBox.append(form);
+    SETTINGS.forEach(function (f) {
+      if (f.group) {
+        var g = el("h3");
+        g.textContent = f.group;
+        form.append(g);
+        if (f.note) {
+          var note = el("p", { "class": "mdv-settings-note" });
+          note.textContent = f.note;
+          form.append(note);
+        }
+        return;
+      }
+      form.append(settingRow(f, values[f.key], detected, overridden.indexOf(f.key) !== -1, info.lint_rules || []));
+    });
+  }
+
+  function settingRow(f, value, detected, overridden, rules) {
+    var row = el("div", { "class": "mdv-setting" });
+    var id = "mdv-setting-" + f.key;
+    var label = el("label", { "for": id });
+    label.textContent = f.label;
+    var status = el("span", { "class": "mdv-setting-status", "aria-live": "polite" });
+    var control, read;
+    if (f.type === "select") {
+      control = el("select", { id: id });
+      f.options.forEach(function (o, i) {
+        var opt = el("option", { value: String(i) });
+        opt.textContent = o[1] + (o[0] === f.def ? " (default)" : "");
+        control.append(opt);
+      });
+      var current = value === undefined ? f.def : value;
+      var index = f.options.findIndex(function (o) { return o[0] === current; });
+      control.value = String(Math.max(index, 0));
+      read = function () {
+        var v = f.options[+control.value][0];
+        return v === f.def ? null : v;
+      };
+    } else if (f.type === "bool") {
+      control = el("input", { id: id, type: "checkbox" });
+      control.checked = value === undefined ? f.def : !!value;
+      read = function () { return control.checked === f.def ? null : control.checked; };
+      row.classList.add("mdv-setting-check");
+    } else if (f.type === "rules") {
+      control = el("div", { "class": "mdv-setting-rules", id: id });
+      var skipped = Array.isArray(value) ? value : [];
+      rules.forEach(function (r) {
+        var item = el("label", { title: r[1] });
+        var box = el("input", { type: "checkbox", value: r[0] });
+        box.checked = skipped.indexOf(r[0]) !== -1;
+        var code = el("code");
+        code.textContent = r[0];
+        item.append(box, " ", code);
+        control.append(item);
+      });
+      read = function () {
+        var picked = Array.prototype.filter.call(control.querySelectorAll("input"), function (b) { return b.checked; })
+          .map(function (b) { return b.value; });
+        return picked.length ? picked : null;
+      };
+    } else {
+      control = el("input", { id: id, type: f.type === "number" ? "number" : "text", spellcheck: "false" });
+      if (f.type === "number") { control.min = "1"; control.max = "65535"; }
+      control.value = value === undefined || value === null ? "" : String(value);
+      var hint = f.detected && detected[f.detected] ? detected[f.detected] + " (found)" : f.placeholder;
+      if (hint) control.placeholder = hint;
+      read = function () {
+        var v = control.value.trim();
+        if (!v) return null;
+        return f.type === "number" ? Number(v) : v;
+      };
+    }
+    var saved = read();
+    var save = function () {
+      var next = read();
+      if (JSON.stringify(next) === JSON.stringify(saved)) return;
+      status.className = "mdv-setting-status";
+      status.textContent = "Saving…";
+      fetch("/__mdv/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-MDV": "1" },
+        body: JSON.stringify({ key: f.key, value: next }),
+      }).then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error(t || "error " + r.status); });
+        return r.json();
+      }).then(function (res) {
+        saved = next;
+        status.textContent = overridden ? "Saved (a command-line option wins for now)"
+          : f.key === "open" || f.key === "browser" || f.key === "port" || f.key === "recent" ||
+            f.key === "lint_ignore" || f.key === "exit_when_closed"
+            ? "Saved, for next time" : "Saved";
+        if (f.key === "theme") applyTheme(next || "auto");
+        if (f.key === "word_count") showWordCount(next !== false);
+        if (res.reload) {
+          status.textContent = "Saved, reloading…";
+          setTimeout(function () { location.reload(); }, 300);
+        }
+      }).catch(function (err) {
+        status.className = "mdv-setting-status mdv-settings-error";
+        status.textContent = err.message;
+        restore(saved);
+      });
+    };
+    // Put the control back to what's saved after a refused change.
+    var restore = function (v) {
+      if (f.type === "select") {
+        var current = v === null ? f.def : v;
+        control.value = String(Math.max(f.options.findIndex(function (o) { return o[0] === current; }), 0));
+      } else if (f.type === "bool") {
+        control.checked = v === null ? f.def : v;
+      } else if (f.type === "rules") {
+        control.querySelectorAll("input").forEach(function (b) { b.checked = !!v && v.indexOf(b.value) !== -1; });
+      } else {
+        control.value = v === null ? "" : String(v);
+      }
+    };
+    control.addEventListener("change", save);
+    if (control.tagName === "INPUT" && control.type !== "checkbox") {
+      control.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); save(); }
+        e.stopPropagation();
+      });
+    }
+    var text = el("div", { "class": "mdv-setting-label" });
+    text.append(label);
+    if (f.help || overridden) {
+      var help = el("div", { "class": "mdv-settings-note" });
+      help.textContent = overridden ? "A command-line option sets this for this run." : f.help;
+      text.append(help);
+    }
+    if (f.type === "bool") row.append(control, text, status);
+    else row.append(text, control, status);
+    return row;
+  }
+
+  // The theme setting also switches this page (and is remembered, as with t).
+  function applyTheme(name) {
+    root.setAttribute("data-mdv-theme", name);
+    updateThemeButton();
+    retheme();
+    savePrefs({ theme: name });
+  }
+
+  // ---- Credits (in the help) -----------------------------------------------
+  function creditList(items, extra) {
+    var ul = el("ul", { "class": "mdv-credits" + (extra ? " " + extra : "") });
+    items.forEach(function (c) {
+      var li = el("li");
+      var a = el("a", { href: c.url, target: "_blank", rel: "noopener" });
+      a.textContent = c.name;
+      li.append(a);
+      if (c.version) {
+        var version = el("span", { "class": "mdv-credit-version" });
+        version.textContent = c.version;
+        li.append(" ", version);
+      }
+      if (c.note) li.append(document.createTextNode(" — " + c.note));
+      var lic = el("span", { "class": "mdv-credit-license" });
+      lic.textContent = c.license || "";
+      li.append(lic);
+      ul.append(li);
+    });
+    return ul;
+  }
+  var credits = build.credits || {};
+  if ((build.bundled && build.bundled.length) || (credits.crates && credits.crates.length)) {
+    var creditsHead = el("h2");
+    creditsHead.textContent = "Credits";
+    var thanks = el("p", { "class": "mdv-credits-intro" });
+    thanks.textContent = "markdown-viewer is built on the work of these projects. Thank you!";
+    helpBox.append(creditsHead, thanks);
+    if (build.bundled && build.bundled.length) {
+      var inPages = el("h3");
+      inPages.textContent = "In every page";
+      helpBox.append(inPages, creditList(build.bundled));
+    }
+    if (credits.crates && credits.crates.length) {
+      var builtWith = el("h3");
+      builtWith.textContent = "Built with (Rust crates)";
+      helpBox.append(builtWith, creditList(credits.crates, "mdv-credits-crates"));
+      var others = (credits.total || 0) - credits.crates.length;
+      if (others > 0) {
+        var more = el("p", { "class": "mdv-credits-intro" });
+        more.textContent = "…and " + others + " more crates they use (counting every platform). " +
+          "Their licenses are on crates.io.";
+        helpBox.append(more);
+      }
+    }
+  }
+
+  var localLoaded = false;
+  function loadAboutLocal() {
+    if (!served || localLoaded) return;
+    localLoaded = true;
+    fetch("/__mdv/about").then(function (r) { return r.json(); }).then(function (d) {
+      var row = function (label, value) { aboutRow(label, value, "", aboutLocal); };
+      row("System", d.os && d.arch ? d.os + ", " + d.arch : "");
+      row("Serving", d.root);
+      if (d.settings) row("Settings", d.settings[0] + (d.settings[1] ? "" : " (not created)"));
+      row("State", d.state);
+      row("Editor", d.editor || "none found");
+      row("Custom CSS", d.custom_css);
+      row("Obsidian", d.obsidian ? "on" : "");
+      row("GitHub links", d.github);
+    }).catch(function (err) { localLoaded = false; console.error("markdown-viewer:", err); });
+  }
   var toast = el("div", { "class": "mdv-ui mdv-toast", role: "status" });
   document.body.append(toolbar, sidebar, overlay, toast);
 
@@ -211,7 +582,7 @@
   filesTab.addEventListener("click", function () { openSidebar("files", true); });
   closeBtn.addEventListener("click", closeSidebar);
   themeBtn.addEventListener("click", cycleTheme);
-  helpBtn.addEventListener("click", function () { overlay.hidden = false; });
+  helpBtn.addEventListener("click", function () { overlay.hidden = false; loadAboutLocal(); });
   overlay.addEventListener("click", function (e) { if (e.target === overlay) overlay.hidden = true; });
 
   // Contents: headings h1–h4, indented relative to the top level used.
@@ -440,6 +811,18 @@
   }
   (window.mdvEnhancers = window.mdvEnhancers || []).push(addCopyButtons);
 
+  // ---- Contents ([TOC]) ----------------------------------------------------
+  // Folded parts open for printing, and fold again afterwards.
+  var printOpened = [];
+  window.addEventListener("beforeprint", function () {
+    printOpened = Array.prototype.slice.call(body.querySelectorAll(".mdv-toc details:not([open])"));
+    printOpened.forEach(function (d) { d.open = true; });
+  });
+  window.addEventListener("afterprint", function () {
+    printOpened.forEach(function (d) { d.open = false; });
+    printOpened = [];
+  });
+
   // ---- Sortable tables -----------------------------------------------------
   // Click a header to sort by that column: ascending, descending, then back
   // to the file's order. Sorting is the reader's view, not a change to the
@@ -629,9 +1012,12 @@
       case "G": window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" }); break;
       case "n": jumpHeading(1); break;
       case "p": jumpHeading(-1); break;
-      case "?": overlay.hidden = !overlay.hidden; break;
+      case "?": overlay.hidden = !overlay.hidden; if (!overlay.hidden) loadAboutLocal(); break;
+      case ",": if (!canSettings) return; openSettings(); break;
+      case "w": toggleWordCount(); break;
       case "Escape":
         if (!overlay.hidden) overlay.hidden = true;
+        else if (!settingsOverlay.hidden) settingsOverlay.hidden = true;
         else if (!linksOverlay.hidden) linksOverlay.hidden = true;
         else if (sidebarOpen() && overlaying()) closeSidebar();
         else return;

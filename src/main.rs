@@ -8,6 +8,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use clap::{CommandFactory, Parser};
 
+mod about;
 mod browser;
 mod codeblocks;
 mod config;
@@ -27,6 +28,7 @@ mod pdf;
 mod platform;
 mod recent;
 mod references;
+mod remote;
 mod render;
 mod server;
 mod site;
@@ -39,11 +41,12 @@ use config::{Config, Prefs};
 use render::{FrontMatter, PageOptions, RenderOptions, Renderer, Style, Theme};
 
 /// Render Markdown with GitHub styling and view it in your browser.
-#[derive(Debug, Parser)]
-#[command(name = "markdown-viewer", version, about)]
+#[derive(Debug, Clone, Parser)]
+#[command(name = "markdown-viewer", version, long_version = about::long_version(), about)]
 struct Cli {
     /// Markdown file to render, a folder to browse (default: the current
-    /// folder), or "-" to read standard input. Folders are always served
+    /// folder), a web address (https://…, including GitHub and GitLab file
+    /// and repository pages), or "-" to read standard input. Folders are always served
     /// with live reload.
     file: Option<PathBuf>,
 
@@ -123,10 +126,21 @@ struct Cli {
     #[arg(long, group = "open_as")]
     tab: bool,
 
-    /// With --watch: exit once the page has been closed (used by the Finder
-    /// integration, where there's no terminal to press Ctrl-C in).
-    #[arg(long)]
+    /// With --watch: exit once the page has been closed, even with
+    /// --no-open (used by the Finder integration). Without --no-open, this
+    /// is the default.
+    #[arg(long, conflicts_with = "keep_running")]
     exit_when_closed: bool,
+
+    /// With --watch: keep serving after the window is closed (until
+    /// Ctrl-C).
+    #[arg(long)]
+    keep_running: bool,
+
+    /// Internal: this is the background viewer started for a page opened
+    /// without --watch (see `launch_in_background`).
+    #[arg(long, hide = true)]
+    background: bool,
 
     /// macOS: add "Markdown Viewer" to Finder (Open With, double-click and a
     /// right-click Quick Action) for the current user.
@@ -215,6 +229,11 @@ struct Settings {
     theme_flag: Option<Theme>,
     config_theme: Option<Theme>,
     number_headings: bool,
+    /// Show the word count in the toolbar, unless the viewer remembers
+    /// otherwise.
+    word_count: bool,
+    /// Stop serving when the window we opened closes.
+    exit_when_closed: bool,
     line_numbers: bool,
     front_matter: FrontMatter,
     /// `None`: decide by whether the file is in an Obsidian vault.
@@ -264,6 +283,8 @@ impl Settings {
             theme_flag: cli.theme,
             config_theme: config.theme,
             number_headings: cli.number_headings || config.number_headings.unwrap_or(false),
+            word_count: config.word_count.unwrap_or(true),
+            exit_when_closed: config.exit_when_closed.unwrap_or(true),
             line_numbers: cli.line_numbers || config.line_numbers.unwrap_or(false),
             front_matter: cli.front_matter.or(config.front_matter).unwrap_or_default(),
             obsidian,
@@ -314,6 +335,7 @@ impl Settings {
             custom_css: self.css.clone(),
             fixed_theme: self.theme_flag.is_some(),
             number_headings: self.number_headings,
+            hide_word_count: !self.word_count,
             ..Default::default()
         }
     }
@@ -330,6 +352,20 @@ enum Source {
         text: String,
         root: PathBuf,
     },
+    /// Markdown from the web, served from an empty folder of its own.
+    Url {
+        remote: Box<remote::Remote>,
+        text: String,
+        root: PathBuf,
+    },
+}
+
+/// An empty folder to serve web documents from, so nothing on disk is
+/// reachable from their pages.
+fn web_root() -> Result<PathBuf> {
+    let dir = std::env::temp_dir().join("markdown-viewer-web");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir.canonical()?)
 }
 
 fn run(cli: Cli) -> Result<()> {
@@ -418,6 +454,15 @@ fn run(cli: Cli) -> Result<()> {
                     root: cwd.clone(),
                 }
             }
+            Some(p) if remote::is_url(&p.to_string_lossy()) => {
+                let remote = Box::new(remote::Remote::new(&p.to_string_lossy())?);
+                let text = remote.fetch()?;
+                Source::Url {
+                    remote,
+                    text,
+                    root: web_root()?,
+                }
+            }
             Some(p) => {
                 let path = p
                     .canonical()
@@ -467,9 +512,15 @@ fn run(cli: Cli) -> Result<()> {
             server::file_title(path),
         ),
         Source::Text { name, text, root } => (text.clone(), root.clone(), name.to_string()),
+        Source::Url { remote, text, root } => (text.clone(), root.clone(), remote.title()),
     };
-    if !watch && (cli.exit_when_closed || cli.port.is_some()) {
-        bail!("--port and --exit-when-closed need --watch");
+    // Without --watch, a page is served in the background (which always
+    // stops when its window closes), or with --no-open written to a file.
+    if !watch && (cli.exit_when_closed || cli.keep_running) {
+        bail!("--exit-when-closed and --keep-running need --watch");
+    }
+    if !watch && cli.no_open && cli.port.is_some() {
+        bail!("--port needs --watch, or a page to open");
     }
 
     let (renderer, mut body) = render_standalone(&settings, &markdown, &dir);
@@ -477,6 +528,9 @@ fn run(cli: Cli) -> Result<()> {
         && let Some(delim) = tables::delimiter(path)
     {
         body = tables::to_html(&markdown, delim);
+    }
+    if let Source::Url { remote, .. } = &source {
+        body = remote::absolutize(&body, remote);
     }
 
     if let Some(output) = &cli.output {
@@ -506,12 +560,28 @@ fn run(cli: Cli) -> Result<()> {
         return serve(&cli, &settings, &source, goto.map(|(_, line)| line));
     }
 
-    // One-shot: write a self-contained page to the temp dir and open it.
+    // Opening a page: a viewer serves it in the background (so it has
+    // everything a served page has: settings, live reload…) and stops when
+    // the window is closed. We return once it's serving.
+    if !cli.no_open && !cli.background {
+        let stdin_text = match &source {
+            Source::Text {
+                name: "stdin",
+                text,
+                ..
+            } => Some(text.as_str()),
+            _ => None,
+        };
+        return launch_in_background(stdin_text);
+    }
+
+    // --no-open: write a self-contained page to the temp dir.
     let prefs = Prefs::load();
     let page = PageOptions {
         base_href: Some(dir_url(&dir)),
         ui: true,
         sidebar: prefs.sidebar.clone(),
+        hide_word_count: !prefs.word_count.unwrap_or(settings.word_count),
         ..settings.page(title.clone(), settings.viewing_theme(&prefs))
     };
     let key = match &source {
@@ -539,6 +609,8 @@ fn docs_command() -> clap::Command {
     Cli::command()
         .mut_arg("install_finder", |a| a.hide(false))
         .mut_arg("uninstall_finder", |a| a.hide(false))
+        // The man page shouldn't change with every commit.
+        .long_version(None::<&str>)
         .mut_arg("install_desktop", |a| a.hide(false))
         .mut_arg("uninstall_desktop", |a| a.hide(false))
 }
@@ -724,6 +796,12 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
         Source::Text { name, root, .. } => {
             (root.clone(), Some(root.join(format!("({name})"))), None)
         }
+        // A second launch for the same address reuses this viewer.
+        Source::Url { remote, root, .. } => (
+            root.clone(),
+            Some(root.join(format!("({})", remote.title()))),
+            Some(PathBuf::from(&remote.url)),
+        ),
     };
 
     // Already being served? Reuse that viewer (and bring its window
@@ -743,29 +821,50 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
         .build()?;
     rt.block_on(async move {
         let renderer = Arc::new(Renderer::with_options(settings.render_options(true, &root)));
-        let docs = docs::Docs::new(root.clone(), renderer.clone())?;
+        let docs = docs::Docs::new(root.clone(), renderer)?;
         if let (Source::Text { text, .. }, Some(key)) = (source, &main) {
             docs.add_virtual(key, docs.render_text(text, &root));
-            if cli.clipboard && cli.watch {
+            if cli.clipboard && cli.watch && !cli.background {
                 follow_clipboard(docs.clone(), key.clone(), root.clone(), text.clone());
             }
+        }
+        if let (Source::Url { remote, text, .. }, Some(key)) = (source, &main) {
+            docs.add_virtual(
+                key,
+                remote::absolutize(&docs.render_text(text, &root), remote),
+            );
+            follow_url(
+                docs.clone(),
+                key.clone(),
+                root.clone(),
+                (**remote).clone(),
+                text.clone(),
+            );
         }
         let saved = Prefs::load();
         let prefs = Prefs {
             theme: Some(settings.viewing_theme(&saved)),
             ..saved
         };
-        let page = PageOptions {
-            served: true,
-            live: true,
-            ui: true,
-            custom_css: None,
-            ..settings.page(String::new(), Theme::Auto)
+        let page = served_page(settings);
+        // The settings dialog: a changed settings file, merged with this
+        // run's command-line options exactly as at startup.
+        let reconfigure: server::Reconfigure = {
+            let cli = cli.clone();
+            let root = root.clone();
+            Arc::new(move |config: &Config| {
+                let settings = Settings::new(&cli, config.clone())?;
+                Ok(server::Reconfigured {
+                    render: settings.render_options(true, &root),
+                    page: served_page(&settings),
+                    custom_css: settings.css_path.clone(),
+                    editor: settings.editor.clone(),
+                })
+            })
         };
         let server = server::Server::bind(server::ServeOptions {
             port: settings.port,
             docs,
-            renderer,
             main: main.clone(),
             page,
             custom_css: settings.css_path.clone(),
@@ -776,6 +875,8 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
                 .as_ref()
                 .map(|p| p.to_string_lossy().into_owned())
                 .unwrap_or_default(),
+            reconfigure: Some(reconfigure),
+            overridden: overridden_settings(cli),
         })
         .await?;
         let url = server.url();
@@ -789,13 +890,21 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
         let handle = server.handle();
         let shown = match source {
             Source::Text { name, .. } => name.to_string(),
+            Source::Url { remote, .. } => remote.url.clone(),
             _ => identity
                 .as_ref()
                 .map(|p| p.display().to_string())
                 .unwrap_or_default(),
         };
         say(&format!("Serving {shown} at {url}"));
-        say("Watching for changes. Press Ctrl-C to stop.");
+        let exit = exit_policy(cli, settings);
+        say(match exit {
+            Exit::Never => "Watching for changes. Press Ctrl-C to stop.",
+            _ if cli.no_open => {
+                "Watching for changes. Stops when the page is closed, or press Ctrl-C."
+            }
+            _ => "Watching for changes. Stops when the window is closed, or press Ctrl-C.",
+        });
         let mut server = tokio::spawn(server.run());
         if !cli.no_open {
             // Set before opening: the browser may load the page before
@@ -808,15 +917,16 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
             let opened = browser::open(&page_url, settings.browser.as_deref(), settings.open)?;
             handle.set_close_on_exit(opened == browser::Opened::Window);
         }
-        // With --exit-when-closed, stop once the page has been closed for a
-        // few seconds (long enough to survive a reload).
+        // Stop once the page has been closed for a few seconds (long enough
+        // to survive a reload, or moving to another file in a folder).
         let abandoned = async {
-            if cli.exit_when_closed {
-                handle
-                    .abandoned(Duration::from_secs(5), Duration::from_secs(60))
-                    .await;
-            } else {
-                std::future::pending::<()>().await;
+            match exit {
+                Exit::Never => std::future::pending::<()>().await,
+                Exit::WhenClosed { first_connect } => {
+                    handle
+                        .abandoned(Duration::from_secs(5), first_connect)
+                        .await
+                }
             }
         };
         tokio::select! {
@@ -835,6 +945,131 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
     })
 }
 
+/// Run this command again as a detached background viewer
+/// (`--watch --exit-when-closed`), relay the first line it prints (where
+/// it's serving), and return. Standard input, if it was the source, is
+/// passed on. The viewer's later output goes to `viewer.log` next to the
+/// state file, where its errors are read from if it fails to start.
+fn launch_in_background(stdin_text: Option<&str>) -> Result<()> {
+    use std::io::{BufRead as _, Seek as _};
+    let exe = std::env::current_exe().context("cannot find this program's path")?;
+    let mut args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    args.extend(["--watch", "--exit-when-closed", "--background"].map(Into::into));
+
+    let log_path = config::state_path()
+        .and_then(|p| p.parent().map(|d| d.join("viewer.log")))
+        .unwrap_or_else(|| std::env::temp_dir().join("markdown-viewer.log"));
+    if let Some(dir) = log_path.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let mut log = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+        .with_context(|| format!("cannot write {}", log_path.display()))?;
+    let start = log.seek(std::io::SeekFrom::End(0))?;
+
+    let mut cmd = std::process::Command::new(exe);
+    cmd.args(&args)
+        .stdin(if stdin_text.is_some() {
+            std::process::Stdio::piped()
+        } else {
+            std::process::Stdio::null()
+        })
+        .stdout(std::process::Stdio::piped())
+        .stderr(log);
+    platform::detach(&mut cmd);
+    let mut child = cmd.spawn().context("cannot start the viewer")?;
+    if let (Some(text), Some(mut stdin)) = (stdin_text, child.stdin.take()) {
+        stdin.write_all(text.as_bytes())?;
+    }
+    let mut first = String::new();
+    if let Some(out) = child.stdout.take() {
+        std::io::BufReader::new(out).read_line(&mut first)?;
+    }
+    if !first.trim().is_empty() {
+        say(first.trim_end());
+        return Ok(());
+    }
+    // It stopped before serving: show why.
+    let status = child.wait()?;
+    let mut text = String::new();
+    if let Ok(mut f) = std::fs::File::open(&log_path) {
+        let _ = f.seek(std::io::SeekFrom::Start(start));
+        let _ = std::io::Read::read_to_string(&mut f, &mut text);
+    }
+    let why = text
+        .trim()
+        .trim_start_matches("markdown-viewer: ")
+        .to_string();
+    if why.is_empty() {
+        bail!("the viewer stopped ({status})");
+    }
+    bail!("{why}")
+}
+
+/// When watch mode stops by itself.
+#[derive(Debug, PartialEq)]
+enum Exit {
+    /// Only on Ctrl-C.
+    Never,
+    /// Once every page has been closed. `first_connect`: also give up if
+    /// no page connects in that time.
+    WhenClosed { first_connect: Option<Duration> },
+}
+
+/// By default, a viewer that opened its own window stops when it closes
+/// (but waits however long the browser takes to connect, so a page opened
+/// by hand later still works). `--exit-when-closed` also applies with
+/// `--no-open`, and gives up after a minute with no page. `--keep-running`
+/// or `exit_when_closed = false` keeps serving until Ctrl-C.
+fn exit_policy(cli: &Cli, settings: &Settings) -> Exit {
+    if cli.exit_when_closed {
+        Exit::WhenClosed {
+            first_connect: Some(Duration::from_secs(60)),
+        }
+    } else if cli.no_open || cli.keep_running || !settings.exit_when_closed {
+        Exit::Never
+    } else {
+        Exit::WhenClosed {
+            first_connect: None,
+        }
+    }
+}
+
+/// The template for served pages.
+fn served_page(settings: &Settings) -> PageOptions {
+    PageOptions {
+        served: true,
+        live: true,
+        ui: true,
+        custom_css: None,
+        ..settings.page(String::new(), Theme::Auto)
+    }
+}
+
+/// Settings-file keys that this run's command-line options override.
+fn overridden_settings(cli: &Cli) -> Vec<String> {
+    [
+        ("theme", cli.theme.is_some()),
+        ("style", cli.style.is_some()),
+        ("css", cli.css.is_some()),
+        ("open", cli.app || cli.window || cli.tab),
+        ("browser", cli.browser.is_some()),
+        ("port", cli.port.is_some()),
+        ("editor", cli.editor.is_some()),
+        ("front_matter", cli.front_matter.is_some()),
+        ("number_headings", cli.number_headings),
+        ("line_numbers", cli.line_numbers),
+        ("obsidian", cli.obsidian || cli.no_obsidian),
+        ("exit_when_closed", cli.exit_when_closed || cli.keep_running),
+    ]
+    .into_iter()
+    .filter(|(_, set)| *set)
+    .map(|(key, _)| key.to_string())
+    .collect()
+}
+
 /// Poll the clipboard and update the page when its text changes.
 fn follow_clipboard(docs: Arc<docs::Docs>, key: PathBuf, root: PathBuf, mut last: String) {
     tokio::spawn(async move {
@@ -845,6 +1080,31 @@ fn follow_clipboard(docs: Arc<docs::Docs>, key: PathBuf, root: PathBuf, mut last
             };
             if text != last && !text.trim().is_empty() {
                 let html = docs.render_text(&text, &root);
+                docs.set_virtual(&key, html);
+                last = text;
+            }
+        }
+    });
+}
+
+/// Fetch a web document again every few seconds, and update the page
+/// when it changes (live reload for addresses).
+fn follow_url(
+    docs: Arc<docs::Docs>,
+    key: PathBuf,
+    root: PathBuf,
+    remote: remote::Remote,
+    mut last: String,
+) {
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            let fetch = remote.clone();
+            let Ok(Ok(text)) = tokio::task::spawn_blocking(move || fetch.fetch()).await else {
+                continue;
+            };
+            if text != last {
+                let html = remote::absolutize(&docs.render_text(&text, &root), &remote);
                 docs.set_virtual(&key, html);
                 last = text;
             }
@@ -933,6 +1193,42 @@ fn dir_url(dir: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn watch_mode_stops_when_its_window_closes() {
+        let policy = |args: &[&str], config: &str| {
+            let cli = Cli::parse_from([&["markdown-viewer", "--watch"], args].concat());
+            let settings = Settings::new(&cli, Config::parse(config).unwrap()).unwrap();
+            exit_policy(&cli, &settings)
+        };
+        let closes = Exit::WhenClosed {
+            first_connect: None,
+        };
+        // Default: we opened the window, so its closing ends the run.
+        assert_eq!(policy(&[], ""), closes);
+        // Nothing opened (or asked to stay): Ctrl-C only.
+        assert_eq!(policy(&["--no-open"], ""), Exit::Never);
+        assert_eq!(policy(&["--keep-running"], ""), Exit::Never);
+        assert_eq!(policy(&[], "exit_when_closed = false"), Exit::Never);
+        // --exit-when-closed: even without opening, and gives up after a minute.
+        let strict = Exit::WhenClosed {
+            first_connect: Some(Duration::from_secs(60)),
+        };
+        assert_eq!(policy(&["--no-open", "--exit-when-closed"], ""), strict);
+        assert_eq!(
+            policy(&["--exit-when-closed"], "exit_when_closed = false"),
+            strict
+        );
+        assert!(
+            Cli::try_parse_from([
+                "markdown-viewer",
+                "--watch",
+                "--keep-running",
+                "--exit-when-closed"
+            ])
+            .is_err()
+        );
+    }
 
     #[test]
     fn file_url_encodes_and_ends_with_slash() {
