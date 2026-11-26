@@ -19,7 +19,12 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   override their paths; the tests always set both.
 - `src/theme.rs`: page CSS for all themes at once, switched by
   `<html data-mdv-theme>` (it splits GitHub's stylesheet into shared rules
-  and per-scheme variables), the print layout, and `--style` CSS.
+  and per-scheme variables), the print layout, and `--style` CSS. Theme
+  selectors are wrapped in `:where()` so `--css` stylesheets can override
+  the variables with plain `.markdown-body` rules; keep it that way (a
+  browser test checks `examples/custom.css`).
+- `docs/custom-css.md`: the guide to `--css`. Update its class and variable
+  tables when page markup or styles change.
 - `src/github.rs`: post-processing to match GitHub's HTML: alert icons and
   heading link icons.
 - `src/docs.rs`: `Docs`, every document being viewed (Markdown files and

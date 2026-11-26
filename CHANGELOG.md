@@ -6,6 +6,17 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- [Writing custom CSS](docs/custom-css.md), a guide to `--css`, and an
+  example theme, `examples/custom.css`.
+
+### Fixed
+
+- Custom CSS can override the theme's colour variables (for example
+  `.markdown-body { --fgColor-accent: … }`); before, the built-in theme
+  rules won.
+
 ## [0.7.0] - 2026-11-26
 
 ### Added

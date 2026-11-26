@@ -27,7 +27,9 @@ markdown-viewer --watch examples/example.md
 - GitHub's look, in light, dark, or following your OS setting. Switch any
   time with <kbd>t</kbd>.
 - Built-in styles: `github` (default), `wide` (full window width), `book`
-  (serif type, for long reading) and `compact`. Add your own CSS with `--css`.
+  (serif type, for long reading) and `compact`. Add your own CSS with `--css`:
+  change fonts, colours (for light and dark) and the printed page (see
+  [Custom CSS](#custom-css)).
 - GitHub Flavored Markdown:
   - Headings with link anchors (hover a heading for its link icon).
   - Bold, italic and strikethrough.
@@ -382,6 +384,25 @@ and quits by itself when you close its window. Output goes to
 The app runs the `markdown-viewer` you installed it from. For Homebrew that's
 the stable `bin` link, so upgrades keep working. Remove it with
 `markdown-viewer --uninstall-finder`.
+
+### Custom CSS
+
+```sh
+markdown-viewer --css examples/custom.css README.md
+```
+
+A stylesheet given with `--css` (or `css = "…"` in the settings file) goes
+after the built-in styles, in the viewer, exports, static sites and PDFs.
+Colours are GitHub's CSS variables, so one line changes them everywhere:
+
+```css
+.markdown-body { --fgColor-accent: #9a4a12; }   /* links */
+```
+
+[Writing custom CSS](docs/custom-css.md) explains the page's structure, the
+variables, light and dark colours, print styles and limits, with recipes.
+[`examples/custom.css`](examples/custom.css) is a complete theme to start
+from.
 
 ### Linux desktop integration
 
