@@ -1,0 +1,62 @@
+/* A warm, book-like reading theme for markdown-viewer, with a dark
+   variant. Try it:  markdown-viewer --css examples/custom.css README.md
+   See docs/custom-css.md for how it works. */
+
+/* Light (and the default): GitHub's colour variables, overridden. */
+.markdown-body {
+  --bgColor-default: #f8f1e3;
+  --bgColor-muted: #efe5cf;
+  --fgColor-default: #433422;
+  --fgColor-muted: #7a6a55;
+  --fgColor-accent: #9a4a12;
+  --borderColor-default: #dccfb4;
+  --borderColor-muted: #e6dbc4;
+
+  max-width: 760px;
+  font-family: Charter, "Iowan Old Style", Georgia, serif;
+  font-size: 18px;
+  line-height: 1.7;
+}
+html { background: #f8f1e3; }
+
+/* Dark: when dark is chosen, and when the theme is auto and the system is
+   dark. */
+:root[data-mdv-theme="dark"],
+:root[data-mdv-theme="dark"] .markdown-body {
+  --bgColor-default: #1f1a14;
+  --bgColor-muted: #2a231b;
+  --fgColor-default: #e6dccb;
+  --fgColor-muted: #a8997f;
+  --fgColor-accent: #e0955c;
+  --borderColor-default: #4a3f31;
+  --borderColor-muted: #3a3127;
+  background: #1f1a14;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-mdv-theme="auto"],
+  :root[data-mdv-theme="auto"] .markdown-body {
+    --bgColor-default: #1f1a14;
+    --bgColor-muted: #2a231b;
+    --fgColor-default: #e6dccb;
+    --fgColor-muted: #a8997f;
+    --fgColor-accent: #e0955c;
+    --borderColor-default: #4a3f31;
+    --borderColor-muted: #3a3127;
+    background: #1f1a14;
+  }
+}
+
+/* Headings without GitHub's rules under them. */
+.markdown-body h1,
+.markdown-body h2 { border-bottom: none; padding-bottom: 0; }
+
+/* Code keeps the monospace font, a little smaller. */
+.markdown-body pre,
+.markdown-body code { font-size: 85%; }
+
+/* Printing and PDFs: smaller type, and each top-level section on a new
+   page. (PDFs always use the light colours.) */
+@media print {
+  .markdown-body { font-size: 11pt; }
+  .markdown-body h2 { break-before: page; }
+}

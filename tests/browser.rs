@@ -804,3 +804,23 @@ fn tables_sort_and_stay_sorted_across_edits() {
         "a third click restores the file's order"
     );
 }
+
+#[test]
+fn custom_css_overrides_theme_colours() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Title\n\nA [link](x.md).\n").unwrap();
+    let css = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/custom.css");
+    let server = serve(&md, &["--css", css.to_str().unwrap(), "--theme", "light"]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    let colours = "return [getComputedStyle(document.querySelector('.markdown-body p a')).color, \
+                   getComputedStyle(document.documentElement).backgroundColor].join(' ');";
+    // Plain `.markdown-body { --var }` rules beat the built-in theme.
+    assert_eq!(js(&tab, colours), "rgb(154, 74, 18) rgb(248, 241, 227)");
+    js(
+        &tab,
+        "document.documentElement.dataset.mdvTheme = 'dark'; return null;",
+    );
+    assert_eq!(js(&tab, colours), "rgb(224, 149, 92) rgb(31, 26, 20)");
+}

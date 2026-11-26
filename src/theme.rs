@@ -105,7 +105,7 @@ fn build_base_css() -> String {
     css.push_str(&numbering_css());
     // Print (and PDF) always in light colours, whatever the screen theme.
     css.push_str("@media print {\n");
-    css.push_str(&scope_rules(&light, ":root[data-mdv-theme]"));
+    css.push_str(&scope_rules(&light, ":where(:root[data-mdv-theme])"));
     css.push_str(PRINT);
     css.push_str("}\n");
     css
@@ -219,10 +219,14 @@ const PRINT: &str = "@page { margin: 16mm 14mm; }\n\
 
 /// Scope two rule sets to the page's theme attribute, with `auto`
 /// following the OS.
+///
+/// The theme selector is wrapped in `:where()`, which adds nothing to a
+/// rule's specificity: `--css` stylesheets come last, so a plain
+/// `.markdown-body { --fgColor-accent: … }` there overrides the theme.
 fn themed(light: &str, dark: &str) -> String {
-    let light_root = ":root[data-mdv-theme=\"light\"]";
-    let dark_root = ":root[data-mdv-theme=\"dark\"]";
-    let auto_root = ":root[data-mdv-theme=\"auto\"]";
+    let light_root = ":where(:root[data-mdv-theme=\"light\"])";
+    let dark_root = ":where(:root[data-mdv-theme=\"dark\"])";
+    let auto_root = ":where(:root[data-mdv-theme=\"auto\"])";
     format!(
         "{}{}@media (prefers-color-scheme: light) {{\n{}}}\n@media (prefers-color-scheme: dark) {{\n{}}}\n",
         scope_rules(light, light_root),
@@ -362,14 +366,14 @@ mod tests {
     fn every_theme_is_switchable_at_runtime() {
         let css = base_css();
         for root in [
-            ":root[data-mdv-theme=\"light\"],\n:root[data-mdv-theme=\"light\"] .markdown-body",
-            ":root[data-mdv-theme=\"dark\"] .markdown-body",
-            ":root[data-mdv-theme=\"auto\"] .markdown-body",
-            ":root[data-mdv-theme=\"dark\"] .hl-",
+            ":where(:root[data-mdv-theme=\"light\"]),\n:where(:root[data-mdv-theme=\"light\"]) .markdown-body",
+            ":where(:root[data-mdv-theme=\"dark\"]) .markdown-body",
+            ":where(:root[data-mdv-theme=\"auto\"]) .markdown-body",
+            ":where(:root[data-mdv-theme=\"dark\"]) .hl-",
         ] {
             assert!(css.contains(root), "missing {root}");
         }
-        assert!(css.contains(":root[data-mdv-theme=\"dark\"] { background: #0d1117; }"));
+        assert!(css.contains(":where(:root[data-mdv-theme=\"dark\"]) { background: #0d1117; }"));
         assert!(css.contains("img[src$=\"#gh-dark-mode-only\"] { display: none; }"));
     }
 
