@@ -31,7 +31,9 @@ markdown-viewer --watch examples/example.md
 - GitHub Flavored Markdown:
   - Headings with link anchors (hover a heading for its link icon).
   - Bold, italic and strikethrough.
-  - Tables with column alignment.
+  - Tables with column alignment. In the viewer, click a column header to
+    sort by it (numbers as numbers); click again to reverse, and a third
+    time for the file's order.
   - Task lists. When watching, tick a box to update the file: the `[ ]`
     in the Markdown becomes `[x]`.
   - Autolinked URLs and email addresses.
@@ -75,6 +77,15 @@ markdown-viewer --watch examples/example.md
   - Callouts (`> [!tip] Title`), including folded ones (`> [!faq]-`).
   - `==highlights==`, with `%%comments%%` hidden.
 
+- CSV and TSV files are shown as tables, as on GitHub: open one directly,
+  or from a folder listing. Columns of numbers are right-aligned, and
+  columns sort like any table.
+- GitHub references, as GitHub links them: `#123` and `GH-123` (issues and
+  pull requests), `owner/repo#123`, `@user` and commit hashes. The
+  repository comes from the folder's git remote (GitHub or GitHub
+  Enterprise), or the `github_repo` setting. Text in code and links is left
+  alone.
+
 **Viewing**
 
 - Opens as a minimal app window (no tabs or address bar), a new window, or a
@@ -97,6 +108,9 @@ markdown-viewer --watch examples/example.md
   `markdown-viewer --goto file.md:42` scrolls the preview to a line; the
   [Zed and VS Code integrations](editors/) use it to follow your cursor.
 - Reopening a file takes you back to where you were reading.
+- Recent files: `markdown-viewer --recent`, or `markdown-viewer` with no
+  arguments in your home folder, lists the files and folders you opened
+  lately, newest first, each a click away.
 - Opening a file that's already being viewed brings its window to the front
   instead of opening another.
 - Click an image or diagram to zoom; scroll to zoom further and drag to pan.
@@ -143,6 +157,13 @@ markdown-viewer --watch examples/example.md
 - An "Open in Markdown Viewer" Quick Action in Finder's right-click menu.
 - Each file opens in its own live-reloading window, and the viewer exits
   when you close the window.
+
+**Linux desktops**
+
+- A "Markdown Viewer" application for Markdown, CSV and TSV files: Open With
+  in your file manager, or the default if you choose. The `.deb`, `.rpm` and
+  AUR packages include it; otherwise `--install-desktop` adds it (see
+  [Linux desktop integration](#linux-desktop-integration)).
 
 **Offline and safe**
 
@@ -194,6 +215,9 @@ markdown-viewer docs/                    # browse a folder (live)
 git show HEAD~1:README.md | markdown-viewer -   # preview standard input
 markdown-viewer --clipboard --watch      # follow the clipboard as it changes
 markdown-viewer --check-links docs/      # report broken links (exit status 1)
+markdown-viewer --lint docs/             # report writing problems (exit status 1)
+markdown-viewer data.csv                 # a CSV or TSV file as a table
+markdown-viewer --recent                 # files and folders you opened lately
 markdown-viewer --goto README.md:42      # scroll a running preview to line 42
 ```
 
@@ -221,13 +245,18 @@ markdown-viewer --goto README.md:42      # scroll a running preview to line 42
 | `--if-running` | With `--goto`: do nothing if no viewer is showing the file |
 | `--check-links` | Check the links in a file or folder and report broken ones |
 | `--online` | With `--check-links`: also check web links (needs `curl`) |
+| `--lint` | Report writing problems in a file or folder (see [Linting](#linting)) |
+| `--recent` | Show the files and folders you opened recently |
 | `--exit-when-closed` | With `--watch`: exit once the page has been closed for 5 seconds |
 | `--install-finder` | macOS: add the Finder integration for your user |
 | `--uninstall-finder` | macOS: remove the Finder integration |
+| `--install-desktop` | Linux: add the desktop integration for your user |
+| `--uninstall-desktop` | Linux: remove the desktop integration |
 
 Without `--watch`, the page is written to your temp directory and opened; no
 server keeps running. Giving a folder (or nothing) always serves it with live
-reload.
+reload, except that with nothing in your home folder you get the Recent
+page instead of all of your home folder.
 
 ### In the viewer
 
@@ -295,6 +324,10 @@ front_matter = "table"  # table or hide
 number_headings = true
 line_numbers = true     # number every code block
 obsidian = false        # default: on inside an Obsidian vault
+github_references = false   # default: on in a checkout with a GitHub remote
+github_repo = "owner/repo"  # if it isn't found from the git remote
+lint_ignore = ["multiple-h1", "duplicate-heading"]   # --lint rules to skip
+recent = false          # don't remember opened files for the Recent page
 ```
 
 Unknown keys are reported as errors, so typos don't go unnoticed. Set
@@ -350,6 +383,29 @@ The app runs the `markdown-viewer` you installed it from. For Homebrew that's
 the stable `bin` link, so upgrades keep working. Remove it with
 `markdown-viewer --uninstall-finder`.
 
+### Linux desktop integration
+
+The `.deb`, `.rpm` and AUR packages install a "Markdown Viewer" application
+for everyone. Otherwise (Homebrew, a tarball or `cargo install`), add it
+for your user:
+
+```sh
+markdown-viewer --install-desktop
+```
+
+This writes `~/.local/share/applications/markdown-viewer.desktop` and its
+icon. Markdown, CSV and TSV files then offer Markdown Viewer under **Open
+With** in your file manager. To open Markdown files with it by default:
+
+```sh
+xdg-mime default markdown-viewer.desktop text/markdown
+```
+
+Each file opens with `--watch --exit-when-closed`, so it updates as you edit
+and quits by itself when you close its window. The entry runs the
+`markdown-viewer` you installed it from (for Homebrew, the stable `bin`
+link). Remove it with `markdown-viewer --uninstall-desktop`.
+
 ### Checking links
 
 ```sh
@@ -363,6 +419,28 @@ status 1 if there are any, so it works in CI. It checks relative files and
 images, `#anchors` (in the same file or another one), and wiki links in an
 Obsidian vault. Web links are only checked with `--online`, which uses
 `curl`.
+
+### Linting
+
+```sh
+markdown-viewer --lint README.md                 # one file
+markdown-viewer --lint docs/                     # every Markdown file in a folder
+markdown-viewer --lint --check-links docs/       # both at once
+```
+
+Like `--check-links`, it reports `file:line: problem (rule)` and exits with
+status 1 if there are any. The rules:
+
+| Rule | Checks that |
+| --- | --- |
+| `heading-increment` | heading levels go down one at a time (no `#` then `###`) |
+| `multiple-h1` | there's one top-level (`#`) heading |
+| `duplicate-heading` | no two headings under the same heading have the same text (the second's link would end in `-1`) |
+| `image-alt` | images have alt text, for screen readers |
+| `empty-link` | links have text and a target |
+| `code-language` | fenced code blocks say their language, for highlighting |
+
+Skip rules with `lint_ignore` in the [settings file](#settings-file).
 
 ### Editors
 
@@ -497,6 +575,12 @@ Releases are built by GitHub Actions when a `v*` tag is pushed; see
 - **Static sites:** `-o DIR` only writes into an empty folder or one an
   earlier export wrote, and only copies files inside the exported folder
   that a page links to.
+- **Recent files:** the list stays on your computer, in the state file
+  next to your reading positions. The Recent page is served from your home
+  folder, the same as browsing it would be. Set `recent = false` to stop
+  recording.
+- **GitHub references:** only change links on the page; nothing is fetched
+  from GitHub.
 - **PDF export:** runs the browser headless with a throwaway profile, so it
   never touches your own browser profile.
 

@@ -6,6 +6,26 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- CSV and TSV files are shown as tables.
+- Click a table's column header to sort by it.
+- GitHub references (`#123`, `GH-123`, `owner/repo#123`, `@user`, commit
+  hashes) link to the repository found from the git remote, or set with
+  `github_repo`; `github_references = false` turns them off.
+- `--lint` reports writing problems (skipped heading levels, several
+  top-level headings, duplicate headings, images without alt text, empty
+  links, code fences without a language); `lint_ignore` skips rules.
+- Linux desktop integration: `--install-desktop` adds a "Markdown Viewer"
+  application for Open With; the `.deb`, `.rpm` and AUR packages include it.
+- Recent files: `--recent`, or no arguments in your home folder, lists the
+  files and folders you opened lately (`recent = false` turns it off).
+
+### Changed
+
+- Running `markdown-viewer` with no arguments in your home folder shows the
+  Recent page instead of browsing the whole home folder.
+
 ## [0.6.0] - 2026-11-25
 
 ### Added

@@ -34,6 +34,24 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   `.mdv-line` spans, closing and reopening spans across line breaks.
 - `src/toc.rs`: `[TOC]` / `<!-- TOC [maxN] -->` markers.
 - `src/gitdiff.rs`: lines changed since `HEAD`, via `git diff -U0`.
+- `src/tables.rs`: CSV and TSV files as HTML tables (`docs::is_viewable`
+  is Markdown or these; `markdown_files` stays Markdown-only for search,
+  links and wiki links, `document_files` adds them for the file list and
+  sites).
+- `src/references.rs`: GitHub references (`#123`, `@user`, commits),
+  linked in rendered HTML outside links, code and math. The repository
+  comes from the git remote (`RenderOptions::github`).
+- `src/lint.rs`: `--lint` rules (`RULES`), run on HTML rendered with source
+  positions; shares `check()` in main.rs with `--check-links`.
+- `src/desktop.rs`: `--install-desktop` (freedesktop entry and icon in
+  `$XDG_DATA_HOME`). `packaging/linux/markdown-viewer.desktop` is the
+  packaged copy; a test keeps it equal to `desktop::entry`.
+- `src/recent.rs`: recently opened files (`Prefs::recent`, recorded on
+  launch, never changed by pages) and the Recent page, a virtual document
+  served from the home folder.
+- Sortable tables live in `ui.js`; like callout folds, `live.js` asks it to
+  restore the file's row order before an update (`mdvSort.save`) and
+  re-sorts after, so source positions stay right.
 - `src/tasks.rs`: ticking task boxes (`POST /__mdv/task`): changes the
   `[ ]` at the item's source position, only if it is still a task item in
   the state the page showed.
