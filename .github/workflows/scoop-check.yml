@@ -1,0 +1,26 @@
+name: Scoop check
+
+# Install markdown-viewer from the published bucket on Windows, as a user
+# would. Run by hand (Actions > Scoop check > Run workflow) after a release.
+on:
+  workflow_dispatch:
+
+jobs:
+  install:
+    runs-on: windows-latest
+    steps:
+      - name: Install Scoop
+        shell: pwsh
+        run: |
+          Invoke-RestMethod -Uri https://get.scoop.sh -OutFile install-scoop.ps1
+          ./install-scoop.ps1 -RunAsAdmin
+          "$env:USERPROFILE\scoop\shims" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+      - name: Install from the bucket
+        shell: pwsh
+        run: |
+          scoop bucket add mdellavo https://github.com/mdellavo/scoop-bucket
+          scoop install mdellavo/markdown-viewer
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          markdown-viewer --version
+          $html = "# Hello" | markdown-viewer - -o - | Out-String
+          if (-not $html.Contains('<h1')) { Write-Error "no heading in the output"; exit 1 }

@@ -194,7 +194,9 @@ jobs:
       - name: Install markdown-viewer from the manifest
         shell: pwsh
         run: |
-          scoop install ./markdown-viewer.json
+          # A local manifest needs its full path ("./x.json" reads as a bucket).
+          scoop install (Resolve-Path markdown-viewer.json).Path
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
           markdown-viewer --version
       # SCOOP_BUCKET_DEPLOY_KEY is the private half of a deploy key with
       # write access to the bucket repository only.
