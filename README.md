@@ -18,6 +18,8 @@ live reload while you edit. A small, fast, offline alternative to
   <em>Edit in your editor; the page updates every time you save.</em>
 </p>
 
+## Quickstart
+
 ```sh
 markdown-viewer --watch README.md
 markdown-viewer                     # browse the current folder
@@ -27,6 +29,13 @@ For a tour of every feature, run:
 
 ```sh
 markdown-viewer --watch examples/example.md
+```
+
+Or open the tour straight from GitHub, with no clone needed (any Markdown
+address works, as do GitHub and GitLab file and repository pages):
+
+```sh
+markdown-viewer https://github.com/mdellavo/markdown-viewer/blob/main/examples/example.md
 ```
 
 ## Install
@@ -102,7 +111,9 @@ cargo install markdown-viewer-rs     # build from source (see Building)
   title, highlights lines 3 to 5 and numbers the lines. `--line-numbers`
   numbers every block.
 - A `[TOC]` line, or `<!-- TOC -->`, becomes a table of contents built from
-  the headings (`<!-- TOC max2 -->` for two levels).
+  the headings (`<!-- TOC max2 -->` for two levels). Click its title to fold
+  it, or a section's arrow to fold that section; folds stay as you left them
+  while the file changes, and everything opens for printing.
 - Theme-aware images: `#gh-light-mode-only` and `#gh-dark-mode-only` image
   URLs show only in that theme, as on GitHub.
 - Math, typeset with [KaTeX](https://katex.org/):
@@ -120,7 +131,8 @@ cargo install markdown-viewer-rs     # build from source (see Building)
   `--front-matter hide`).
 - Numbered headings (1, 1.1, 1.2, …) with `--number-headings`, in the page
   and the contents.
-- Obsidian notes, on automatically inside a vault (a `.obsidian` folder):
+- Obsidian notes, on automatically inside a vault (a `.obsidian` folder;
+  try [`examples/vault`](examples/vault/Home.md)):
   - `[[wiki links]]`, including `[[Note|label]]` and `[[Note#Heading]]`,
     found by name anywhere in the vault. Missing notes are marked.
   - `![[image.png]]` embeds (with an optional width, `![[image.png|300]]`).
@@ -169,7 +181,12 @@ cargo install markdown-viewer-rs     # build from source (see Building)
   instead of opening another.
 - Click an image or diagram to zoom; scroll to zoom further and drag to pan.
 - Presentation mode (<kbd>s</kbd>): the document as full-screen slides,
-  split at `---` rules (or at headings, if there are none).
+  split at `---` rules (or at headings, if there are none). Try
+  [`examples/slides.md`](examples/slides.md).
+- Open Markdown from the web: `markdown-viewer https://…/notes.md`. GitHub
+  and GitLab file pages and repository addresses work too (a repository
+  shows its README). Relative links and images point back at the web, and
+  the page re-fetches every 10 seconds while open. Needs `curl`.
 - Preview standard input (`markdown-viewer -`) or the clipboard
   (`--clipboard`; with `--watch` the page follows the clipboard as it
   changes).
@@ -182,7 +199,9 @@ cargo install markdown-viewer-rs     # build from source (see Building)
 - Check the page's links (<kbd>l</kbd>), or every file's with
   `--check-links` (see [Checking links](#checking-links)).
 - Large files stay fast: an edit updates only the blocks that changed.
-- Word count and reading time in the toolbar.
+- Word count and reading time in the toolbar; <kbd>w</kbd> (or a click on
+  it) hides it to save space, and it stays hidden until you show it again.
+  `word_count = false` in the settings file hides it by default.
 - Keyboard shortcuts for everything (see [In the viewer](#in-the-viewer)).
 - Your theme and sidebar choices are remembered between runs.
 - In watch mode, relative images load, and links to other `.md` files open as
@@ -241,8 +260,10 @@ markdown-viewer --clipboard --watch      # follow the clipboard as it changes
 markdown-viewer --check-links docs/      # report broken links (exit status 1)
 markdown-viewer --lint docs/             # report writing problems (exit status 1)
 markdown-viewer data.csv                 # a CSV or TSV file as a table
+markdown-viewer https://github.com/o/r   # a repository's README, or any Markdown URL
 markdown-viewer --recent                 # files and folders you opened lately
 markdown-viewer --goto README.md:42      # scroll a running preview to line 42
+markdown-viewer --version                # version, commit and build details
 ```
 
 | Option | Description |
@@ -271,16 +292,29 @@ markdown-viewer --goto README.md:42      # scroll a running preview to line 42
 | `--online` | With `--check-links`: also check web links (needs `curl`) |
 | `--lint` | Report writing problems in a file or folder (see [Linting](#linting)) |
 | `--recent` | Show the files and folders you opened recently |
-| `--exit-when-closed` | With `--watch`: exit once the page has been closed for 5 seconds |
+| `--keep-running` | With `--watch`: keep serving after the window is closed (until Ctrl-C) |
+| `--exit-when-closed` | With `--watch`: exit once the page has been closed for 5 seconds, even with `--no-open` (the default otherwise) |
 | `--install-finder` | macOS: add the Finder integration for your user |
 | `--uninstall-finder` | macOS: remove the Finder integration |
 | `--install-desktop` | Linux: add the desktop integration for your user |
 | `--uninstall-desktop` | Linux: remove the desktop integration |
 
-Without `--watch`, the page is written to your temp directory and opened; no
-server keeps running. Giving a folder (or nothing) always serves it with live
-reload, except that with nothing in your home folder you get the Recent
-page instead of all of your home folder.
+Every page you open is served by a viewer, so live reload, settings and
+everything marked "when serving" below always work:
+
+- **Without `--watch`,** the viewer runs in the background: the command
+  returns as soon as the page is open, and the viewer stops by itself once
+  the window has been closed for 5 seconds (or if no window connects within
+  a minute). Its messages go to `viewer.log` next to the state file.
+- **With `--watch`,** it stays in the foreground of your terminal until the
+  window closes or you press Ctrl-C (see [Opening the page](#opening-the-page)).
+- **With `--no-open`** and no `--watch`, nothing is served: the page is
+  written to your temp directory as a standalone file, and its path printed.
+
+Giving a folder (or nothing) serves it with live reload, except that with
+nothing in your home folder you get the Recent page instead of all of your
+home folder. Exported pages (`-o`, static sites, `--pdf`) have no viewer
+behind them.
 
 ### In the viewer
 
@@ -306,7 +340,9 @@ button.
 | <kbd>d</kbd> / <kbd>u</kbd> | Half a page down / up |
 | <kbd>g</kbd> / <kbd>G</kbd> | Top / bottom |
 | <kbd>n</kbd> / <kbd>p</kbd> | Next / previous heading |
-| <kbd>?</kbd> | Show the shortcuts |
+| <kbd>w</kbd> | Show or hide the word count and reading time |
+| <kbd>,</kbd> | Settings: change and save the [settings file](#settings-file) (when serving) |
+| <kbd>?</kbd> | Show the shortcuts, and About: the version and build, bundled Mermaid and KaTeX, and (when serving) where the settings and state files are, the editor in use and the served folder. **Copy details** copies it all, for bug reports. Then credits for the projects markdown-viewer is built on |
 | <kbd>Esc</kbd> | Close |
 
 The theme, whether the sidebar is open, and where you were in each file are
@@ -338,6 +374,14 @@ on Windows, `%APPDATA%\markdown-viewer\config.toml`).
 Command-line options override it, and a theme you pick in the viewer
 overrides its `theme`.
 
+You can also change settings in the viewer: press <kbd>,</kbd> or the gear
+in the toolbar. Each change is saved to this file straight away (its
+comments and layout are kept) and applies at once: rendering options update
+the page, the style and custom CSS reload it, and the browser, open mode
+and port are used the next time a page opens. A change the file wouldn't
+accept, such as a CSS file that doesn't exist, isn't saved. Command-line
+options still win for the current run, and the dialog says when one does.
+
 ```toml
 theme = "auto"          # auto, light or dark
 style = "book"          # github, wide, book or compact
@@ -354,6 +398,8 @@ github_references = false   # default: on in a checkout with a GitHub remote
 github_repo = "owner/repo"  # if it isn't found from the git remote
 lint_ignore = ["multiple-h1", "duplicate-heading"]   # --lint rules to skip
 recent = false          # don't remember opened files for the Recent page
+word_count = false      # hide the word count and reading time (w toggles it)
+exit_when_closed = false  # keep serving after the window closes (until Ctrl-C)
 ```
 
 Unknown keys are reported as errors, so typos don't go unnoticed. Set
@@ -372,6 +418,13 @@ browser's `.exe`.
 | Chrome, Edge, Brave, Chromium, Vivaldi | app window | new window |
 | Firefox, Opera, Safari | new window (no app mode) | new window |
 | Others | new tab | new tab |
+
+Closing the window (or tab) markdown-viewer opened also stops it: once no
+page has been open for 5 seconds, the server shuts down and the command
+exits, so nothing is left running. The pause lets a reload, or moving to
+another file in a folder, carry on. Use `--keep-running` (or
+`exit_when_closed = false` in the settings file) to keep serving until
+Ctrl-C. With `--no-open` it always keeps running.
 
 When you stop `--watch` with Ctrl-C, a window that markdown-viewer opened
 closes itself. Some pages stay open instead, showing a "markdown-viewer
@@ -631,6 +684,13 @@ Releases are built by GitHub Actions when a `v*` tag is pushed; see
 - **Other websites:** requests addressed to any other hostname are rejected,
   so a website can't read the files being served. Saving preferences also
   needs a custom header, which other websites can't send to it.
+- **Settings dialog:** only the viewer's own pages can change settings:
+  saving needs the same custom header other websites can't send. The
+  `editor` setting is a command that runs when you double-click, so treat
+  it like the rest of the settings file.
+- **About:** pages carry only the build (version, commit, target). Local
+  details (file paths, the editor) come from the viewer when serving, so
+  exported pages and static sites never include them.
 - **Editor and reading positions:** the page can ask the server to open a
   file in your editor or to remember a position, but only for Markdown files
   inside the served folder, and only with a custom header other websites
@@ -640,6 +700,10 @@ Releases are built by GitHub Actions when a `v*` tag is pushed; see
   folder, only if that line still holds a task item in the state the page
   showed, and only with the same custom header. If the file is open in an
   editor with unsaved changes, the editor will see it changed on disk.
+- **Web addresses:** fetched with `curl`. Their pages are served from an
+  empty folder of their own, so nothing on your disk is reachable from
+  them; their scripts are blocked like any page's; and they can't be
+  edited or have their task boxes ticked.
 - **Static sites:** `-o DIR` only writes into an empty folder or one an
   earlier export wrote, and only copies files inside the exported folder
   that a page links to.

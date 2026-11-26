@@ -6,6 +6,57 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Web addresses: `markdown-viewer https://…/file.md`, including GitHub and
+  GitLab file pages and repository addresses (which show the README).
+  Relative links and images point back at the web, and open pages
+  re-fetch every 10 seconds. Fetched with `curl`.
+- Hide the toolbar's word count and reading time with <kbd>w</kbd> (or by
+  clicking it); the choice is remembered. `word_count = false` (also in the
+  settings dialog) hides it by default.
+
+- A settings dialog (<kbd>,</kbd> or the gear in the toolbar) that changes
+  the settings file and applies the change at once: rendering options
+  update the page, the style and custom CSS reload it, and launch options
+  are used next time. Changes keep the file's comments and are only saved
+  if valid.
+
+- An About section in the help (`?`): version and release notes, commit,
+  build target, compiler, bundled Mermaid and KaTeX, links to the
+  changelog, issues and license, and (when serving) the settings and state
+  files, editor and served folder, with a button to copy it all.
+- `markdown-viewer --version` shows the commit and build details (`-V`
+  stays short).
+- Credits in the help: the projects included in every page (Mermaid,
+  KaTeX, GitHub's Markdown CSS, Octicons) and the Rust crates
+  markdown-viewer is built with, with versions, licenses and links.
+- `examples/slides.md`: an example deck for presentation mode.
+- `examples/vault`: an example Obsidian vault with wiki links, embeds,
+  callouts, highlights and comments.
+
+### Changed
+
+- Opening a page without `--watch` now serves it from a viewer in the
+  background, so the settings dialog, live reload and everything else a
+  served page has work there too. The command returns at once, and the
+  viewer stops when the window closes. `--no-open` (without `--watch`)
+  still writes a standalone file, and `--port` now works without `--watch`.
+- Watch mode stops by itself once the window (or tab) it opened is closed:
+  the server shuts down and the command exits after 5 seconds without a
+  page. `--keep-running` or `exit_when_closed = false` keeps serving until
+  Ctrl-C; `--no-open` never stops by itself.
+- The `[TOC]` table of contents is a card with a "Contents" title and
+  quieter, nested links. It folds: the whole list, or any section with
+  sections under it. Folds are kept across live updates and opened for
+  printing.
+
+### Fixed
+
+- Diagrams in presentation mode (s) were shrunk to a 16-pixel square by the
+  rule for toolbar icons; they now show, sized to fill the slide. Math
+  symbols drawn as SVG (such as square roots) were affected too.
+
 ## [0.8.0] - 2026-11-26
 
 ### Added

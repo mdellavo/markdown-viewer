@@ -12,7 +12,12 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
 ## Layout
 
 - `src/main.rs`: CLI (clap), merging options with the settings file
-  (`Settings`), one-shot mode, `-o`, `--pdf` and serving.
+  (`Settings`), `-o`, `--pdf` and serving. Opening a page without
+  `--watch` re-runs the command detached as a background viewer
+  (`launch_in_background`: `--watch --exit-when-closed` plus the hidden
+  `--background`), relays its first line (the address) and returns; its
+  stderr goes to `viewer.log` next to the state file. `--no-open` without
+  `--watch` still writes a standalone page to the temp dir.
 - `src/config.rs`: the settings file (`Config`, TOML, unknown keys are
   errors) and remembered viewer preferences (`Prefs`: theme and sidebar,
   JSON state file). `MARKDOWN_VIEWER_CONFIG` / `MARKDOWN_VIEWER_STATE`
@@ -57,6 +62,11 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
 - Sortable tables live in `ui.js`; like callout folds, `live.js` asks it to
   restore the file's row order before an update (`mdvSort.save`) and
   re-sorts after, so source positions stay right.
+- `src/remote.rs`: web addresses: GitHub/GitLab page and repository
+  addresses to raw files (`Remote::new`), fetching with `curl`, and
+  `absolutize` (relative links against the page, images against the raw
+  file). In main.rs a `Source::Url` is a virtual document served from an
+  empty temp folder (`web_root`), re-fetched every 10 s (`follow_url`).
 - `src/tasks.rs`: ticking task boxes (`POST /__mdv/task`): changes the
   `[ ]` at the item's source position, only if it is still a task item in
   the state the page showed.
@@ -102,6 +112,15 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   (Server-Sent Events), `POST /__mdv/prefs` (needs an `X-MDV` header),
   `/__mdv/files`, `/__mdv/{mermaid,katex}.js`, `/__mdv/katex.css`, and
   static files.
+- Settings dialog (`/__mdv/settings`): `config::update_file` edits one key
+  with `toml_edit` (keeping comments) and writes only if the file still
+  parses and `ServeOptions::reconfigure` (built in main.rs: the new file
+  merged with the run's command-line options, as at startup) succeeds.
+  The result goes into `Live` (page template, custom CSS, editor) and, if
+  the render options changed, `Docs::set_renderer`, which re-renders open
+  pages. Page-level changes answer `reload: true`. New settings need a
+  field in `Config`, `Settings`, `overridden_settings` and the dialog's
+  `SETTINGS` list in ui.js.
 - Shutdown: on Ctrl-C, `main.rs` calls `ServerHandle::announce_shutdown`,
   the event stream sends a `close` event, and `live.js` closes the window if
   the page was rendered with `close_on_exit` (only for windows we opened),
@@ -117,16 +136,29 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   `open -a "Markdown Viewer"`. The app's icon source is
   `assets/macos/AppIcon.svg`; `AppIcon.icns` is generated from it (render at
   1024px, then `sips` and `iconutil`).
-- `--exit-when-closed`: the server counts connected pages
-  (`ServerHandle::abandoned`). It exits 5 s after the last one leaves, or
-  after 60 s if none ever connects.
+- Stopping when the window closes (`exit_policy` in main.rs): the server
+  counts connected pages (`ServerHandle::abandoned`) and exits 5 s after
+  the last one leaves. On by default when we opened the page; off with
+  `--no-open`, `--keep-running` or `exit_when_closed = false`.
+  `--exit-when-closed` forces it (even with `--no-open`) and also gives up
+  after 60 s if no page ever connects.
 - `assets/`: GitHub CSS, `ui.js` and `ui.css` (the viewer UI), `live.js`,
   `mermaid-init.js`, `mermaid.min.js.gz`, `math-init.js`, `katex/` (KaTeX
   JS, CSS and woff2 fonts) and `octicons/` (GitHub icons, MIT), embedded with
   `include_str!`/`include_bytes!`. Everything ships inside the binary; there
   are no runtime files.
 - `build.rs`: inlines KaTeX's woff2 fonts into its CSS as `data:` URIs, so one
-  stylesheet works both inlined and served.
+  stylesheet works both inlined and served. Also sets `MDV_*` build
+  details (git commit and date, target, profile, rustc; the commit comes
+  from `.cargo_vcs_info.json` in crates.io builds).
+- `src/about.rs`: `--version` (long form) and the help's About section:
+  `build_json()` goes into every UI page (`data-about`; nothing local), and
+  `/__mdv/about` adds local details for served pages only. `docs_command`
+  drops the long version so the man page doesn't change per commit.
+- `assets/credits.json`: the direct Rust dependencies (and a total count)
+  for the help's Credits, generated from `cargo metadata` by the
+  `generated_files` test. After changing dependencies:
+  `UPDATE_GENERATED=1 cargo test --test cli generated_files`.
 - Page scripts cooperate through a few globals and events:
   - `window.mdvEnhancers`: `render(root)` functions (Mermaid, math, copy
     buttons). `live.js` runs them all on new content before swapping it in.
@@ -156,8 +188,16 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
 - `tests/cli.rs`: end-to-end tests against the built binary, including an
   insta snapshot of `tests/fixtures/gfm.md` and a check that every feature in
   `examples/example.md` still renders.
-- `examples/example.md`: feature tour (GFM, alerts, raw HTML, math, all
-  Mermaid diagram types). Add new features here and to its test.
+- `examples/`: try-it-yourself files, each with a render test in
+  `tests/cli.rs`:
+  - `example.md`: the feature tour (GFM, alerts, raw HTML, math, all
+    Mermaid diagram types, code block extras, `[TOC]`, GitHub references).
+    It links to the others.
+  - `slides.md`: a deck for presentation mode.
+  - `vault/`: an Obsidian vault (`.obsidian/app.json` marks it) with wiki
+    links, embeds, callouts, highlights and comments.
+  - `cities.csv` (tables), `other.md` (linked pages), `custom.css`
+    (`--css`).
 - `docs/screenshot.md` and `docs/screenshots.sh`: the README screenshots.
   Run `cargo build && docs/screenshots.sh` after visible UI changes and
   check the images before committing them.
@@ -214,7 +254,8 @@ cargo run -- --watch tests/fixtures/gfm.md
 - Browser tests (`tests/browser.rs`) cover the viewer UI; add one for any new
   interaction. They skip without Chrome, except in CI
   (`MARKDOWN_VIEWER_BROWSER_TESTS=required`).
-- After changing options, regenerate completions and the man page:
+- After changing options or dependencies, regenerate completions, the man
+  page and the credits:
   `UPDATE_GENERATED=1 cargo test --test cli generated_files`.
 - If `cargo build` stops picking up source changes ("Fresh" after edits),
   run `cargo clean -p markdown-viewer-rs`.
@@ -224,6 +265,12 @@ cargo run -- --watch tests/fixtures/gfm.md
   list and, where relevant, Usage, the options table, Building or Security.
   Remove anything that's no longer true.
 - Add user-visible changes to `CHANGELOG.md` under `[Unreleased]`.
+- Show every new rendering feature or file type in `examples/`, and
+  extend that example's render test: add it to `example.md`, or to the
+  example it belongs with (`slides.md` for presentation, `vault/` for
+  Obsidian). If none fits, add a new example, link it from `example.md`
+  and the README, and give it a test. Change or remove examples when a
+  feature changes.
 
 ## Updating Mermaid
 

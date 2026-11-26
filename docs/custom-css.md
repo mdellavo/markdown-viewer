@@ -168,7 +168,8 @@ in `@media print`. `@page` sets the paper size and margins.
 | `.callout`, `.callout[data-callout="…"]`, `.callout-title` | Obsidian callouts |
 | `.mdv-code-figure`, `.mdv-code-title` | a code block with a `title="…"`, and its title |
 | `.mdv-line`, `.mdv-hl` | a line of a numbered or highlighted code block; a highlighted line |
-| `.mdv-toc` | a `[TOC]` table of contents |
+| `.mdv-toc`, `.mdv-toc > details > summary` | a `[TOC]` table of contents, and its "Contents" title |
+| `.mdv-toc li > details > summary` | a section in the contents that folds (it has sections under it) |
 | `.mdv-front-matter` | the front matter table |
 | `table.mdv-data`, `.mdv-data-note` | a CSV or TSV file's table, and the row count under it |
 | `div.mermaid` | a Mermaid diagram |
