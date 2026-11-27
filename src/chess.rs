@@ -478,7 +478,7 @@ fn board(p: &Position, last: Option<(usize, usize)>, caption: &str) -> String {
         if caption.is_empty() { "" } else { ", " },
         crate::render::escape_attr(caption)
     );
-    for sq in 0..64 {
+    for (sq, square) in p.board.iter().enumerate() {
         let (file, rank) = (sq % 8, sq / 8);
         let x = EDGE + file as f64 * SQ;
         let y = (7 - rank) as f64 * SQ;
@@ -493,7 +493,7 @@ fn board(p: &Position, last: Option<(usize, usize)>, caption: &str) -> String {
             "<rect class=\"mdv-chess-{shade}{}\" x=\"{x}\" y=\"{y}\" width=\"{SQ}\" height=\"{SQ}\"/>",
             if moved { " mdv-chess-moved" } else { "" }
         );
-        if let Some(piece) = p.board[sq] {
+        if let Some(piece) = *square {
             let class = match piece.0 {
                 Color::White => "mdv-chess-white",
                 Color::Black => "mdv-chess-black",

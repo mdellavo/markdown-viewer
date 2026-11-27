@@ -437,7 +437,7 @@ impl Parser {
                     } else {
                         // A space ends a command such as \langle before the
                         // letters that follow.
-                        format!("\\left{} {inner}\\right{}", bracket(tex), bracket(right))
+                        format!("\\left{} {inner}\\right{}", tex, right)
                     };
                     Some(Piece { tex, bare: inner })
                 }
@@ -662,13 +662,6 @@ impl Parser {
             out.push(' ');
         }
         out.trim_end().to_string()
-    }
-}
-
-fn bracket(tex: &str) -> &str {
-    match tex {
-        "." => ".",
-        t => t,
     }
 }
 

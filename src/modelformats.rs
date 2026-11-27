@@ -226,7 +226,7 @@ fn gltf(json: &Value, glb_bin: Option<&[u8]>, dir: Option<&Path>) -> Result<Tris
             };
             match mode {
                 4 => {
-                    for t in indices.chunks_exact(3) {
+                    for t in indices.as_chunks::<3>().0 {
                         out.push([get(t[0])?, get(t[1])?, get(t[2])?]);
                     }
                 }
