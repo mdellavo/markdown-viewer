@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="markdown-viewer example" xmlns="http://www.topografix.com/GPX/1/1">
+  <wpt lat="41.8240" lon="-71.4128"><name>Providence</name></wpt>
+  <wpt lat="41.4901" lon="-71.3128"><name>Newport</name></wpt>
+  <trk>
+    <name>Providence to Newport</name>
+    <trkseg>
+      <trkpt lat="41.8240" lon="-71.4128"/>
+      <trkpt lat="41.7798" lon="-71.3887"/>
+      <trkpt lat="41.7301" lon="-71.2834"/>
+      <trkpt lat="41.6771" lon="-71.2662"/>
+      <trkpt lat="41.6337" lon="-71.2445"/>
+      <trkpt lat="41.5640" lon="-71.2632"/>
+      <trkpt lat="41.4901" lon="-71.3128"/>
+    </trkseg>
+  </trk>
+</gpx>

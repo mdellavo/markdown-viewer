@@ -1,5 +1,6 @@
 //! Small post-processing steps that make comrak's HTML match what GitHub
-//! renders: alert icons, and the link icon shown when hovering a heading.
+//! renders: alert icons, the link icon shown when hovering a heading, and
+//! colour chips after colours in inline code (`` `#0969da` ``).
 
 use std::sync::OnceLock;
 
@@ -100,7 +101,79 @@ pub fn finish(html: String) -> String {
             "class=\"anchor\"><span class=\"octicon octicon-link\" aria-hidden=\"true\"></span></a>",
         );
     }
+    if html.contains("<code") {
+        html = color_chips(&html);
+    }
     html
+}
+
+/// GitHub shows a swatch after a colour written alone in inline code:
+/// `#rgb`, `#rrggbb` (and with alpha), `rgb(…)`/`rgba(…)` and
+/// `hsl(…)`/`hsla(…)`.
+fn color_chips(html: &str) -> String {
+    let mut out = String::with_capacity(html.len());
+    let mut rest = html;
+    let mut in_pre = false;
+    while let Some(i) = rest.find("<code") {
+        let after = &rest[i..];
+        // Inline code: `<code>` or `<code data-sourcepos="…">` (code blocks
+        // have a language class or sit in <pre>, and are left alone).
+        let Some(open_end) = after.find('>') else {
+            break;
+        };
+        let attrs = &after[5..open_end];
+        let inline = attrs.is_empty()
+            || (attrs.starts_with(" data-sourcepos=\"") && !attrs[17..].contains(' '));
+        let body_start = open_end + 1;
+        // Inside a <pre> since the last step?
+        let before = &rest[..i];
+        if let Some(p) = before.rfind("<pre") {
+            in_pre = before[p..].find("</pre>").is_none();
+        } else if before.contains("</pre>") {
+            in_pre = false;
+        }
+        out.push_str(&rest[..i + body_start]);
+        rest = &after[body_start..];
+        if !inline || in_pre {
+            continue;
+        }
+        if let Some(end) = rest.find("</code>")
+            && is_color(&rest[..end])
+        {
+            let color = &rest[..end];
+            out.push_str(color);
+            out.push_str(&format!(
+                "<span class=\"mdv-color\" style=\"background-color: {color}\" aria-hidden=\"true\"></span>"
+            ));
+            rest = &rest[end..];
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+fn is_color(s: &str) -> bool {
+    if let Some(hex) = s.strip_prefix('#') {
+        return matches!(hex.len(), 3 | 4 | 6 | 8) && hex.chars().all(|c| c.is_ascii_hexdigit());
+    }
+    let Some((name, args)) = s.split_once('(') else {
+        return false;
+    };
+    let Some(args) = args.strip_suffix(')') else {
+        return false;
+    };
+    let parts: Vec<&str> = args
+        .split([',', ' ', '/'])
+        .map(str::trim)
+        .filter(|p| !p.is_empty())
+        .collect();
+    let number = |p: &str, units: &[&str]| {
+        let n = units.iter().find_map(|u| p.strip_suffix(u)).unwrap_or(p);
+        !n.is_empty() && n.parse::<f64>().is_ok_and(f64::is_finite)
+    };
+    matches!(name, "rgb" | "rgba" | "hsl" | "hsla")
+        && matches!(parts.len(), 3 | 4)
+        && parts.iter().all(|p| number(p, &["%", "deg"]))
 }
 
 #[cfg(test)]
@@ -147,5 +220,18 @@ mod tests {
         for (_, _, svg) in ALERT_ICONS {
             assert!(!svg_path(svg).contains(['<', '>', '"']));
         }
+    }
+
+    #[test]
+    fn colours_in_inline_code_get_a_chip() {
+        let html = "<p><code>#0969da</code> <code data-sourcepos=\"1:1-1:10\">rgb(9, 105, 218)</code> \
+                    <code>hsl(212 92% 45% / 0.5)</code> <code>#xyz</code> <code>red</code> \
+                    <code>rgb(1,2,3);x</code></p><pre lang=\"css\"><code>#fff</code></pre>";
+        let out = finish(html.into());
+        assert_eq!(out.matches("class=\"mdv-color\"").count(), 3, "{out}");
+        assert!(out.contains(
+            "<code>#0969da<span class=\"mdv-color\" style=\"background-color: #0969da\""
+        ));
+        assert!(out.contains("<code>#fff</code></pre>"));
     }
 }

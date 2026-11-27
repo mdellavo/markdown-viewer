@@ -1,3 +1,6 @@
+---
+tags: [ideas, example]
+---
 # Ideas
 
 ## This week

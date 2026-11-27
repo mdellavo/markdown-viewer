@@ -1,6 +1,7 @@
 ---
 title: markdown-viewer feature tour
 description: YAML front matter is shown as a table, like on GitHub.
+tags: [markdown, example]
 ---
 
 <p align="center"><img src="images/logo.svg" alt="Markdown logo" width="120"></p>
@@ -39,6 +40,9 @@ like this, or with two trailing spaces.
 Like this.
 
 Escaped characters stay literal: \*not italic\*, \`not code\`, \# not a heading.
+
+Colours in inline code get a swatch, as on GitHub: `#0969da`,
+`rgb(207, 34, 46)` and `hsl(137 55% 41%)`.
 
 Beyond GitHub: E = mc^2^ and H~2~O, with `^superscript^` and
 `~subscript~` (on GitHub, single tildes strike through). Abbreviations
@@ -91,6 +95,12 @@ the one for the current theme is shown (hover it to see which):
 
 ![Light-mode image](images/logo.svg#gh-light-mode-only "light-mode image")
 ![Dark-mode image](images/logo.svg#gh-dark-mode-only "dark-mode image")
+
+Video and audio files, linked like images, become players:
+
+![A test pattern](images/clip.webm)
+
+![A tone](images/tone.ogg)
 
 ## Lists
 
@@ -317,6 +327,15 @@ $$
 
 Invalid TeX is shown in red instead of breaking the page: $\frac{1}{$.
 
+[AsciiMath](https://asciimath.org), if you'd rather not write TeX
+(`asciimath` blocks, one equation per line):
+
+```asciimath
+sum_(i=1)^n i^2 = (n(n+1)(2n+1))/6
+x = (-b +- sqrt(b^2 - 4ac))/(2a)
+[[a, b], [c, d]] [[x], [y]] = [[ax + by], [cx + dy]]
+```
+
 ---
 
 ## Mermaid diagrams
@@ -537,6 +556,215 @@ facet normal -0.89 0 0.45
   endloop
 endfacet
 endsolid pyramid
+```
+
+### More map and model formats
+
+GPX tracks, KML placemarks and WKT geometry are drawn on the same kind of
+map, and OBJ, PLY and OFF models like STL ones:
+
+```gpx
+<?xml version="1.0"?>
+<gpx version="1.1" creator="example" xmlns="http://www.topografix.com/GPX/1/1">
+  <wpt lat="42.3601" lon="-71.0589"><name>Boston</name></wpt>
+  <trk><name>Along the river</name><trkseg>
+    <trkpt lat="42.3601" lon="-71.0589"/><trkpt lat="42.3626" lon="-71.0843"/>
+    <trkpt lat="42.3736" lon="-71.1097"/><trkpt lat="42.3678" lon="-71.1316"/>
+  </trkseg></trk>
+</gpx>
+```
+
+```kml
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+  <Placemark><name>Boston Common</name><Polygon><outerBoundaryIs><LinearRing>
+    <coordinates>-71.0707,42.3554 -71.0627,42.3570 -71.0639,42.3525 -71.0688,42.3533 -71.0707,42.3554</coordinates>
+  </LinearRing></outerBoundaryIs></Polygon></Placemark>
+</Document></kml>
+```
+
+```wkt
+POLYGON ((-71.07 42.35, -71.05 42.35, -71.06 42.37, -71.07 42.35))
+POINT (-71.06 42.36)
+```
+
+```obj
+# A cube: eight corners, six square faces
+v -1 -1 -1
+v 1 -1 -1
+v 1 1 -1
+v -1 1 -1
+v -1 -1 1
+v 1 -1 1
+v 1 1 1
+v -1 1 1
+f 1 2 3 4
+f 5 8 7 6
+f 1 5 6 2
+f 2 6 7 3
+f 3 7 8 4
+f 4 8 5 1
+```
+
+Model and map files can be shown like images, binary STL too:
+
+![A tetrahedron](images/tetrahedron.stl)
+
+![A ride](images/ride.gpx)
+
+glTF (`.gltf`, `.glb`, or a `gltf` block) and 3MF models:
+
+![A pyramid](images/pyramid.glb)
+
+![A hex nut](images/nut.3mf)
+
+## More diagrams
+
+ASCII art with [Svgbob](https://github.com/ivanceras/svgbob) (`bob`):
+
+```bob
+  .--------.      .--------.
+  | Editor |----->| Viewer |
+  '--------'      '--------'
+       |               ^
+       v               |
+  +--------+           |
+  |  File  |-----------'
+  +--------+
+```
+
+[Pikchr](https://pikchr.org), the diagram language from SQLite:
+
+```pikchr
+arrow right 200% "Markdown" "Source"
+box rad 10px "markdown-" "viewer" fit
+arrow right 200% "HTML" "and SVG"
+```
+
+[WaveDrom](https://wavedrom.com) timing diagrams:
+
+```wavedrom
+{ signal: [
+  { name: "clk",  wave: "p.......|.." },
+  { name: "addr", wave: "x.3.x...|4x", data: ["A1", "A2"] },
+  { name: "data", wave: "x...5.x.|.6", data: ["D1", "D2"] },
+  { name: "ack",  wave: "0....1.0|.1" }
+]}
+```
+
+Graphviz (`dot`), PlantUML (`plantuml`) and D2 (`d2`) blocks are drawn by
+the program when it's installed; otherwise they say what to install:
+
+```dot
+digraph {
+  rankdir=LR
+  Markdown -> HTML -> Browser
+  Markdown -> PDF
+}
+```
+
+A QR code (`qr`) for the text in the block:
+
+```qr
+https://github.com/mdellavo/markdown-viewer
+```
+
+## Charts, music and chemistry
+
+[Vega-Lite](https://vega.github.io/vega-lite/) charts:
+
+```vega-lite
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v6.json",
+  "description": "Rainfall by month",
+  "data": { "values": [
+    { "month": "Jan", "mm": 92 }, { "month": "Feb", "mm": 84 }, { "month": "Mar", "mm": 109 },
+    { "month": "Apr", "mm": 94 }, { "month": "May", "mm": 86 }, { "month": "Jun", "mm": 93 }
+  ] },
+  "mark": "bar",
+  "encoding": {
+    "x": { "field": "month", "type": "ordinal", "sort": null },
+    "y": { "field": "mm", "type": "quantitative", "title": "Rainfall (mm)" }
+  }
+}
+```
+
+Sheet music in [ABC notation](https://abcnotation.com) (`abc`):
+
+```abc
+X:1
+T:Twinkle, Twinkle
+M:4/4
+L:1/4
+K:C
+CCGG|AAG2|FFEE|DDC2|
+```
+
+Molecules from [SMILES](https://en.wikipedia.org/wiki/Simplified_Molecular_Input_Line_Entry_System) (`smiles`), here caffeine:
+
+```smiles
+CN1C=NC2=C1C(=O)N(C(=O)N2C)C
+```
+
+Molecules from their files: a flat molfile (`mol`, `sdf`) is drawn as a
+structure, and 3D coordinates (molfiles, `xyz`, `pdb`) as balls and sticks
+that turn when dragged:
+
+![Benzoic acid](images/benzoic-acid.mol)
+
+```xyz
+5
+methane
+C   0.000   0.000   0.000
+H   0.629   0.629   0.629
+H  -0.629  -0.629   0.629
+H  -0.629   0.629  -0.629
+H   0.629  -0.629  -0.629
+```
+
+## Calendars
+
+An iCalendar file (`.ics`, or an `ics` block) as a list of events:
+
+```ics
+BEGIN:VCALENDAR
+VERSION:2.0
+X-WR-CALNAME:Release planning
+BEGIN:VEVENT
+SUMMARY:Feature freeze
+DTSTART;VALUE=DATE:20261201
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Stand-up
+DTSTART;TZID=America/New_York:20261202T093000
+DTEND;TZID=America/New_York:20261202T094500
+RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR
+LOCATION:Video call
+END:VEVENT
+BEGIN:VEVENT
+SUMMARY:Release
+DTSTART:20261210T170000Z
+DTEND:20261210T180000Z
+DESCRIPTION:Tag\, build and publish.
+END:VEVENT
+END:VCALENDAR
+```
+
+## Chess
+
+A position in FEN (`fen`):
+
+```fen
+r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4
+```
+
+A game in PGN (`pgn`), shown at its final position:
+
+```pgn
+[White "Scholar"]
+[Black "Victim"]
+[Result "1-0"]
+
+1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0
 ```
 
 *[HTML]: HyperText Markup Language

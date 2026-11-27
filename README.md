@@ -134,8 +134,57 @@ cargo install markdown-viewer-rs     # build from source (see Building)
     tiles.
   - ```` ```stl ```` blocks (ASCII STL) become shaded 3D models. Drag one to
     turn it, and double-click to go back.
-  - Both are drawn when the page is built, so they're in exports and PDFs
+  - Beyond GitHub: ```` ```gpx ```` (GPS tracks), ```` ```kml ```` and
+    ```` ```wkt ```` blocks become maps too, and ```` ```obj ````,
+    ```` ```ply ````, ```` ```off ```` and ```` ```gltf ```` blocks models.
+  - Model and map files shown as images are drawn the same way:
+    `![part](part.stl)` (binary STL too), `.obj`, `.ply`, `.off`, `.gltf`,
+    `.glb`, `.3mf`, `.gpx`, `.kml`, `.geojson`, `.topojson` and `.wkt`, when
+    the image is alone in its paragraph. glTF and 3MF models show their
+    shape; materials and textures are left out.
+  - All are drawn when the page is built, so they're in exports and PDFs
     too. A block that can't be drawn shows its source and the reason.
+- More diagrams, also drawn when the page is built (offline, in exports
+  too; click one to enlarge it):
+  - ```` ```bob ````: ASCII-art diagrams, by
+    [Svgbob](https://github.com/ivanceras/svgbob).
+  - ```` ```pikchr ````: [Pikchr](https://pikchr.org), the diagram language
+    from SQLite.
+  - ```` ```wavedrom ````: [WaveDrom](https://wavedrom.com) timing
+    diagrams (signals, buses with labels, groups, gaps; not arrows).
+  - ```` ```dot ```` (or `graphviz`), ```` ```plantuml ```` and
+    ```` ```d2 ````: drawn by [Graphviz](https://graphviz.org),
+    [PlantUML](https://plantuml.com) or [D2](https://d2lang.com) when the
+    program is installed (otherwise the block says what to install).
+    PlantUML runs in its sandbox mode, which can't read other files or the
+    web.
+  - ```` ```qr ````: the block's text as a QR code.
+  - ```` ```fen ```` and ```` ```pgn ````: chess boards, for a position or
+    a game's final position (moves are checked, and the last one is
+    marked).
+- Charts, sheet music and molecules, drawn in the page by bundled
+  libraries (loaded only on pages that use them):
+  - ```` ```vega-lite ```` (and ```` ```vega ````):
+    [Vega-Lite](https://vega.github.io/vega-lite/) charts. Data can be in
+    the block, or a JSON file next to the document when serving.
+  - ```` ```abc ````: sheet music in [ABC notation](https://abcnotation.com),
+    by [abcjs](https://www.abcjs.net/).
+  - ```` ```smiles ````: chemical structures from SMILES, by
+    [SmilesDrawer](https://github.com/reymond-group/smilesDrawer).
+- Molecules: ```` ```mol ````/```` ```sdf ```` (molfiles), ```` ```xyz ```` and
+  ```` ```pdb ```` blocks, or those files shown as images. A flat molfile is
+  drawn as a structure diagram (bonds, double bonds, wedges, labels with
+  their hydrogens and charges); 3D coordinates as balls and sticks that turn
+  when dragged, with bonds the file leaves out found by distance.
+- Calendars: an ```` ```ics ```` block or `![](events.ics)` lists the events
+  by month, with times and time zones, places, descriptions and how they
+  repeat.
+- [AsciiMath](https://asciimath.org) in ```` ```asciimath ```` blocks (one
+  equation per line), typeset by KaTeX.
+- Video and audio linked like images (`![demo](demo.mp4)`, `.webm`, `.mov`,
+  `.mp3`, `.ogg`, `.wav`, …) become players, as on GitHub and in Obsidian.
+- Colours in inline code (`` `#0969da` ``, `` `rgb(…)` ``, `` `hsl(…)` ``)
+  get a swatch after them, as on GitHub.
 - Beyond GitHub:
   - Definition lists: a term, then lines starting with `: `.
   - `^superscript^` and `~subscript~`. (On GitHub, single tildes strike
@@ -160,6 +209,12 @@ cargo install markdown-viewer-rs     # build from source (see Building)
     works outside a vault, for ordinary Markdown links).
   - Callouts (`> [!tip] Title`), including folded ones (`> [!faq]-`).
   - `==highlights==`, with `%%comments%%` hidden.
+  - `#tags` in the text (nested ones too, `#projects/garden`) shown as
+    chips.
+- Tags: front matter `tags:` (on any page) and Obsidian `#tags` are shown
+  as chips. When serving, a **Tags** tab (<kbd>#</kbd>) lists every tag in
+  the folder with the files using each, this page's tags first; click a
+  chip to open its tag there.
 
 - CSV and TSV files are shown as tables, as on GitHub: open one directly,
   or from a folder listing. Columns of numbers are right-aligned, and
@@ -175,6 +230,11 @@ cargo install markdown-viewer-rs     # build from source (see Building)
 - Opens as a minimal app window (no tabs or address bar), a new window, or a
   tab, in your default browser or the one you choose (see
   [Opening the page](#opening-the-page)).
+- Quick to show: the page's text appears before diagram and chart
+  libraries load; diagrams on screen are drawn first, and drawings are
+  remembered by the browser, so reloading or coming back shows them at
+  once. When serving, the first page is rendered while the browser opens,
+  and unchanged code blocks and drawings aren't redone on each save.
 - Watch mode (`--watch`) updates the page whenever you save:
   - It scrolls to the first thing you changed and briefly highlights it.
     Otherwise your scroll position is kept.
@@ -283,9 +343,10 @@ cargo install markdown-viewer-rs     # build from source (see Building)
 
 **Offline and safe**
 
-- Everything ships inside one binary: stylesheets, fonts, KaTeX and
-  mermaid.js. Pages never contact the network, though images that link to
-  the web still load. KaTeX and Mermaid are only added to pages that use them.
+- Everything ships inside one binary: stylesheets, fonts, KaTeX, mermaid.js,
+  Vega-Lite, abcjs and SmilesDrawer. Pages never contact the network, though
+  images that link to the web still load. The libraries are only added to
+  pages that use them.
 - Scripts inside the Markdown are blocked (see [Security](#security)).
 
 ## Usage
@@ -382,6 +443,7 @@ code block shows its copy button.
 | <kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd> | Larger / smaller / normal text |
 | <kbd>c</kbd> | Copy the page |
 | <kbd>b</kbd> | Backlinks: other files that link here (when serving) |
+| <kbd>#</kbd> | Tags: every tag in the folder and the files using it (when serving) |
 | <kbd>h</kbd> | Recent files, in the sidebar (when serving) |
 | <kbd>l</kbd> | Check this page's links (when serving) |
 | <kbd>D</kbd> | Show what changed since the last git commit (when serving) |
@@ -728,7 +790,7 @@ Releases are built by GitHub Actions when a `v*` tag is pushed; see
 
 markdown-viewer is a single Rust binary. Everything a page needs is compiled
 into it: GitHub's stylesheet, the viewer's scripts, Mermaid, KaTeX and its
-fonts, and the icons. It never fetches anything from the internet unless
+fonts, Vega-Lite, abcjs, SmilesDrawer, and the icons. It never fetches anything from the internet unless
 you ask it to (web addresses, `--check-links --online`); only images and
 media that a document itself links to are loaded from the web.
 
@@ -750,7 +812,11 @@ highlights code when the page is built. A series of small passes then
 brings the HTML closer to GitHub and adds the extras: alert icons, heading
 anchors, front matter tables, code block titles and line numbers, the table
 of contents, GitHub references, and Obsidian wiki links, embeds and
-callouts. Diagrams and math are drawn in the browser, by Mermaid and KaTeX.
+callouts. Maps, 3D models and most diagrams (Svgbob, Pikchr, WaveDrom,
+chess, QR codes, and Graphviz, PlantUML or D2 when installed) are drawn as
+SVG at this point, so they need no script. Mermaid diagrams, math, Vega-Lite
+charts, sheet music and molecules are drawn in the browser by their
+libraries.
 CSV and TSV files skip Markdown and become tables directly.
 
 **The page.** One template produces every page. It carries all the themes
@@ -808,7 +874,16 @@ app and the Linux desktop entry are thin launchers for the same command.
 - **Raw HTML:** allowed, because READMEs often use it. The page's
   Content-Security-Policy blocks any script that comes from the Markdown,
   and a `<base>` tag that would change where the page's own scripts load
-  from. KaTeX and Mermaid run in their strict modes.
+  from. KaTeX and Mermaid run in their strict modes, and Vega-Lite charts
+  evaluate their expressions without `eval`.
+- **Files shown as images:** a model, map, molecule or calendar file shown
+  as an image is read when the page is built (only by its relative path, at
+  most 20 MB), and its drawing is put in the page, so exports and static
+  sites include it.
+- **Diagram programs:** Graphviz, PlantUML and D2 blocks run that program
+  (if installed) on the block's text, in an empty temporary folder, with a
+  time limit; PlantUML in its sandbox mode (no other files, no web). Their
+  SVG is put in the page without scripts or event handlers.
 - **Watch server:** listens on loopback only and serves only files inside
   the Markdown file's folder (or the folder you gave it). The file list
   skips hidden folders and doesn't follow symlinked folders. Other files
@@ -862,35 +937,48 @@ app and the Linux desktop entry are thin launchers for the same command.
 
 - [ ] Quick switcher: <kbd>Ctrl</kbd>/<kbd>⌘</kbd>-<kbd>O</kbd> for a fuzzy
   finder over file names, headings and aliases.
+- [ ] Command palette (<kbd>⌘</kbd>/<kbd>Ctrl</kbd>-<kbd>K</kbd>): one
+  search over files, headings and viewer commands.
 - [ ] Hover previews of linked notes and headings, and of footnotes.
 - [ ] Graph view: how notes link, for the whole folder or this note's
   neighbours.
-- [ ] Tags: `#tags` and front matter `tags:` as chips, and a Tags sidebar
-  tab listing notes by tag.
 - [ ] Unlinked mentions: notes that name this one without linking to it.
-- [ ] Back and forward history inside the viewer
-  (<kbd>Alt</kbd>-<kbd>←</kbd> / <kbd>→</kbd>), restoring the scroll
-  position.
 - [ ] Bookmarks for notes and headings, as a sidebar tab.
-- [ ] Command palette (<kbd>⌘</kbd>/<kbd>Ctrl</kbd>-<kbd>K</kbd>): one
-  search over files, headings and viewer commands.
+- [ ] A sticky breadcrumb of the headings you're under, while scrolling.
+- [ ] Recently changed: the folder's files by modification time, as a
+  sidebar tab.
+- [ ] A calendar of daily notes (`2026-11-27.md`), and previous/next day
+  links on them.
 - [ ] Task overview: every open task across the folder, grouped by file,
   with ticking working there too.
 - [ ] Task progress ("4 of 9 done") in the toolbar and on each list, and a
   key to hide finished items.
+- [ ] A link health tab: broken links, orphan notes and missing anchors in
+  the folder, from `--check-links`.
+- [ ] Open a random note (Obsidian's "random note"), for rediscovering a
+  vault.
+- [ ] Reopen last session: the files you had open, at the same places.
 
-**Obsidian syntax**
+**Obsidian and plugin syntax**
 
 - [ ] Block references: `^block-id` anchors, `[[Note#^id]]` links and
   `![[Note#^id]]` embeds.
 - [ ] `aliases:` for wiki links, and typed display of properties (dates,
   links, lists, checkboxes).
 - [ ] Read-only Dataview queries (```` ```dataview ```` tables and lists
-  from the vault's front matter).
+  from the vault's front matter), and Obsidian Bases (`.base` files).
+- [ ] Tasks plugin queries (```` ```tasks ````) and Obsidian search blocks
+  (```` ```query ````), as lists of results.
+- [ ] Kanban boards (the Kanban plugin's Markdown files), read-only.
 - [ ] JSON Canvas: `.canvas` files as a pannable board.
-- [ ] More embeds: `![[file.pdf]]` (with `#page=N`), audio, video and
-  `![[file.csv]]`.
+- [ ] More embeds: `![[file.pdf]]` (with `#page=N`), `![[clip.mp4]]` and
+  `![[song.mp3]]` as players, and `![[file.csv]]` and `![[part.stl]]`
+  drawn as they are with `![](…)`.
 - [ ] Excalidraw drawings (`.excalidraw`, `.excalidraw.md`).
+- [ ] Inline footnotes (`^[a note right here]`) and `==highlights==`
+  outside Obsidian mode too.
+- [ ] Callout options: `> [!note|wide]` metadata and custom callout types
+  from the vault's CSS snippets.
 
 **Rendering**
 
@@ -899,21 +987,70 @@ app and the Linux desktop entry are thin launchers for the same command.
   with live updates following the included files.
 - [ ] Custom processors: pipe the Markdown through a command (Pandoc, a
   preprocessor) before rendering.
-- [ ] More themes: GitHub's dark dimmed and high-contrast variants.
+- [ ] Image captions from the title (`![alt](a.png "Caption")` as a
+  figure).
+- [ ] Footnotes as sidenotes in the margin, when the window is wide enough.
+- [ ] A ```` ```chart ```` block over a table or CSV file, drawn offline.
+- [ ] Chemistry in math: `$\ce{H2O + CO2 -> H2CO3}$`, with KaTeX's mhchem
+  extension.
+- [ ] Inline AsciiMath in running text (not only blocks), and V3000
+  molfiles.
+- [ ] Redraw a page when a file it shows as an image changes (models, maps,
+  molecules, calendars), not only when the Markdown is saved.
+- [ ] Other Markdown dialects' extras: MkDocs admonitions (`!!! note`),
+  content tabs (`=== "Linux"`), and Pandoc attributes on headings and
+  images (`{#id .class width=50%}`).
+- [ ] Citations: `[@doe2020]` from a `.bib` or CSL JSON file, with a
+  bibliography at the end (as in Zettlr and Pandoc).
+- [ ] Numbered figures, tables and equations, with cross-references
+  (`@fig:map`), as pandoc-crossref does.
+- [ ] CriticMarkup review marks (`{++added++}`, `{--removed--}`,
+  `{>>comment<<}`), shown like the rendered diff.
+- [ ] Page breaks for printing and PDFs (`<!-- pagebreak -->`).
+- [ ] More themes: GitHub's dark dimmed and high-contrast variants, and a
+  sepia reading theme.
 
 **Other formats**
 
-- [ ] Jupyter notebooks (`.ipynb`), with cells and outputs.
-- [x] GeoJSON and TopoJSON maps, and STL models, as GitHub shows them.
-- [x] Definition lists, abbreviations, `^superscript^` / `~subscript~`.
-- [ ] PlantUML, Graphviz (DOT) and D2 diagrams, through a local binary
-  when installed.
+- [ ] Jupyter notebooks (`.ipynb`): Markdown cells, highlighted code and
+  the saved outputs (text, tables, images, charts), without running
+  anything.
+- [ ] JSON, YAML and TOML files as foldable trees, in the file list like
+  CSV tables.
+- [ ] Other markup through Pandoc when it's installed: reStructuredText,
+  Org and AsciiDoc files.
+- [ ] Subtitles: a `clip.vtt` next to `clip.mp4` becomes the video's
+  captions.
+- [ ] Railroad (syntax) diagrams from EBNF, and bit-field / register
+  layouts in WaveDrom's style.
+- [ ] Mind maps from an ordinary Markdown list (```` ```markmap ````).
+- [ ] Barcodes (Code 128, EAN-13), like the QR code blocks.
+- [ ] Points from a CSV with latitude and longitude columns, on a map.
+- [ ] Colour palettes (```` ```palette ````, `.gpl`, `.ase`) as named
+  swatches, and font files (`.ttf`, `.otf`, `.woff2`) as a type specimen.
+- [ ] Terminal recordings (asciinema `.cast`) shown as their last screen,
+  or played back.
+- [ ] MusicXML sheet music.
+- [ ] More diagrams through installed programs, like Graphviz: TikZ (via
+  LaTeX), Mscgen, blockdiag/seqdiag, Structurizr and draw.io files.
+- [ ] Calendar times in your own time zone, and a month grid view.
+
+**Git**
+
+- [ ] A whole-repository diff: every changed Markdown file, each opening
+  its rendered diff (`--diff` on a folder).
+- [ ] Compare two files (`--diff-file other.md`) or two revisions.
+- [ ] The file at any revision (`--rev v1.0`), and a History tab: the
+  file's commits, each opening its rendered diff.
+- [ ] Choose staged or unstaged changes for `--diff`.
 
 **Reading**
 
 - [ ] Focus mode: dim everything but the current paragraph or section,
   with a reading ruler.
 - [ ] A reading progress bar and a heading minimap.
+- [ ] Read aloud with the system's speech, highlighting each sentence.
+- [ ] Reading width and font choices in the toolbar, remembered.
 - [ ] Readability statistics: reading level, sentence length, longest
   paragraphs and overused words, each linked to its place.
 - [ ] The headings as a zoomable mind map.
@@ -921,10 +1058,13 @@ app and the Linux desktop entry are thin launchers for the same command.
   scrolling together.
 - [ ] Speaker notes and a presenter view (timer, next slide) for
   presentation mode.
-- [ ] Fold a section by clicking its heading, remembered per file.
+- [ ] Fold a section by clicking its heading in the page, remembered per
+  file.
 - [ ] Mark every block that changed on save, not only the first.
-- [x] A rendered git diff (`--diff HEAD~3`): inserted text in green,
-  deleted text struck through.
+- [ ] Step through a page's images with the arrow keys once one is
+  enlarged, as a gallery.
+- [ ] A glossary of the page's abbreviations, and reading time for each
+  section in the contents.
 - [ ] Proofing: highlight doubled words, passive voice and your own list
   of words to watch for.
 
@@ -933,6 +1073,8 @@ app and the Linux desktop entry are thin launchers for the same command.
 - [ ] Preview unsaved edits: the VS Code extension sends the buffer as you
   type.
 - [ ] Scroll the editor from the preview (`--goto` in reverse).
+- [ ] Neovim, Sublime Text and JetBrains integrations like the VS Code
+  extension: open the preview, follow the cursor.
 
 **Exporting**
 
@@ -942,7 +1084,12 @@ app and the Linux desktop entry are thin launchers for the same command.
   cover page from the front matter, and bookmarks from the headings.
 - [ ] Slides to PDF, one slide per page.
 - [ ] Export from the viewer: a toolbar menu for PDF, HTML or rich text.
-- [ ] Save a Mermaid diagram or math block as SVG or PNG.
+- [ ] `-o` with local images, video and audio embedded too (today they're
+  linked), so the page can be emailed as one attachment.
+- [ ] Export to plain GitHub Markdown: wiki links, embeds and includes
+  resolved, for publishing an Obsidian note elsewhere.
+- [ ] Save a diagram, chart, map, model or math block as SVG or PNG.
+- [ ] Copy a link to a heading or a block, from its link icon.
 - [ ] Graph, tags and backlinks in `-o` static sites.
 - [ ] Search in exported sites, from an index written at export time
   (working from disk too).
@@ -957,11 +1104,13 @@ app and the Linux desktop entry are thin launchers for the same command.
 
 **Platform and packaging**
 
-- [ ] Quick Look on macOS: press space on a `.md` file in Finder.
+- [ ] Quick Look on macOS: press space on a `.md` file in Finder, and a
+  preview handler for Windows Explorer.
 - [ ] A native window (WKWebView on macOS): real menus and a remembered
   window size, whatever your default browser is.
 - [ ] The VS Code extension on the Marketplace and Open VSX.
-- [ ] A Nix flake and a winget package.
+- [ ] A Nix flake, a winget package, a Flatpak, and a Windows installer
+  that registers `.md` files.
 - [ ] A GitHub Action and a pre-commit hook for `--check-links` and
   `--lint`.
 - [ ] An optional update check, off by default.
@@ -977,3 +1126,9 @@ MIT. Includes:
   `assets/LICENSE-octicons`).
 - [Mermaid](https://github.com/mermaid-js/mermaid) (MIT, see
   `assets/LICENSE-mermaid`).
+- [Vega](https://github.com/vega/vega), [Vega-Lite](https://github.com/vega/vega-lite)
+  and vega-interpreter (BSD-3-Clause, see `assets/libs/LICENSE-vega*`).
+- [abcjs](https://github.com/paulrosen/abcjs) (MIT, see
+  `assets/libs/LICENSE-abcjs`).
+- [SmilesDrawer](https://github.com/reymond-group/smilesDrawer) (MIT, see
+  `assets/libs/LICENSE-smiles-drawer`).

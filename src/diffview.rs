@@ -53,14 +53,20 @@ pub fn old_text(file: &Path, rev: &str) -> Result<String> {
     )
 }
 
-/// Render `new` with what changed since `old` marked. `options` are the
-/// viewer's; source positions are left out (they'd differ between the two).
-pub fn render(options: &RenderOptions, old: &str, new: &str, rev: &str) -> String {
+/// Render `file`'s text `new` with what changed since `old` marked.
+/// `options` are the viewer's; source positions are left out (they'd
+/// differ between the two).
+pub fn render(options: &RenderOptions, file: &Path, old: &str, new: &str, rev: &str) -> String {
     let renderer = Renderer::with_options(RenderOptions {
         sourcepos: false,
         ..options.clone()
     });
-    compare(&renderer.render_body(old), &renderer.render_body(new), rev)
+    let dir = file.parent();
+    compare(
+        &renderer.render_in(old, dir, None),
+        &renderer.render_in(new, dir, None),
+        rev,
+    )
 }
 
 fn compare(old_html: &str, new_html: &str, rev: &str) -> String {
@@ -413,7 +419,13 @@ mod tests {
     use super::*;
 
     fn render(old: &str, new: &str) -> String {
-        super::render(&RenderOptions::default(), old, new, "HEAD~3")
+        super::render(
+            &RenderOptions::default(),
+            Path::new("doc.md"),
+            old,
+            new,
+            "HEAD~3",
+        )
     }
 
     #[test]

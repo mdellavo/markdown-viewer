@@ -48,7 +48,7 @@ pub fn extract(html: &str) -> Vec<Link> {
         let name = tag.split_whitespace().next().unwrap_or("");
         let wanted = match name {
             "a" => Some(("href", false)),
-            "img" => Some(("src", true)),
+            "img" | "video" | "audio" => Some(("src", true)),
             _ => None,
         };
         if let Some((attr_name, image)) = wanted

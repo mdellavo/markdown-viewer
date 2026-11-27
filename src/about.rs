@@ -69,7 +69,7 @@ pub fn build_json() -> &'static str {
 /// What pages include: (name, version, license, link). Their licenses are
 /// in `assets/LICENSE-*`.
 fn bundled() -> serde_json::Value {
-    serde_json::json!([
+    let mut list = serde_json::json!([
         {
             "name": "github-markdown-css",
             "note": "GitHub's Markdown styles",
@@ -96,7 +96,23 @@ fn bundled() -> serde_json::Value {
             "license": "MIT",
             "url": "https://github.com/primer/octicons",
         },
-    ])
+    ]);
+    // Vega-Lite, abcjs, SmilesDrawer, before the icons.
+    if let Some(items) = list.as_array_mut() {
+        for (i, lib) in crate::libraries::LIBRARIES.iter().enumerate() {
+            items.insert(
+                3 + i,
+                serde_json::json!({
+                    "name": lib.name,
+                    "version": lib.version,
+                    "note": lib.note,
+                    "license": lib.license,
+                    "url": lib.url,
+                }),
+            );
+        }
+    }
+    list
 }
 
 /// About this viewer, for served pages only (`/__mdv/about`): where its
@@ -164,7 +180,7 @@ mod tests {
                 .iter()
                 .any(|c| c["name"] == "comrak")
         );
-        assert_eq!(json["bundled"].as_array().unwrap().len(), 4);
+        assert_eq!(json["bundled"].as_array().unwrap().len(), 7);
         assert!(!build_json().contains(&std::env::temp_dir().display().to_string()));
     }
 }

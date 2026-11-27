@@ -171,7 +171,7 @@ impl Prefs {
         if let Some(sidebar) = update.sidebar
             && matches!(
                 sidebar.as_str(),
-                "" | "contents" | "files" | "links" | "recent"
+                "" | "contents" | "files" | "links" | "recent" | "tags"
             )
         {
             self.sidebar = Some(sidebar);

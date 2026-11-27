@@ -6,6 +6,41 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Faster pages: text shows before diagram, math and chart libraries load;
+  diagrams on screen are drawn first and are remembered by the browser, so
+  reloads and returning to a page show them at once; the first page is
+  rendered while the browser opens; unchanged code blocks and drawings
+  aren't redone on each save; live updates follow saves sooner; and served
+  pages share their styles and viewer script, which the browser keeps.
+
+### Added
+
+- Tags: front matter `tags:` and, in Obsidian notes, `#tags` in the text
+  are shown as chips, and a Tags sidebar tab (<kbd>#</kbd>) lists every tag
+  in the folder with the files using it.
+- More drawings from code blocks, made when the page is built (offline, in
+  exports and PDFs): ```` ```bob ```` (Svgbob ASCII art), ```` ```pikchr ````,
+  ```` ```wavedrom ```` timing diagrams, ```` ```qr ```` codes, and
+  ```` ```fen ````/```` ```pgn ```` chess boards. Click a diagram to enlarge
+  it.
+- ```` ```dot ````, ```` ```plantuml ```` and ```` ```d2 ```` diagrams, drawn
+  by Graphviz, PlantUML or D2 when installed.
+- Vega-Lite charts (```` ```vega-lite ````), sheet music in ABC notation
+  (```` ```abc ````) and molecules from SMILES (```` ```smiles ````), with the
+  libraries bundled and loaded only on pages that use them.
+- GPX, KML and WKT maps, OBJ, PLY and OFF models, and model and map files
+  shown as images (`![part](part.stl)`, binary STL too).
+- glTF (`.gltf`, `.glb`, ```` ```gltf ````) and 3MF models.
+- Molecules: molfiles as structure diagrams; 3D molfiles, XYZ and PDB as
+  balls and sticks that turn when dragged.
+- Calendars: ```` ```ics ```` blocks and `.ics` files as a list of events.
+- AsciiMath in ```` ```asciimath ```` blocks.
+- Video and audio linked like images become players.
+- Colour swatches after colours in inline code (`` `#0969da` ``), as on
+  GitHub.
+
 ## [0.13.0] - 2026-11-27
 
 ### Added

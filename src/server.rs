@@ -47,6 +47,7 @@ const SOURCE_PATH: &str = "/__mdv/source";
 const GITDIFF_PATH: &str = "/__mdv/gitdiff";
 const CHECK_PATH: &str = "/__mdv/check";
 const BACKLINKS_PATH: &str = "/__mdv/backlinks";
+const TAGS_PATH: &str = "/__mdv/tags";
 const RECENT_PATH: &str = "/__mdv/recent";
 const RECENT_REMOVE_PATH: &str = "/__mdv/recent/remove";
 const RECENT_OPEN_PATH: &str = "/__mdv/recent/open";
@@ -254,10 +255,21 @@ impl Server {
             .route(GITDIFF_PATH, get(gitdiff))
             .route(CHECK_PATH, get(check_links))
             .route(BACKLINKS_PATH, get(backlinks))
+            .route(TAGS_PATH, get(tags))
             .route(RECENT_PATH, get(recent_list))
             .route(RECENT_REMOVE_PATH, post(recent_remove))
             .route(RECENT_OPEN_PATH, post(recent_open))
             .route(MERMAID_PATH, get(mermaid_js))
+            .route(
+                crate::render::BASE_CSS_PATH,
+                get(|| async { shared_asset(0) }),
+            )
+            .route(
+                crate::render::UI_CSS_PATH,
+                get(|| async { shared_asset(1) }),
+            )
+            .route(crate::render::UI_JS_PATH, get(|| async { shared_asset(2) }))
+            .route("/__mdv/lib/{file}", get(library_js))
             .route(KATEX_JS_PATH, get(katex_js))
             .route(KATEX_CSS_PATH, get(katex_css))
             .fallback(get(path_handler))
@@ -894,6 +906,15 @@ async fn backlinks(State(state): State<AppState>, Query(q): Query<EventsQuery>) 
     }
 }
 
+/// Every tag in the served folder, with the files using it (the Tags tab).
+async fn tags(State(state): State<AppState>) -> Response {
+    let docs = state.docs.clone();
+    match tokio::task::spawn_blocking(move || docs.tags()).await {
+        Ok(tags) => no_store(Json(serde_json::json!({ "tags": tags })).into_response()),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
 async fn whoami(State(state): State<AppState>) -> Response {
     Json(serde_json::json!({
         "target": state.identity.as_str(),
@@ -923,6 +944,28 @@ async fn mermaid_js() -> Response {
         MERMAID_JS_GZ,
     )
         .into_response()
+}
+
+/// A bundled library (libraries.rs), also sent still compressed.
+async fn library_js(axum::extract::Path(file): axum::extract::Path<String>) -> Response {
+    let lib = file.strip_suffix(".js").and_then(crate::libraries::by_id);
+    match lib {
+        Some(lib) => (
+            [
+                (header::CONTENT_TYPE, "text/javascript; charset=utf-8"),
+                (header::CONTENT_ENCODING, "gzip"),
+                (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+            ],
+            lib.gz,
+        )
+            .into_response(),
+        None => StatusCode::NOT_FOUND.into_response(),
+    }
+}
+
+fn shared_asset(i: usize) -> Response {
+    let (_, content_type, body) = crate::render::shared_assets()[i];
+    immutable(content_type, body)
 }
 
 async fn katex_js() -> Response {

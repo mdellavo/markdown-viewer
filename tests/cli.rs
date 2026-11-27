@@ -162,6 +162,11 @@ fn vault_example_renders() {
     );
     assert!(body.contains("<mark>Highlighted text</mark>"), "highlight");
     assert!(!body.contains("You can't see this"), "comment hidden");
+    assert!(
+        body.contains("<a class=\"mdv-tag\" data-mdv-tag=\"projects/garden\">#projects/garden</a>"),
+        "nested tag"
+    );
+    assert!(body.contains("<code>#tags</code>"), "not in code");
 }
 
 /// examples/example.md is the feature tour; make sure every feature in it
@@ -185,6 +190,14 @@ fn example_renders_every_feature() {
         body.contains("class=\"mdv-front-matter\""),
         "front matter table"
     );
+    assert!(
+        body.contains(
+            "<td class=\"mdv-tags\"><a class=\"mdv-tag\" data-mdv-tag=\"markdown\">#markdown</a>"
+        ),
+        "front matter tags as chips"
+    );
+    // #tags in the text are for Obsidian notes; here they stay text.
+    assert!(!body.contains("data-mdv-tag=\"tags\""));
     assert_eq!(count("<pre class=\"mermaid\">"), 10, "mermaid diagrams");
     assert_eq!(
         count("markdown-alert-"),
@@ -193,9 +206,17 @@ fn example_renders_every_feature() {
     );
     assert_eq!(count("type=\"checkbox\""), 6, "task list items");
     assert_eq!(count("data-math-style=\"inline\""), 4, "inline math");
-    assert_eq!(count("data-math-style=\"display\""), 3, "display math");
+    assert_eq!(
+        count("data-math-style=\"display\""),
+        4,
+        "display math (one AsciiMath)"
+    );
     assert!(body.contains("$5 or $10"), "dollar amounts stay text");
-    assert_eq!(count("<table>"), 2, "the table, plus the front matter's");
+    assert_eq!(
+        count("<table>"),
+        3,
+        "the table, the front matter and the calendar"
+    );
     assert_eq!(count("class=\"footnote-ref\""), 2);
     for tag in ["<h1", "<h2", "<h3", "<h4", "<h5", "<h6"] {
         assert!(body.contains(tag), "heading {tag}");
@@ -232,14 +253,53 @@ fn example_renders_every_feature() {
         "<circle class=\"mdv-map-point\"",
         "<title>name: Boston</title>",
         "<figure class=\"mdv-stl\" data-mdv-mesh=",
+        "<span class=\"mdv-color\" style=\"background-color: #0969da\"",
+        "<figure class=\"mdv-diagram mdv-bob\"><svg",
+        "<figure class=\"mdv-diagram mdv-pikchr\"><svg",
+        "<figure class=\"mdv-diagram mdv-wavedrom\"><svg",
+        "<figure class=\"mdv-diagram mdv-qr\"><svg",
+        "<pre class=\"mdv-lib mdv-lib-vega\">",
+        "<pre class=\"mdv-lib mdv-lib-abc\">",
+        "<pre class=\"mdv-lib mdv-lib-smiles\">",
+        "<figcaption>Scholar – Victim, 1-0, after 4. Qxf7#</figcaption>",
+        "White to move",
+        "<title>name: Providence to Newport</title>",
+        "aria-label=\"3D model, 4 triangles\"",
+        "aria-label=\"3D model, 12 triangles\"",
+        "aria-label=\"3D model, 6 triangles\"",
+        "aria-label=\"3D model, 24 triangles\"",
+        "<video class=\"mdv-video\" src=\"images/clip.webm\" controls",
+        "<audio class=\"mdv-audio\" src=\"images/tone.ogg\" controls",
+        "<pre data-math-style=\"display\" lang=\"asciimath\"><code>\\begin{gathered}",
+        "text-anchor=\"start\">OH</text>",
+        "<figcaption>Benzoic acid</figcaption>",
+        "methane, 5 atoms",
+        "<figure class=\"mdv-calendar\"><figcaption>Release planning</figcaption>",
+        "Repeats weekly on Mon, Wed, Fri",
     ] {
         assert!(body.contains(needle), "missing {needle:?}");
     }
     assert_eq!(
         count("<figure class=\"mdv-map\""),
-        2,
-        "a GeoJSON and a TopoJSON map"
+        6,
+        "GeoJSON, TopoJSON, GPX, KML and WKT maps, and a GPX file"
     );
+    assert_eq!(count("<figure class=\"mdv-diagram mdv-chess\""), 2);
+    assert_eq!(
+        count("<figure class=\"mdv-stl\""),
+        5,
+        "STL, OBJ, binary STL, GLB and 3MF"
+    );
+    // Graphviz draws only where it's installed.
+    assert_eq!(
+        count("<figure class=\"mdv-diagram mdv-dot\"")
+            + count("<figure class=\"mdv-diagram mdv-diagram-missing\""),
+        1
+    );
+    // The libraries are inlined, once each.
+    assert!(html.contains("window.vegaInterpreter"));
+    assert!(html.contains("ABCJS"));
+    assert!(html.contains("window.SmilesDrawer"));
     assert!(!body.contains("Can't draw"), "every drawing is valid");
     assert!(
         !body.contains("*[HTML]"),
@@ -474,13 +534,22 @@ fn theme_and_sidebar_choices_are_remembered() {
     let state = test_dir().join("state.json");
     let _ = std::fs::remove_file(&state);
 
+    // The <html> tag (the page's styles also name every theme).
+    let root = |page: String| {
+        page[page.find("<html").unwrap()..]
+            .split('>')
+            .next()
+            .unwrap()
+            .to_string()
+    };
+
     let server = start({
         let mut c = mdv();
         c.args(["--watch"]).arg(&md);
         c
     });
     let a = &server.addr;
-    assert!(http_get(a, "/", a).contains("data-mdv-theme=\"auto\""));
+    assert!(root(http_get(a, "/", a)).contains("data-mdv-theme=\"auto\""));
 
     let body = r#"{"theme":"dark","sidebar":"contents"}"#;
     let post = |extra: &str| {
@@ -498,7 +567,7 @@ fn theme_and_sidebar_choices_are_remembered() {
     );
     assert!(post("X-MDV: 1\r\n").starts_with("HTTP/1.1 204"));
 
-    let page = http_get(a, "/", a);
+    let page = root(http_get(a, "/", a));
     assert!(
         page.contains("data-mdv-theme=\"dark\""),
         "applied this session"
@@ -517,13 +586,17 @@ fn theme_and_sidebar_choices_are_remembered() {
         c.args(["--watch"]).arg(&md);
         c
     });
-    assert!(http_get(&again.addr, "/", &again.addr).contains("data-mdv-theme=\"dark\""));
+    assert!(root(http_get(&again.addr, "/", &again.addr)).contains("data-mdv-theme=\"dark\""));
+    // (A second launch for the same file would reuse that viewer.)
+    drop(again);
     let explicit = start({
         let mut c = mdv();
         c.args(["--watch", "--theme", "light"]).arg(&md);
         c
     });
-    assert!(http_get(&explicit.addr, "/", &explicit.addr).contains("data-mdv-theme=\"light\""));
+    assert!(
+        root(http_get(&explicit.addr, "/", &explicit.addr)).contains("data-mdv-theme=\"light\"")
+    );
 }
 
 #[test]
@@ -2133,4 +2206,117 @@ fn diff_marks_changes_since_a_revision() {
         .output()
         .unwrap();
     assert!(String::from_utf8_lossy(&bad.stderr).contains("isn't in a git repository"));
+}
+
+/// Graphviz, PlantUML and D2 blocks run the program (here stand-ins) and
+/// put its cleaned-up SVG in the page; failures show the source and why.
+#[test]
+fn diagram_programs_draw_their_blocks() {
+    let dir = tempfile::tempdir().unwrap();
+    let bin = dir.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let svg = dir.path().join("out.svg");
+    std::fs::write(
+        &svg,
+        "<?xml version=\"1.0\"?>\n<svg onload=\"alert(1)\" width=\"80pt\"><script>alert(2)</script>\
+         <g><text fill=\"black\">drawn</text></g></svg>\n",
+    )
+    .unwrap();
+    // `dot` prints the SVG; `plantuml` fails.
+    if cfg!(windows) {
+        std::fs::write(
+            bin.join("dot.cmd"),
+            format!("@type \"{}\"\r\n", svg.display()),
+        )
+        .unwrap();
+        std::fs::write(
+            bin.join("plantuml.cmd"),
+            "@echo Syntax Error? (line 2) 1>&2\r\n@exit /b 1\r\n",
+        )
+        .unwrap();
+    } else {
+        for (name, body) in [
+            ("dot", format!("#!/bin/sh\ncat > /dev/null\ncat {svg:?}\n")),
+            (
+                "plantuml",
+                "#!/bin/sh\ncat > /dev/null\necho 'Syntax Error? (line 2)' >&2\nexit 1\n"
+                    .to_string(),
+            ),
+        ] {
+            let p = bin.join(name);
+            std::fs::write(&p, body).unwrap();
+            Command::new("chmod").arg("+x").arg(&p).status().unwrap();
+        }
+    }
+    let md = dir.path().join("d.md");
+    std::fs::write(
+        &md,
+        "```dot\ndigraph { a -> b }\n```\n\n```plantuml\nAlice -> Bob\n```\n\n```d2\na -> b\n```\n",
+    )
+    .unwrap();
+    let out = mdv()
+        .env("MARKDOWN_VIEWER_DIAGRAM_PATH", &bin)
+        .arg(&md)
+        .args(["-o", "-"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let html = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        html.contains("<figure class=\"mdv-diagram mdv-dot\"><svg  width=\"80pt\"><g><text fill=\"currentColor\">drawn</text></g></svg></figure>"),
+        "{html}"
+    );
+    assert!(!html.contains("alert("));
+    assert!(html.contains("Can't draw this PlantUML: Syntax Error? (line 2)"));
+    assert!(html.contains("Install D2 (<code>d2</code>) to draw this diagram."));
+}
+
+/// Pages that use a library get it: inlined in a standalone page, served
+/// at /__mdv/lib/, and written once into a static site's _mdv folder.
+#[test]
+fn chart_libraries_are_bundled() {
+    let dir = tempfile::tempdir().unwrap();
+    let docs = dir.path().join("docs");
+    std::fs::create_dir(&docs).unwrap();
+    std::fs::write(
+        docs.join("chart.md"),
+        "```vega-lite\n{\"mark\": \"bar\"}\n```\n",
+    )
+    .unwrap();
+    std::fs::write(docs.join("plain.md"), "# Plain\n").unwrap();
+    let site = dir.path().join("site");
+    let out = mdv().arg(&docs).arg("-o").arg(&site).output().unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let page = std::fs::read_to_string(site.join("chart.html")).unwrap();
+    assert!(
+        page.contains("data-libs=\"{&quot;vega&quot;:&quot;_mdv/vega.js&quot;}\""),
+        "{page}"
+    );
+    assert!(
+        std::fs::read_to_string(site.join("_mdv/vega.js"))
+            .unwrap()
+            .contains("window.vegaInterpreter")
+    );
+    assert!(!site.join("_mdv/abcjs.js").exists());
+    let plain = std::fs::read_to_string(site.join("plain.html")).unwrap();
+    assert!(!plain.contains("data-libs"));
+
+    let mut cmd = mdv();
+    cmd.arg("--watch").arg(docs.join("chart.md"));
+    let server = start(cmd);
+    let page = http_get(&server.addr, "/", &server.addr);
+    assert!(page.contains("/__mdv/lib/vega.js?v=6.5.0"), "{page}");
+    let js = http_get(&server.addr, "/__mdv/lib/abcjs.js?v=1", &server.addr);
+    assert!(js.starts_with("HTTP/1.1 200"));
+    assert!(js.to_ascii_lowercase().contains("content-encoding: gzip"));
+    let missing = http_get(&server.addr, "/__mdv/lib/nope.js", &server.addr);
+    assert!(missing.starts_with("HTTP/1.1 404"), "{missing}");
 }

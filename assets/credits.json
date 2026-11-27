@@ -74,6 +74,24 @@
     },
     {
       "license": "MIT OR Apache-2.0",
+      "name": "pikchr",
+      "url": "https://github.com/kinnison/pikchr",
+      "version": "0.1.4"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "qrcode",
+      "url": "https://github.com/kennytm/qrcode-rust",
+      "version": "0.15.0"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
+      "name": "roxmltree",
+      "url": "https://github.com/RazrFalcon/roxmltree",
+      "version": "0.21.2"
+    },
+    {
+      "license": "MIT OR Apache-2.0",
       "name": "serde",
       "url": "https://github.com/serde-rs/serde",
       "version": "1.0.229"
@@ -83,6 +101,12 @@
       "name": "serde_json",
       "url": "https://github.com/serde-rs/json",
       "version": "1.0.154"
+    },
+    {
+      "license": "Apache-2.0",
+      "name": "svgbob",
+      "url": "https://github.com/ivanceras/svgbob",
+      "version": "0.7.6"
     },
     {
       "license": "MIT",
@@ -139,5 +163,5 @@
       "version": "0.13.2"
     }
   ],
-  "total": 203
+  "total": 273
 }

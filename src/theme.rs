@@ -219,7 +219,83 @@ const CODE_AND_TOC: &str = "\
 .markdown-body :is(.mdv-map, .mdv-stl) pre { margin: 0; border-radius: 0; }\n\
 @media print { .markdown-body .mdv-map, .markdown-body .mdv-stl { break-inside: avoid; } \
   .markdown-body .mdv-stl-hint { display: none !important; } }\n\
+.markdown-body .mdv-diagram { margin: 0 0 16px; overflow-x: auto; text-align: center; }\n\
+.markdown-body .mdv-diagram > svg { max-width: 100%; height: auto; }\n\
+.markdown-body .mdv-diagram > figcaption { color: var(--fgColor-muted); font-size: 12px; margin-top: 4px; }\n\
+.markdown-body .mdv-diagram :where(svg text:not([fill])) { fill: currentColor; }\n\
+.markdown-body :is(.mdv-diagram-invalid, .mdv-diagram-missing) { text-align: left; border: 1px solid var(--borderColor-default); \
+  border-radius: 6px; overflow: hidden; }\n\
+.markdown-body :is(.mdv-diagram-invalid, .mdv-diagram-missing) > figcaption { margin: 0; padding: 6px 12px; }\n\
+.markdown-body .mdv-diagram-invalid > figcaption { color: var(--fgColor-danger); }\n\
+.markdown-body :is(.mdv-diagram-invalid, .mdv-diagram-missing) pre { margin: 0; border-radius: 0; }\n\
+.markdown-body :is(.mdv-plantuml, .mdv-d2) > svg { background: #fff; border-radius: 6px; padding: 8px; }\n\
+.markdown-body .mdv-qr > svg { width: 160px; background: #fff; border-radius: 4px; }\n\
+.markdown-body .mdv-wavedrom svg { font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }\n\
+.markdown-body .mdv-wave-line { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }\n\
+.markdown-body .mdv-wave-bus { stroke: currentColor; stroke-width: 1.2; fill: none; }\n\
+.markdown-body .mdv-wave-x { fill: color-mix(in srgb, currentColor 18%, transparent); }\n\
+.markdown-body .mdv-wave-3 { fill: #fffbb4; } .markdown-body .mdv-wave-4 { fill: #ffe0b9; } \
+.markdown-body .mdv-wave-5 { fill: #b9e0ff; } .markdown-body .mdv-wave-6 { fill: #ccfdfe; } \
+.markdown-body .mdv-wave-7 { fill: #cdfdc5; } .markdown-body .mdv-wave-8 { fill: #f0c1fb; } \
+.markdown-body .mdv-wave-9 { fill: #f5c2c0; }\n\
+.markdown-body .mdv-wave-data.mdv-wave-on-fill { fill: #1f2328; }\n\
+.markdown-body .mdv-wave-gap { fill: none; stroke: var(--bgColor-default); stroke-width: 4; }\n\
+.markdown-body .mdv-wave-grid { stroke: var(--borderColor-muted); stroke-dasharray: 2 3; }\n\
+.markdown-body :is(.mdv-wave-name, .mdv-wave-group, .mdv-wave-data, .mdv-wave-title) { fill: currentColor; }\n\
+.markdown-body .mdv-wave-group, .markdown-body .mdv-wave-title { font-weight: 600; }\n\
+.markdown-body .mdv-chess svg { width: 336px; }\n\
+.markdown-body .mdv-chess-light { fill: #f0d9b5; } .markdown-body .mdv-chess-dark { fill: #b58863; }\n\
+.markdown-body .mdv-chess-moved { fill: #cdd26a; } .markdown-body .mdv-chess-dark.mdv-chess-moved { fill: #aaa23a; }\n\
+.markdown-body :is(.mdv-chess-white, .mdv-chess-black) { font-size: 33px; font-family: 'Segoe UI Symbol', 'Apple Symbols', 'DejaVu Sans', 'Noto Sans Symbols 2', sans-serif; \
+  paint-order: stroke; stroke-linejoin: round; }\n\
+.markdown-body .mdv-chess-white { fill: #fff; stroke: #1f2328; stroke-width: 1.6; }\n\
+.markdown-body .mdv-chess-black { fill: #1f2328; stroke: #1f2328; stroke-width: .6; }\n\
+.markdown-body .mdv-chess-coord { fill: var(--fgColor-muted); font-size: 11px; }\n\
+.markdown-body pre.mdv-lib-error { border-left: 4px solid var(--fgColor-danger); }\n\
+.markdown-body .mdv-abc svg { max-width: 100%; height: auto; }\n\
+.markdown-body .mdv-smiles > svg { width: 360px; max-width: 100%; height: auto; }\n\
+.markdown-body .mdv-color { display: inline-block; width: 8px; height: 8px; margin-left: 4px; border-radius: 50%; \
+  border: 1px solid var(--borderColor-default); vertical-align: middle; }\n\
+.markdown-body .mdv-molecule > svg { width: auto; max-width: 100%; }\n\
+.markdown-body .mdv-molecule-3d > svg { width: 400px; touch-action: none; }\n\
+.markdown-body .mdv-molecule-3d[data-mdv-atoms] > svg { cursor: grab; }\n\
+.markdown-body .mdv-mol-bond { stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; }\n\
+.markdown-body .mdv-mol-aromatic { stroke-dasharray: 3 3; }\n\
+.markdown-body .mdv-mol-wedge { fill: currentColor; }\n\
+.markdown-body .mdv-mol-label { font: 600 14px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; \
+  paint-order: stroke; stroke: var(--bgColor-default); stroke-width: 6px; stroke-linejoin: round; fill: currentColor; }\n\
+.markdown-body :is(.mdv-mol-charge, .mdv-mol-count) { font-size: 10px; }\n\
+.markdown-body .mdv-mol-stick { stroke: var(--fgColor-muted); stroke-width: 3; stroke-linecap: round; }\n\
+.markdown-body .mdv-molecule-3d circle { stroke: rgba(0,0,0,.35); stroke-width: .8; fill: #909090; }\n\
+.markdown-body .mdv-mol-label.mdv-el-N { fill: #2f5be0; } .markdown-body .mdv-mol-label.mdv-el-O { fill: #e0352b; }\n\
+.markdown-body .mdv-mol-label.mdv-el-S { fill: #b08900; } .markdown-body .mdv-mol-label.mdv-el-Cl { fill: #1f9a1f; }\n\
+.markdown-body .mdv-mol-label.mdv-el-P { fill: #e07000; } .markdown-body .mdv-mol-label.mdv-el-Br { fill: #a62929; }\n\
+.markdown-body circle.mdv-el-H { fill: #f2f2f2; } .markdown-body circle.mdv-el-C { fill: #707070; }\n\
+.markdown-body circle.mdv-el-N { fill: #3c63f0; } .markdown-body circle.mdv-el-O { fill: #f0362b; }\n\
+.markdown-body circle.mdv-el-S { fill: #f2c628; } .markdown-body circle.mdv-el-P { fill: #ff8000; }\n\
+.markdown-body circle.mdv-el-Cl { fill: #2fc22f; } .markdown-body circle.mdv-el-Br { fill: #a62929; }\n\
+.markdown-body circle.mdv-el-I { fill: #940094; } .markdown-body circle.mdv-el-M { fill: #c0a080; } \
+.markdown-body circle.mdv-el-X { fill: #e070e0; }\n\
+.markdown-body .mdv-mol-hint { display: none; }\n\
+:root[data-mdv-ui] .markdown-body .mdv-molecule[data-mdv-atoms] .mdv-mol-hint { display: inline; }\n\
+.markdown-body .mdv-calendar { margin: 0 0 16px; }\n\
+.markdown-body .mdv-calendar > figcaption { font-weight: 600; margin-bottom: 6px; }\n\
+.markdown-body .mdv-calendar table { display: table; width: 100%; }\n\
+.markdown-body .mdv-calendar td { vertical-align: top; }\n\
+.markdown-body .mdv-calendar .mdv-cal-month td { font-weight: 600; background: var(--bgColor-muted); }\n\
+.markdown-body .mdv-cal-day, .markdown-body .mdv-cal-time { white-space: nowrap; font-variant-numeric: tabular-nums; }\n\
+.markdown-body :is(.mdv-cal-zone, .mdv-cal-note, .mdv-cal-desc) { color: var(--fgColor-muted); font-size: 12px; }\n\
+.markdown-body :is(video.mdv-video, audio.mdv-audio) { max-width: 100%; vertical-align: middle; }\n\
+.markdown-body video.mdv-video { border-radius: 6px; max-height: 70vh; }\n\
+@media print { .markdown-body .mdv-mol-hint { display: none !important; } }\n\
+@media print { .markdown-body .mdv-diagram { break-inside: avoid; } }\n\
 .markdown-body abbr[title] { text-decoration: underline dotted; cursor: help; }\n\
+.markdown-body a.mdv-tag { display: inline-block; padding: 0 .6em; border-radius: 2em; font-size: 85%; line-height: 1.6; \
+  color: var(--fgColor-accent); background: color-mix(in srgb, var(--fgColor-accent) 12%, transparent); text-decoration: none; \
+  white-space: nowrap; }\n\
+:root[data-mdv-ui] .markdown-body a.mdv-tag { cursor: pointer; }\n\
+:root[data-mdv-ui] .markdown-body a.mdv-tag:hover { background: color-mix(in srgb, var(--fgColor-accent) 22%, transparent); }\n\
+.markdown-body td.mdv-tags { white-space: normal; }\n\
 .markdown-body ins.mdv-ins { background: color-mix(in srgb, var(--fgColor-success) 18%, transparent); color: var(--fgColor-default); \
   text-decoration: none; border-radius: 3px; padding: 0 2px; box-shadow: inset 0 -1px var(--borderColor-success-emphasis); }\n\
 .markdown-body del.mdv-del { background: color-mix(in srgb, var(--fgColor-danger) 14%, transparent); color: var(--fgColor-danger); \

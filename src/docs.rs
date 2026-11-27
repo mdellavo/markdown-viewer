@@ -22,7 +22,7 @@ use tokio::sync::{mpsc, watch};
 
 use crate::render::Renderer;
 
-const DEBOUNCE: Duration = Duration::from_millis(100);
+const DEBOUNCE: Duration = Duration::from_millis(50);
 /// Limits for the file list, so a huge folder can't stall the viewer.
 const MAX_FILES: usize = 2000;
 const MAX_DEPTH: usize = 6;
@@ -202,7 +202,7 @@ impl Docs {
     pub fn render_text(&self, text: &str, dir: &Path) -> String {
         let renderer = self.renderer();
         if !renderer.options().obsidian {
-            return renderer.render_body(text);
+            return renderer.render_in(text, Some(dir), None);
         }
         let (files, _) = self.list_files();
         let ctx = crate::obsidian::LinkContext {
@@ -246,6 +246,13 @@ impl Docs {
                 changed
             });
         }
+    }
+
+    /// Every tag in the served folder's Markdown files: front matter tags,
+    /// and `#tags` in the text when rendering Obsidian notes.
+    pub fn tags(&self) -> Vec<crate::tags::Tagged> {
+        let (files, _) = self.list_files();
+        crate::tags::index(&self.root, &files, self.renderer().options().obsidian)
     }
 
     /// Lines in other files that link to `doc` (wiki or Markdown links).

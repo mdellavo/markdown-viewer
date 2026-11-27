@@ -1,5 +1,7 @@
-//! ```` ```stl ```` blocks (ASCII STL) drawn as 3D models, as GitHub does.
-//! The model is drawn when the page is built, as an SVG of shaded
+//! 3D models drawn as GitHub draws ```` ```stl ```` blocks: ASCII STL, and
+//! also Wavefront OBJ, PLY (ASCII) and OFF blocks, and model files shown as
+//! images (`![part](part.stl)`, binary STL too, through embeds.rs). The
+//! model is drawn when the page is built, as an SVG of shaded
 //! triangles seen from above at an angle, so it works offline, in exports
 //! and in PDFs. In the viewer (ui.js), dragging rotates it: the figure
 //! carries the model's vertices in `data-mdv-mesh` for that.
@@ -10,31 +12,343 @@ use crate::render::escape_text;
 
 const SIZE: f64 = 400.0;
 /// Most triangles drawn.
-const MAX_TRIANGLES: usize = 20_000;
+pub const MAX_TRIANGLES: usize = 20_000;
 /// Most triangles the viewer can rotate (their vertices go in the page).
 const MAX_ROTATABLE: usize = 5_000;
 /// The starting view: turned and tilted (radians).
 pub const YAW: f64 = -0.6;
 pub const PITCH: f64 = 1.0;
 
-type V3 = [f64; 3];
+pub type V3 = [f64; 3];
 
-/// Render a ```stl block.
-pub fn render(code: &str, sourcepos: &str) -> String {
-    match parse(code) {
-        Ok(tris) if !tris.is_empty() => draw(&tris, sourcepos),
-        Ok(_) => invalid(code, sourcepos, "no facets to draw"),
-        Err(e) => invalid(code, sourcepos, &e),
+/// The model formats, by code block language or file extension.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Format {
+    Stl,
+    Obj,
+    Ply,
+    Off,
+    /// glTF: JSON (a block, or a `.gltf` file), or binary `.glb`.
+    Gltf,
+    /// 3MF (files only: they're zip archives).
+    ThreeMf,
+}
+
+impl Format {
+    pub fn from_extension(ext: &str) -> Option<Self> {
+        match ext.to_ascii_lowercase().as_str() {
+            "stl" => Some(Self::Stl),
+            "obj" => Some(Self::Obj),
+            "ply" => Some(Self::Ply),
+            "off" => Some(Self::Off),
+            "gltf" | "glb" => Some(Self::Gltf),
+            "3mf" => Some(Self::ThreeMf),
+            _ => None,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Stl => "STL",
+            Self::Obj => "OBJ",
+            Self::Ply => "PLY",
+            Self::Off => "OFF",
+            Self::Gltf => "glTF",
+            Self::ThreeMf => "3MF",
+        }
+    }
+
+    fn lang(self) -> &'static str {
+        match self {
+            Self::Stl => "stl",
+            Self::Obj => "obj",
+            Self::Ply => "ply",
+            Self::Off => "off",
+            Self::Gltf => "gltf",
+            Self::ThreeMf => "3mf",
+        }
+    }
+
+    fn parse(self, code: &str) -> Result<Vec<[V3; 3]>, String> {
+        match self {
+            Self::Stl => parse(code),
+            Self::Obj => parse_obj(code),
+            Self::Ply => parse_ply(code),
+            Self::Off => parse_off(code),
+            Self::Gltf => crate::modelformats::gltf_text(code),
+            Self::ThreeMf => Err("3MF files are zip archives; show the file as an image".into()),
+        }
     }
 }
 
-fn invalid(code: &str, sourcepos: &str, why: &str) -> String {
+/// Render a ```stl block.
+pub fn render(code: &str, sourcepos: &str) -> String {
+    render_as(Format::Stl, code, sourcepos)
+}
+
+/// Render a ```obj block.
+pub fn obj(code: &str, sourcepos: &str) -> String {
+    render_as(Format::Obj, code, sourcepos)
+}
+
+/// Render a ```ply block.
+pub fn ply(code: &str, sourcepos: &str) -> String {
+    render_as(Format::Ply, code, sourcepos)
+}
+
+/// Render a ```gltf block (glTF JSON with its buffers as data URIs).
+pub fn gltf(code: &str, sourcepos: &str) -> String {
+    render_as(Format::Gltf, code, sourcepos)
+}
+
+/// Render a ```off block.
+pub fn off(code: &str, sourcepos: &str) -> String {
+    render_as(Format::Off, code, sourcepos)
+}
+
+fn render_as(format: Format, code: &str, sourcepos: &str) -> String {
+    match format.parse(code) {
+        Ok(tris) if !tris.is_empty() => draw(&tris, sourcepos),
+        Ok(_) => invalid(format, code, sourcepos, "no faces to draw"),
+        Err(e) => invalid(format, code, sourcepos, &e),
+    }
+}
+
+/// A model file (`![alt](part.stl)`): binary STL, GLB and 3MF as well as
+/// the text formats; a glTF file's other files are read from `dir`. `Err`
+/// says why it can't be drawn.
+pub fn file(
+    format: Format,
+    bytes: &[u8],
+    dir: Option<&std::path::Path>,
+    sourcepos: &str,
+) -> Result<String, String> {
+    let tris = match binary_stl(format, bytes) {
+        Some(tris) => tris,
+        None if format == Format::Gltf => crate::modelformats::gltf_file(bytes, dir)?,
+        None if format == Format::ThreeMf => crate::modelformats::three_mf(bytes)?,
+        None => {
+            let text = std::str::from_utf8(bytes)
+                .map_err(|_| format!("not a text {} file", format.name()))?;
+            format.parse(text)?
+        }
+    };
+    if tris.is_empty() {
+        return Err("no faces to draw".into());
+    }
+    Ok(draw(&tris, sourcepos))
+}
+
+/// Binary STL: an 80-byte header, a triangle count, then 50 bytes per
+/// triangle (normal, three vertices, attributes). Recognised by its size,
+/// since some binary files also start with "solid".
+fn binary_stl(format: Format, bytes: &[u8]) -> Option<Vec<[V3; 3]>> {
+    if format != Format::Stl || bytes.len() < 84 {
+        return None;
+    }
+    let count = u32::from_le_bytes(bytes[80..84].try_into().ok()?) as usize;
+    if bytes.len() != 84 + count.checked_mul(50)? {
+        return None;
+    }
+    let f = |at: usize| f32::from_le_bytes(bytes[at..at + 4].try_into().unwrap()) as f64;
+    let mut out = Vec::new();
+    for i in 0..count.min(MAX_TRIANGLES) {
+        let at = 84 + i * 50 + 12;
+        let v = |k: usize| [f(at + k * 12), f(at + k * 12 + 4), f(at + k * 12 + 8)];
+        let t = [v(0), v(1), v(2)];
+        if t.iter().flatten().all(|n| n.is_finite()) {
+            out.push(t);
+        }
+    }
+    Some(out)
+}
+
+fn invalid(format: Format, code: &str, sourcepos: &str, why: &str) -> String {
     format!(
-        "<figure class=\"mdv-stl mdv-stl-invalid\"{sourcepos}><figcaption>Can't draw this STL: {}</figcaption>\
-         <pre lang=\"stl\"><code>{}</code></pre></figure>\n",
+        "<figure class=\"mdv-stl mdv-stl-invalid\"{sourcepos}><figcaption>Can't draw this {}: {}</figcaption>\
+         <pre lang=\"{}\"><code>{}</code></pre></figure>\n",
+        format.name(),
         escape_text(why),
+        format.lang(),
         escape_text(code)
     )
+}
+
+/// Polygons (lists of vertex indices) as triangles, fanned from their
+/// first corner.
+fn fan(verts: &[V3], faces: &[Vec<usize>]) -> Result<Vec<[V3; 3]>, String> {
+    let mut out = Vec::new();
+    for face in faces {
+        for i in 1..face.len().saturating_sub(1) {
+            let get = |k: usize| {
+                verts.get(face[k]).copied().ok_or_else(|| {
+                    format!(
+                        "a face uses vertex {}, but there are {}",
+                        face[k] + 1,
+                        verts.len()
+                    )
+                })
+            };
+            out.push([get(0)?, get(i)?, get(i + 1)?]);
+            if out.len() >= MAX_TRIANGLES {
+                return Ok(out);
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn numbers<'a>(words: impl Iterator<Item = &'a str>) -> Option<V3> {
+    let nums: Vec<f64> = words
+        .take(3)
+        .map(|w| w.parse().ok())
+        .collect::<Option<_>>()?;
+    match nums[..] {
+        [x, y, z] if x.is_finite() && y.is_finite() && z.is_finite() => Some([x, y, z]),
+        _ => None,
+    }
+}
+
+/// Wavefront OBJ: `v x y z` vertices and `f a b c …` faces (indices from 1,
+/// negative ones counting back, `a/t/n` forms allowed).
+fn parse_obj(code: &str) -> Result<Vec<[V3; 3]>, String> {
+    let mut verts = Vec::new();
+    let mut faces = Vec::new();
+    for (n, line) in code.lines().enumerate() {
+        let mut words = line.split_whitespace();
+        match words.next() {
+            Some("v") => verts.push(
+                numbers(words)
+                    .ok_or_else(|| format!("line {}: a vertex needs three numbers", n + 1))?,
+            ),
+            Some("f") => {
+                let mut face = Vec::new();
+                for w in words {
+                    let i: i64 = w
+                        .split('/')
+                        .next()
+                        .and_then(|i| i.parse().ok())
+                        .ok_or_else(|| format!("line {}: {w:?} isn't a vertex number", n + 1))?;
+                    let index = if i < 0 { verts.len() as i64 + i } else { i - 1 };
+                    if index < 0 {
+                        return Err(format!("line {}: no vertex {i}", n + 1));
+                    }
+                    face.push(index as usize);
+                }
+                faces.push(face);
+            }
+            _ => {}
+        }
+    }
+    fan(&verts, &faces)
+}
+
+/// ASCII PLY: a header of elements and properties, then their rows. Uses
+/// the vertices' x, y and z and the faces' index lists.
+fn parse_ply(code: &str) -> Result<Vec<[V3; 3]>, String> {
+    let mut lines = code.lines();
+    if lines.next().map(str::trim) != Some("ply") {
+        return Err("a PLY file starts with \"ply\"".into());
+    }
+    // Each element: name, count, property names (a list property is "list").
+    let mut elements: Vec<(String, usize, Vec<String>)> = Vec::new();
+    for line in lines.by_ref() {
+        let words: Vec<&str> = line.split_whitespace().collect();
+        match words[..] {
+            ["format", f, ..] if f != "ascii" => {
+                return Err(format!("{f} PLY isn't supported, only ascii"));
+            }
+            ["element", name, count] => elements.push((
+                name.into(),
+                count
+                    .parse()
+                    .map_err(|_| format!("bad element count {count:?}"))?,
+                Vec::new(),
+            )),
+            ["property", "list", .., name] | ["property", _, name] => {
+                if let Some(e) = elements.last_mut() {
+                    let list = words[1] == "list";
+                    e.2.push(if list {
+                        format!("list:{name}")
+                    } else {
+                        name.into()
+                    });
+                }
+            }
+            ["end_header"] => break,
+            _ => {}
+        }
+    }
+    let mut verts = Vec::new();
+    let mut faces = Vec::new();
+    for (name, count, props) in &elements {
+        for _ in 0..*count {
+            let row = lines.next().ok_or("the file ends early")?;
+            let nums: Vec<f64> = row
+                .split_whitespace()
+                .map(|w| w.parse().map_err(|_| format!("{w:?} isn't a number")))
+                .collect::<Result<_, _>>()?;
+            if name == "vertex" {
+                let at = |p: &str| {
+                    props
+                        .iter()
+                        .position(|x| x == p)
+                        .and_then(|i| nums.get(i).copied())
+                };
+                match (at("x"), at("y"), at("z")) {
+                    (Some(x), Some(y), Some(z))
+                        if x.is_finite() && y.is_finite() && z.is_finite() =>
+                    {
+                        verts.push([x, y, z])
+                    }
+                    _ => return Err("a vertex needs x, y and z".into()),
+                }
+            } else if name == "face" {
+                let n = *nums.first().ok_or("an empty face")? as usize;
+                faces.push(nums.iter().skip(1).take(n).map(|i| *i as usize).collect());
+            }
+        }
+    }
+    fan(&verts, &faces)
+}
+
+/// OFF: an optional `OFF` line, the vertex and face counts, the vertices,
+/// then faces as `n i1 … in`. `#` starts a comment.
+fn parse_off(code: &str) -> Result<Vec<[V3; 3]>, String> {
+    let mut rows = code
+        .lines()
+        .map(|l| l.split('#').next().unwrap_or("").trim())
+        .filter(|l| !l.is_empty());
+    let mut first = rows.next().ok_or("empty")?;
+    if let Some(rest) = first.strip_prefix("OFF") {
+        first = match rest.trim() {
+            "" => rows.next().ok_or("no counts after OFF")?,
+            r => r,
+        };
+    }
+    let counts: Vec<usize> = first
+        .split_whitespace()
+        .filter_map(|w| w.parse().ok())
+        .collect();
+    let [nv, nf, ..] = counts[..] else {
+        return Err("the counts line needs vertices and faces".into());
+    };
+    let mut verts = Vec::with_capacity(nv.min(1 << 20));
+    for _ in 0..nv {
+        let row = rows.next().ok_or("fewer vertices than the count")?;
+        verts.push(numbers(row.split_whitespace()).ok_or("a vertex needs three numbers")?);
+    }
+    let mut faces = Vec::new();
+    for _ in 0..nf {
+        let row = rows.next().ok_or("fewer faces than the count")?;
+        let nums: Vec<usize> = row
+            .split_whitespace()
+            .filter_map(|w| w.parse().ok())
+            .collect();
+        let n = *nums.first().ok_or("an empty face")?;
+        faces.push(nums.iter().skip(1).take(n).copied().collect());
+    }
+    fan(&verts, &faces)
 }
 
 /// The triangles of an ASCII STL file (its `vertex` lines, in threes).
@@ -93,7 +407,7 @@ fn normalise(tris: &[[V3; 3]]) -> Vec<[V3; 3]> {
 /// Turn around the z axis (yaw), then tilt towards the viewer (pitch).
 /// Returns screen x, screen y (down) and depth (larger is nearer). The
 /// same maths is in ui.js.
-fn view(v: V3, yaw: f64, pitch: f64) -> V3 {
+pub fn view(v: V3, yaw: f64, pitch: f64) -> V3 {
     let (sy, cy) = yaw.sin_cos();
     let x = v[0] * cy - v[1] * sy;
     let y = v[0] * sy + v[1] * cy;
@@ -247,7 +561,7 @@ endsolid corner
             html.contains("line 2: a vertex needs three numbers"),
             "{html}"
         );
-        assert!(render("solid empty\nendsolid empty\n", "").contains("no facets"));
+        assert!(render("solid empty\nendsolid empty\n", "").contains("no faces"));
     }
 
     #[test]
@@ -256,5 +570,42 @@ endsolid corner
         let f = faces(&tris, YAW, PITCH);
         assert!(f[0].depth <= f[1].depth);
         assert!(f.iter().all(|f| (0.3..=1.0).contains(&f.light)));
+    }
+
+    #[test]
+    fn obj_ply_and_off_draw_the_same_square() {
+        let o = "# a square\nv 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\nf 1/1 2/2 3/3 -1\n";
+        let p = "ply\nformat ascii 1.0\nelement vertex 4\nproperty float x\nproperty float y\n\
+                   property float z\nelement face 1\nproperty list uchar int vertex_indices\nend_header\n\
+                   0 0 0\n1 0 0\n1 1 0\n0 1 0\n4 0 1 2 3\n";
+        let f = "OFF\n# counts\n4 1 0\n0 0 0\n1 0 0\n1 1 0\n0 1 0\n4 0 1 2 3\n";
+        for html in [obj(o, ""), ply(p, ""), off(f, "")] {
+            assert_eq!(html.matches("<polygon ").count(), 2, "{html}");
+            assert!(html.contains("2 triangles"));
+        }
+        assert!(
+            super::obj("v 0 0 0\nf 1 2 3\n", "")
+                .contains("Can't draw this OBJ: a face uses vertex 2")
+        );
+        assert!(super::ply("ply\nformat binary_little_endian 1.0\n", "").contains("only ascii"));
+    }
+
+    #[test]
+    fn binary_stl_files_are_read() {
+        let mut bytes = vec![0u8; 80];
+        bytes.extend(1u32.to_le_bytes());
+        for n in [
+            0.0f32, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+        ] {
+            bytes.extend(n.to_le_bytes());
+        }
+        bytes.extend([0, 0]);
+        let html = file(Format::Stl, &bytes, None, "").unwrap();
+        assert!(html.contains("3D model, 1 triangle\""), "{html}");
+        assert!(
+            file(Format::Stl, b"\xff\xfe", None, "")
+                .unwrap_err()
+                .contains("not a text STL")
+        );
     }
 }

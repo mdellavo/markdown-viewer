@@ -18,6 +18,7 @@
 
   // Icons: Primer Octicons (MIT), see assets/LICENSE-octicons.
   var ICONS = {
+    "tag": ["M1 7.775V2.75C1 1.784 1.784 1 2.75 1h5.025c.464 0 .91.184 1.238.513l6.25 6.25a1.75 1.75 0 0 1 0 2.474l-5.026 5.026a1.75 1.75 0 0 1-2.474 0l-6.25-6.25A1.752 1.752 0 0 1 1 7.775Zm1.5 0c0 .066.026.13.073.177l6.25 6.25a.25.25 0 0 0 .354 0l5.025-5.025a.25.25 0 0 0 0-.354l-6.25-6.25a.25.25 0 0 0-.177-.073H2.75a.25.25 0 0 0-.25.25ZM6 5a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z"],
     "code": ["m11.28 3.22 4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734L13.94 8l-3.72-3.72a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215Zm-6.56 0a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L2.06 8l3.72 3.72a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L.47 8.53a.75.75 0 0 1 0-1.06Z"],
     "gear": ["M8 0a8.2 8.2 0 0 1 .701.031C9.444.095 9.99.645 10.16 1.29l.288 1.107c.018.066.079.158.212.224.231.114.454.243.668.386.123.082.233.09.299.071l1.103-.303c.644-.176 1.392.021 1.82.63.27.385.506.792.704 1.218.315.675.111 1.422-.364 1.891l-.814.806c-.049.048-.098.147-.088.294.016.257.016.515 0 .772-.01.147.038.246.088.294l.814.806c.475.469.679 1.216.364 1.891a7.977 7.977 0 0 1-.704 1.217c-.428.61-1.176.807-1.82.63l-1.102-.302c-.067-.019-.177-.011-.3.071a5.909 5.909 0 0 1-.668.386c-.133.066-.194.158-.211.224l-.29 1.106c-.168.646-.715 1.196-1.458 1.26a8.006 8.006 0 0 1-1.402 0c-.743-.064-1.289-.614-1.458-1.26l-.289-1.106c-.018-.066-.079-.158-.212-.224a5.738 5.738 0 0 1-.668-.386c-.123-.082-.233-.09-.299-.071l-1.103.303c-.644.176-1.392-.021-1.82-.63a8.12 8.12 0 0 1-.704-1.218c-.315-.675-.111-1.422.363-1.891l.815-.806c.05-.048.098-.147.088-.294a6.214 6.214 0 0 1 0-.772c.01-.147-.038-.246-.088-.294l-.815-.806C.635 6.045.431 5.298.746 4.623a7.92 7.92 0 0 1 .704-1.217c.428-.61 1.176-.807 1.82-.63l1.102.302c.067.019.177.011.3-.071.214-.143.437-.272.668-.386.133-.066.194-.158.211-.224l.29-1.106C6.009.645 6.556.095 7.299.03 7.53.01 7.764 0 8 0Zm-.571 1.525c-.036.003-.108.036-.137.146l-.289 1.105c-.147.561-.549.967-.998 1.189-.173.086-.34.183-.5.29-.417.278-.97.423-1.529.27l-1.103-.303c-.109-.03-.175.016-.195.045-.22.312-.412.644-.573.99-.014.031-.021.11.059.19l.815.806c.411.406.562.957.53 1.456a4.709 4.709 0 0 0 0 .582c.032.499-.119 1.05-.53 1.456l-.815.806c-.081.08-.073.159-.059.19.162.346.353.677.573.989.02.03.085.076.195.046l1.102-.303c.56-.153 1.113-.008 1.53.27.161.107.328.204.501.29.447.222.85.629.997 1.189l.289 1.105c.029.109.101.143.137.146a6.6 6.6 0 0 0 1.142 0c.036-.003.108-.036.137-.146l.289-1.105c.147-.561.549-.967.998-1.189.173-.086.34-.183.5-.29.417-.278.97-.423 1.529-.27l1.103.303c.109.029.175-.016.195-.045.22-.313.411-.644.573-.99.014-.031.021-.11-.059-.19l-.815-.806c-.411-.406-.562-.957-.53-1.456a4.709 4.709 0 0 0 0-.582c-.032-.499.119-1.05.53-1.456l.815-.806c.081-.08.073-.159.059-.19a6.464 6.464 0 0 0-.573-.989c-.02-.03-.085-.076-.195-.046l-1.102.303c-.56.153-1.113.008-1.53-.27a4.44 4.44 0 0 0-.501-.29c-.447-.222-.85-.629-.997-1.189l-.289-1.105c-.029-.11-.101-.143-.137-.146a6.6 6.6 0 0 0-1.142 0ZM11 8a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM9.5 8a1.5 1.5 0 1 0-3.001.001A1.5 1.5 0 0 0 9.5 8Z"],
     "copy": ["M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z", "M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"],
@@ -149,6 +150,8 @@
   var linksTab = tab("Backlinks", "cross-reference", false);
   if (hasFiles) tabs.append(filesTab);
   if (served) tabs.append(linksTab);
+  var tagsTab = tab("Tags", "tag", false);
+  if (served) tabs.append(tagsTab);
   // Recent files, when the viewer remembers them.
   var hasRecent = served && script.hasAttribute("data-recent");
   var recentTab = tab("Recent", "history", false);
@@ -163,7 +166,8 @@
   filesPanel.append(filter, fileList, hitList);
   var linksPanel = el("div", { "class": "mdv-panel", role: "tabpanel", hidden: "" });
   var recentPanel = el("div", { "class": "mdv-panel", role: "tabpanel", hidden: "" });
-  sidebar.append(tabs, contentsPanel, filesPanel, linksPanel, recentPanel);
+  var tagsPanel = el("div", { "class": "mdv-panel", role: "tabpanel", hidden: "" });
+  sidebar.append(tabs, contentsPanel, filesPanel, linksPanel, tagsPanel, recentPanel);
 
   var KEYS = [
     ["[ / ]", "Back / forward (also Alt-\u2190 / Alt-\u2192)"],
@@ -179,6 +183,7 @@
     ["c", "Copy the page (rich text, and Markdown as plain text)"],
     ["w", "Show or hide the word count and reading time"],
     served ? ["b", "Show backlinks: other files linking here"] : null,
+    served ? ["#", "Show tags, and the files using each"] : null,
     hasRecent ? ["h", "Show recent files"] : null,
     served ? ["l", "Check this page's links"] : null,
     served ? ["D", "Show what changed since the last git commit"] : null,
@@ -605,10 +610,10 @@
   function sidebarOpen() { return root.classList.contains("mdv-sidebar-open"); }
   var currentTab = "contents";
   function selectTab(name) {
-    if ((name === "files" && !hasFiles) || (name === "links" && !served) || (name === "recent" && !hasRecent) ||
-        ["contents", "files", "links", "recent"].indexOf(name) === -1) name = "contents";
+    if ((name === "files" && !hasFiles) || ((name === "links" || name === "tags") && !served) || (name === "recent" && !hasRecent) ||
+        ["contents", "files", "links", "tags", "recent"].indexOf(name) === -1) name = "contents";
     currentTab = name;
-    var panels = { contents: [contentsPanel, contentsTab], files: [filesPanel, filesTab], links: [linksPanel, linksTab], recent: [recentPanel, recentTab] };
+    var panels = { contents: [contentsPanel, contentsTab], files: [filesPanel, filesTab], links: [linksPanel, linksTab], tags: [tagsPanel, tagsTab], recent: [recentPanel, recentTab] };
     for (var n in panels) {
       panels[n][0].hidden = n !== name;
       panels[n][1].setAttribute("aria-selected", String(n === name));
@@ -617,6 +622,7 @@
     filesBtn.setAttribute("aria-pressed", String(sidebarOpen() && name === "files"));
     if (name === "files") loadFiles();
     if (name === "links") loadBacklinks();
+    if (name === "tags") loadTags();
     if (name === "recent") loadRecent();
   }
   function openSidebar(name, focusFilter) {
@@ -892,7 +898,7 @@
   // ---- Copy buttons on code blocks ---------------------------------------
   function addCopyButtons(container) {
     container.querySelectorAll("pre").forEach(function (pre) {
-      if (pre.classList.contains("mermaid") || pre.hasAttribute("data-math-style")) return;
+      if (pre.classList.contains("mermaid") || pre.classList.contains("mdv-lib") || pre.hasAttribute("data-math-style")) return;
       if (pre.parentElement && pre.parentElement.classList.contains("mdv-code")) return;
       var wrap = el("div", { "class": "mdv-code" });
       pre.parentNode.insertBefore(wrap, pre);
@@ -1130,6 +1136,7 @@
       case "0": setScale(1); break;
       case "c": copyPage(); break;
       case "b": if (!served) return; openSidebar("links"); break;
+      case "#": if (!served) return; toggleSidebar("tags"); break;
       case "l": if (!served) return; checkLinks(); break;
       case "D": if (!served) return; toggleGit(); break;
       case "j": window.scrollBy(0, 80); break;
@@ -1224,7 +1231,7 @@
   body.addEventListener("dblclick", function (e) {
     if (!canEdit) return;
     var t = e.target;
-    if (t.closest("a, button, input, .mdv-ui, img, div.mermaid, .mdv-map, .mdv-stl")) return;
+    if (t.closest("a, button, input, .mdv-ui, img, div.mermaid, .mdv-map, .mdv-stl, .mdv-diagram")) return;
     var node = t.closest("[data-sourcepos]");
     if (!node) return;
     var sel = window.getSelection && window.getSelection();
@@ -1345,14 +1352,22 @@
       openZoom(copy);
       return;
     }
-    var diagram = e.target.closest("div.mermaid, .mdv-map:not(.mdv-map-invalid)");
+    var diagram = e.target.closest("div.mermaid, .mdv-map:not(.mdv-map-invalid), " +
+      ".mdv-diagram:not(.mdv-diagram-invalid, .mdv-diagram-missing, .mdv-qr, .mdv-chess, .mdv-molecule-3d)");
     if (diagram && diagram.querySelector("svg")) {
       var svg = diagram.querySelector("svg").cloneNode(true);
       var vb = svg.viewBox && svg.viewBox.baseVal;
       svg.removeAttribute("style");
+      svg.removeAttribute("width");
+      svg.removeAttribute("height");
       svg.style.width = Math.min(window.innerWidth * 0.92, (vb && vb.width ? vb.width : 800) * 1.6) + "px";
       svg.style.height = "auto";
-      openZoom(svg);
+      // The page's diagram styles apply inside .markdown-body.
+      var wrap = el("div", { "class": "markdown-body mdv-zoom-body" });
+      var copy = el(diagram.tagName.toLowerCase(), { "class": diagram.className });
+      copy.append(svg);
+      wrap.append(copy);
+      openZoom(wrap);
     }
   });
 
@@ -1400,12 +1415,55 @@
       poly.style.setProperty("--l", f.light.toFixed(2));
     });
   }
+  // 3D molecules (molecules.rs): balls and sticks, redrawn from
+  // data-mdv-atoms ("x,y,z,radius,element;…") and data-mdv-bonds ("a,b;…")
+  // the way molecules.rs `scene` draws them.
+  function moleculeModel(fig) {
+    var m = stlState.get(fig);
+    if (!m) {
+      var atoms = fig.getAttribute("data-mdv-atoms").split(";").map(function (a) {
+        var f = a.split(",");
+        return { v: [+f[0], +f[1], +f[2]], r: +f[3], el: f[4] };
+      });
+      var bondText = fig.getAttribute("data-mdv-bonds");
+      var bonds = bondText ? bondText.split(";").map(function (b) { return b.split(",").map(Number); }) : [];
+      m = { atoms: atoms, bonds: bonds, yaw: STL_YAW, pitch: STL_PITCH, svg: fig.querySelector("svg"), molecule: true };
+      stlState.set(fig, m);
+    }
+    return m;
+  }
+  function drawMolecule(m) {
+    var cy = Math.cos(m.yaw), sy = Math.sin(m.yaw), cp = Math.cos(m.pitch), sp = Math.sin(m.pitch);
+    var half = 200, scale = half * 0.92;
+    var p = m.atoms.map(function (a) {
+      var x = a.v[0] * cy - a.v[1] * sy, y = a.v[0] * sy + a.v[1] * cy, z = a.v[2];
+      return [x, -(y * cp + z * sp), -y * sp + z * cp];
+    });
+    var items = [];
+    m.bonds.forEach(function (b, i) { items.push([(p[b[0]][2] + p[b[1]][2]) / 2 - 0.01, 0, i]); });
+    m.atoms.forEach(function (a, i) { items.push([p[i][2], 1, i]); });
+    items.sort(function (a, b) { return a[0] - b[0]; });
+    var f = function (n) { return (half + n * scale).toFixed(1); };
+    m.svg.innerHTML = items.map(function (it) {
+      if (it[1] === 0) {
+        var b = m.bonds[it[2]];
+        return '<line class="mdv-mol-stick" x1="' + f(p[b[0]][0]) + '" y1="' + f(p[b[0]][1]) +
+          '" x2="' + f(p[b[1]][0]) + '" y2="' + f(p[b[1]][1]) + '"/>';
+      }
+      var a = m.atoms[it[2]];
+      return '<circle class="mdv-el-' + a.el + '" cx="' + f(p[it[2]][0]) + '" cy="' + f(p[it[2]][1]) +
+        '" r="' + Math.max(a.r * scale, 1).toFixed(1) + '"/>';
+    }).join("");
+  }
+  var TURNABLE = ".markdown-body .mdv-stl[data-mdv-mesh], .markdown-body .mdv-molecule[data-mdv-atoms]";
+  function turnable(fig) { return fig.hasAttribute("data-mdv-atoms") ? moleculeModel(fig) : stlModel(fig); }
+  function drawTurnable(m) { if (m.molecule) drawMolecule(m); else drawStl(m); }
   var stlDrag = null;
   document.addEventListener("pointerdown", function (e) {
-    var fig = e.target.closest && e.target.closest(".markdown-body .mdv-stl[data-mdv-mesh]");
+    var fig = e.target.closest && e.target.closest(TURNABLE);
     if (!fig || e.button !== 0) return;
     e.preventDefault();
-    stlDrag = { model: stlModel(fig), x: e.clientX, y: e.clientY, frame: 0, svg: fig.querySelector("svg") };
+    stlDrag = { model: turnable(fig), x: e.clientX, y: e.clientY, frame: 0, svg: fig.querySelector("svg") };
     stlDrag.svg.style.cursor = "grabbing";
   });
   document.addEventListener("pointermove", function (e) {
@@ -1415,19 +1473,19 @@
     d.model.pitch += (e.clientY - d.y) * 0.01;
     d.x = e.clientX;
     d.y = e.clientY;
-    if (!d.frame) d.frame = requestAnimationFrame(function () { d.frame = 0; drawStl(d.model); });
+    if (!d.frame) d.frame = requestAnimationFrame(function () { d.frame = 0; drawTurnable(d.model); });
   });
   document.addEventListener("pointerup", function () {
     if (stlDrag) stlDrag.svg.style.cursor = "";
     stlDrag = null;
   });
   document.addEventListener("dblclick", function (e) {
-    var fig = e.target.closest && e.target.closest(".markdown-body .mdv-stl[data-mdv-mesh]");
+    var fig = e.target.closest && e.target.closest(TURNABLE);
     if (!fig) return;
-    var m = stlModel(fig);
+    var m = turnable(fig);
     m.yaw = STL_YAW;
     m.pitch = STL_PITCH;
-    drawStl(m);
+    drawTurnable(m);
   });
 
   // ---- Presentation mode ---------------------------------------------------
@@ -1893,6 +1951,98 @@
     });
   }
   linksTab.addEventListener("click", function () { openSidebar("links"); });
+
+  // ---- Tags -----------------------------------------------------------------------
+  // Every tag in the served folder (front matter tags, and #tags in
+  // Obsidian notes), each opening to the files that use it. The page's own
+  // tags come first. Clicking a tag chip in the page opens it here.
+  var openTagName = null;
+  function tagChip(name, label) {
+    var c = el("span", { "class": "mdv-tag", "data-mdv-tag": name });
+    c.textContent = "#" + label;
+    return c;
+  }
+  function loadTags() {
+    fetch("/__mdv/tags").then(function (r) { return r.json(); }).then(function (data) {
+      var tags = data.tags || [];
+      tagsPanel.textContent = "";
+      if (!tags.length) {
+        tagsPanel.append(el("div", { "class": "mdv-empty" }, "No tags in this folder"));
+        return;
+      }
+      var find = el("input", { "class": "mdv-filter", type: "search", placeholder: "Find tags\u2026", "aria-label": "Find tags" });
+      tagsPanel.append(find);
+      // This page's tags, from its chips.
+      var here = {};
+      body.querySelectorAll(".mdv-tag[data-mdv-tag]").forEach(function (c) { here[c.getAttribute("data-mdv-tag")] = true; });
+      var mine = tags.filter(function (t) { return here[t.tag.toLowerCase()]; });
+      if (mine.length) {
+        var title = el("div", { "class": "mdv-dir" });
+        title.textContent = "On this page";
+        var chips = el("div", { "class": "mdv-tag-chips" });
+        mine.forEach(function (t) { chips.append(tagChip(t.tag.toLowerCase(), t.tag)); });
+        tagsPanel.append(title, chips);
+      }
+      var allTitle = el("div", { "class": "mdv-dir" });
+      allTitle.textContent = tags.length + (tags.length === 1 ? " tag" : " tags");
+      tagsPanel.append(allTitle);
+      var groups = [];
+      tags.forEach(function (t) {
+        var key = t.tag.toLowerCase();
+        var group = el("details", { "class": "mdv-tag-group", "data-mdv-tag": key });
+        var summary = el("summary");
+        var count = el("span", { "class": "mdv-tag-count" });
+        count.textContent = String(t.files.length);
+        summary.append(tagChip(key, t.tag), count);
+        group.append(summary);
+        t.files.forEach(function (f) {
+          var a = el("a", {
+            "class": "mdv-hit" + (f.file === currentDoc ? " mdv-current" : ""),
+            href: "/" + f.file.split("/").map(encodeURIComponent).join("/") + "#mdv-line-" + f.line,
+            title: f.file + ":" + f.line,
+          });
+          var where = el("span", { "class": "mdv-hit-file" });
+          where.textContent = f.file + (f.count > 1 ? " (" + f.count + "\u00d7)" : "");
+          a.append(where);
+          group.append(a);
+        });
+        groups.push([key, group]);
+        tagsPanel.append(group);
+      });
+      find.addEventListener("input", function () {
+        var q = find.value.trim().replace(/^#/, "").toLowerCase();
+        groups.forEach(function (g) { g[1].hidden = q !== "" && g[0].indexOf(q) === -1; });
+      });
+      if (openTagName) showTag(openTagName);
+    }).catch(function () {
+      tagsPanel.textContent = "";
+      tagsPanel.append(el("div", { "class": "mdv-empty" }, "Couldn't load tags"));
+    });
+  }
+  function showTag(name) {
+    var groups = tagsPanel.querySelectorAll("details.mdv-tag-group");
+    for (var i = 0; i < groups.length; i++) {
+      if (groups[i].getAttribute("data-mdv-tag") === name) {
+        groups[i].open = true;
+        groups[i].scrollIntoView({ block: "nearest" });
+        openTagName = null;
+        return;
+      }
+    }
+  }
+  tagsTab.addEventListener("click", function () { openSidebar("tags"); });
+  // A chip (in the page, or "On this page") opens its tag.
+  document.addEventListener("click", function (e) {
+    var chip = e.target.closest && e.target.closest(".mdv-tag[data-mdv-tag]");
+    if (!chip || !served || chip.closest("summary")) return;
+    e.preventDefault();
+    openTagName = chip.getAttribute("data-mdv-tag");
+    if (sidebarOpen() && currentTab === "tags" && tagsPanel.querySelector("details")) showTag(openTagName);
+    else openSidebar("tags");
+  });
+  document.addEventListener("mdv:updated", function () {
+    if (sidebarOpen() && currentTab === "tags") loadTags();
+  });
 
   // ---- Recent files -------------------------------------------------------------
   // The sidebar's Recent tab, and the Recent page's rows. Items inside the

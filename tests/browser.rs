@@ -1389,3 +1389,149 @@ fn stl_models_turn_when_dragged() {
     );
     assert_eq!(js(&tab, points), before);
 }
+
+#[test]
+fn library_diagrams_draw_and_zoom_with_their_styles() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("charts.md");
+    let vega = "```vega-lite\n{\"data\": {\"values\": [{\"a\": \"A\", \"b\": 2}, {\"a\": \"B\", \"b\": 5}]}, \
+                \"mark\": \"bar\", \"encoding\": {\"x\": {\"field\": \"a\", \"type\": \"nominal\"}, \
+                \"y\": {\"field\": \"b\", \"type\": \"quantitative\"}}}\n```\n";
+    let text = format!(
+        "# Charts\n\n{vega}\n```abc\nX:1\nK:C\nCDEF|\n```\n\n```smiles\nCCO\n```\n\n\
+         ```wavedrom\n{{ signal: [{{ name: 'clk', wave: 'p...' }}] }}\n```\n"
+    );
+    std::fs::write(&md, &text).unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    until(
+        &tab,
+        "document.querySelector('figure.mdv-vega svg') && document.querySelector('figure.mdv-abc svg') \
+         && document.querySelector('figure.mdv-smiles svg') && !document.querySelector('pre.mdv-lib')",
+        "the chart, music and molecule",
+    );
+    assert_eq!(
+        js(
+            &tab,
+            "return document.querySelectorAll('figure.mdv-vega rect, figure.mdv-vega path').length > 2;"
+        ),
+        true
+    );
+    // A live update draws a new block too.
+    std::fs::write(&md, format!("{text}\n{vega}")).unwrap();
+    until(
+        &tab,
+        "document.querySelectorAll('figure.mdv-vega svg').length === 2",
+        "the added chart",
+    );
+    // Zoomed, a diagram keeps the page's styles for it.
+    js(
+        &tab,
+        "document.querySelector('.mdv-wavedrom svg').dispatchEvent(new MouseEvent('click', { bubbles: true })); return 0;",
+    );
+    until(&tab, "document.querySelector('.mdv-zoom svg')", "the zoom");
+    assert_eq!(
+        js(
+            &tab,
+            "return getComputedStyle(document.querySelector('.mdv-zoom .mdv-wave-line')).fill;"
+        ),
+        "none",
+        "styled like the page"
+    );
+    press(&tab, "Escape");
+}
+
+#[test]
+fn molecules_turn_when_dragged() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("mol.md");
+    std::fs::write(
+        &md,
+        "# Methane\n\n```xyz\n5\nmethane\nC 0 0 0\nH 0.629 0.629 0.629\nH -0.629 -0.629 0.629\n\
+         H -0.629 0.629 -0.629\nH 0.629 -0.629 -0.629\n```\n",
+    )
+    .unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    until(
+        &tab,
+        "document.querySelector('.mdv-molecule circle')",
+        "the molecule",
+    );
+    let drawing = "return document.querySelector('.mdv-molecule svg').innerHTML;";
+    let before = js(&tab, drawing);
+    // The viewer redraws exactly what the page drew.
+    js(
+        &tab,
+        "document.querySelector('.mdv-molecule svg').dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); return 0;",
+    );
+    assert_eq!(js(&tab, drawing), before, "the same maths as the server");
+    js(
+        &tab,
+        "const svg = document.querySelector('.mdv-molecule svg');
+         const r = svg.getBoundingClientRect();
+         const at = (type, dx) => svg.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0,
+           clientX: r.left + 100 + dx, clientY: r.top + 100 }));
+         at('pointerdown', 0); at('pointermove', 60); at('pointerup', 60);
+         return 0;",
+    );
+    until(
+        &tab,
+        &format!("document.querySelector('.mdv-molecule svg').innerHTML !== {before}"),
+        "the molecule turned",
+    );
+}
+
+#[test]
+fn tag_chips_open_the_tags_tab() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join(".obsidian")).unwrap();
+    let a = dir.path().join("a.md");
+    std::fs::write(&a, "# A\n\nAbout #alpha and #Beta.\n").unwrap();
+    std::fs::write(dir.path().join("b.md"), "---\ntags: [alpha]\n---\n# B\n").unwrap();
+    let server = serve(&a, &[]);
+    let tab = open(&browser, &format!("http://{}/a.md", server.addr));
+    until(
+        &tab,
+        "document.querySelector('.markdown-body .mdv-tag')",
+        "the chips",
+    );
+    js(
+        &tab,
+        "document.querySelector('.markdown-body .mdv-tag[data-mdv-tag=\"alpha\"]').click(); return 0;",
+    );
+    until(
+        &tab,
+        "document.querySelector('details.mdv-tag-group[data-mdv-tag=\"alpha\"][open]')",
+        "the alpha tag opened",
+    );
+    let files = js(
+        &tab,
+        "return [...document.querySelectorAll('details[data-mdv-tag=\"alpha\"] a.mdv-hit')].map(a => a.getAttribute('href')).join(' ');",
+    );
+    assert_eq!(files, "/a.md#mdv-line-3 /b.md#mdv-line-1");
+    assert_eq!(
+        js(
+            &tab,
+            "return [...document.querySelectorAll('.mdv-tag-chips .mdv-tag')].map(c => c.textContent).join(' ');"
+        ),
+        "#alpha #Beta",
+        "this page's tags first"
+    );
+    // The filter narrows the list.
+    js(
+        &tab,
+        "const f = document.querySelector('.mdv-panel:not([hidden]) .mdv-filter'); f.value = 'bet';
+         f.dispatchEvent(new Event('input')); return 0;",
+    );
+    assert_eq!(
+        js(
+            &tab,
+            "return [...document.querySelectorAll('details.mdv-tag-group')].filter(d => !d.hidden).length;"
+        ),
+        1
+    );
+}

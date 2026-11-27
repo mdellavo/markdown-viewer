@@ -19,9 +19,53 @@ const MAX_HEIGHT: f64 = 480.0;
 const MAX_FEATURES: usize = 5000;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum Format {
+pub enum Format {
     GeoJson,
     TopoJson,
+    Gpx,
+    Kml,
+    Wkt,
+}
+
+impl Format {
+    pub fn from_extension(ext: &str) -> Option<Self> {
+        match ext.to_ascii_lowercase().as_str() {
+            "geojson" => Some(Self::GeoJson),
+            "topojson" => Some(Self::TopoJson),
+            "gpx" => Some(Self::Gpx),
+            "kml" => Some(Self::Kml),
+            "wkt" => Some(Self::Wkt),
+            _ => None,
+        }
+    }
+
+    fn names(self) -> (&'static str, &'static str) {
+        match self {
+            Self::GeoJson => ("geojson", "GeoJSON"),
+            Self::TopoJson => ("topojson", "TopoJSON"),
+            Self::Gpx => ("gpx", "GPX"),
+            Self::Kml => ("kml", "KML"),
+            Self::Wkt => ("wkt", "WKT"),
+        }
+    }
+
+    /// The features to draw, or why there are none.
+    fn features(self, code: &str) -> Result<Vec<Feature>, String> {
+        let json =
+            || serde_json::from_str::<Value>(code).map_err(|e| format!("not valid JSON: {e}"));
+        let v = match self {
+            Self::GeoJson => json()?,
+            Self::TopoJson => topo_to_geo(&json()?)?,
+            Self::Gpx => crate::geoformats::gpx(code)?,
+            Self::Kml => crate::geoformats::kml(code)?,
+            Self::Wkt => crate::geoformats::wkt(code)?,
+        };
+        let features = collect(&v)?;
+        if features.is_empty() {
+            return Err("no geometry to draw".into());
+        }
+        Ok(features)
+    }
 }
 
 /// Render a ```geojson block.
@@ -34,27 +78,37 @@ pub fn topojson(code: &str, sourcepos: &str) -> String {
     render(code, sourcepos, Format::TopoJson)
 }
 
+/// Render a ```gpx block.
+pub fn gpx(code: &str, sourcepos: &str) -> String {
+    render(code, sourcepos, Format::Gpx)
+}
+
+/// Render a ```kml block.
+pub fn kml(code: &str, sourcepos: &str) -> String {
+    render(code, sourcepos, Format::Kml)
+}
+
+/// Render a ```wkt block.
+pub fn wkt(code: &str, sourcepos: &str) -> String {
+    render(code, sourcepos, Format::Wkt)
+}
+
 fn render(code: &str, sourcepos: &str, format: Format) -> String {
-    let parsed = serde_json::from_str::<Value>(code)
-        .map_err(|e| format!("not valid JSON: {e}"))
-        .and_then(|v| match format {
-            Format::GeoJson => Ok(v),
-            Format::TopoJson => topo_to_geo(&v),
-        })
-        .and_then(|v| collect(&v));
-    match parsed {
-        Ok(features) if !features.is_empty() => draw(&features, sourcepos),
-        Ok(_) => invalid(code, sourcepos, format, "no geometry to draw"),
+    match format.features(code) {
+        Ok(features) => draw(&features, sourcepos),
         Err(e) => invalid(code, sourcepos, format, &e),
     }
 }
 
+/// A map file shown as an image (`![route](ride.gpx)`, through embeds.rs).
+pub fn file(format: Format, bytes: &[u8], sourcepos: &str) -> Result<String, String> {
+    let text = std::str::from_utf8(bytes).map_err(|_| "not a text file".to_string())?;
+    Ok(draw(&format.features(text)?, sourcepos))
+}
+
 /// A block that couldn't be drawn: the source, with what went wrong.
 fn invalid(code: &str, sourcepos: &str, format: Format, why: &str) -> String {
-    let (lang, name) = match format {
-        Format::GeoJson => ("geojson", "GeoJSON"),
-        Format::TopoJson => ("topojson", "TopoJSON"),
-    };
+    let (lang, name) = format.names();
     format!(
         "<figure class=\"mdv-map mdv-map-invalid\"{sourcepos}><figcaption>Can't draw this {name}: {}</figcaption>\
          <pre lang=\"{lang}\"><code>{}</code></pre></figure>\n",

@@ -52,13 +52,41 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   links and wiki links, `document_files` adds them for the file list and
   sites).
 - `src/geo.rs` and `src/stl.rs`: ```` ```geojson ````/```` ```topojson ````
-  maps and ```` ```stl ```` models, drawn as SVG at render time (fence
-  renderers in render.rs, like Mermaid's), so they need no script and stay
-  offline. Each is one top-level `<figure>` for live updates. STL figures
+  maps (and GPX, KML, WKT via `src/geoformats.rs`, which turns them into
+  GeoJSON) and ```` ```stl ```` models (and OBJ, PLY, OFF, binary STL),
+  drawn as SVG at render time (fence renderers listed in `DRAWINGS` in
+  render.rs), so they need no script and stay offline. Each is one top-level `<figure>` for live updates. STL figures
   carry rounded vertices in `data-mdv-mesh` and ui.js turns them by
   redrawing with the same projection and shading as `stl::faces`; the page
   draws from those same rounded vertices, so the two match exactly (a
   browser test checks). Keep the maths in step.
+- `src/embeds.rs`: video and audio linked as images become players
+  (`media`, any page); model, map, molecule and calendar files linked as
+  images (`![](part.stl)`) are drawn in place of a paragraph holding only
+  the image.
+  Needs the document's folder: render with `Renderer::render_in` (or
+  `render_doc`, which takes it from the link context); `render_body` has
+  no folder and leaves them as images.
+- `src/modelformats.rs`: glTF/GLB and 3MF (with a small zip reader) to
+  triangles for stl.rs. `src/molecules.rs`: molfile/XYZ/PDB; flat molfiles
+  as 2D structures, the rest as balls and sticks that ui.js turns
+  (`drawMolecule`, same maths as `scene`; a browser test checks they
+  match). `src/calendar.rs`: iCalendar agendas. `src/asciimath.rs`:
+  AsciiMath to TeX, emitted as a display-math `<pre>` for math-init.js.
+- `src/diagrams.rs`: ```` ```bob ```` (svgbob), ```` ```pikchr ````,
+  ```` ```qr ```` and the program-drawn ```` ```dot ````/```` ```plantuml ````/
+  ```` ```d2 ```` blocks (run with a time limit in a temp folder, results
+  cached by content, SVG cleaned by `clean_svg`; tests point
+  `MARKDOWN_VIEWER_DIAGRAM_PATH` at stand-in programs). Also the shared
+  `figure`/`invalid` markup (`<figure class="mdv-diagram mdv-KIND">`).
+  `src/wavedrom.rs` (timing diagrams, drawn here) and `src/chess.rs` (FEN,
+  and PGN played out with a small SAN move checker) use them.
+- `src/libraries.rs` and `assets/libraries-init.js`: ```` ```vega-lite ````,
+  ```` ```abc ```` and ```` ```smiles ```` blocks, drawn in the page by
+  bundled libraries (`assets/libs/*.js.gz`), loaded like Mermaid: inlined in
+  standalone pages, `/__mdv/lib/ID.js` when served, `_mdv/ID.js` in sites.
+  Vega's bundle includes vega-interpreter, so expressions run without
+  `eval` under the page's CSP.
 - `src/diffview.rs`: `--diff REV`. The old text comes from `git show
   REV:./name`; both versions are rendered without source positions and
   split into top-level blocks, which are compared (LCS). Changed text
@@ -69,6 +97,10 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   `follow_diff` in main.rs recomputes when the file changes.
 - `src/abbr.rs`: `*[ABBR]: meaning` definitions, blanked before rendering
   (keeping line numbers) and wrapped in `<abbr>` afterwards, outside code.
+- `src/tags.rs`: `#tags` (Obsidian mode, as chips in rendered HTML) and
+  front matter `tags:` (chips in frontmatter.rs's table, always), and the
+  folder's tag index for `/__mdv/tags` (the Tags tab in ui.js; chips carry
+  `data-mdv-tag`, lowercased).
 - `src/references.rs`: GitHub references (`#123`, `@user`, commits),
   linked in rendered HTML outside links, code and math. The repository
   comes from the git remote (`RenderOptions::github`).
@@ -216,6 +248,14 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   replaces only the changed range, and re-syncs positions below it. This
   needs page blocks to map 1:1 to the server's top-level elements, so
   enhancers must replace a top-level element with exactly one element.
+- Speed: init scripts start after the first paint (`afterPaint`), draw
+  remembered and on-screen blocks first, and keep drawings in
+  `localStorage` (`mdv-draw:` keys, by content, version and theme).
+  render.rs caches highlighted code and drawings by content
+  (`RenderCache`), main.rs renders the first page while the browser opens,
+  and served pages link `/__mdv/page.css`, `/__mdv/ui.css` and
+  `/__mdv/ui.js` (versioned, kept by the browser) instead of inlining them.
+  live.js prepares content in `<template>`s so media isn't fetched twice.
 - `window.mdvInitial`: promises for the page's own first render;
   `live.js` waits for them before comparing, and never jumps on the first
   sync after connecting.
@@ -284,8 +324,8 @@ cargo run -- --watch tests/fixtures/gfm.md
 
 - Keep it offline: no CDN links or network fetches in generated pages.
 - The only scripts in pages are `ui.js` (not in `-o`/`--pdf` exports),
-  `live.js` (watch mode), Mermaid and KaTeX (each an init script plus the
-  library, only on pages that need them). Any script must carry the per-page
+  `live.js` (watch mode), Mermaid, KaTeX and the libraries in libraries.rs
+  (each an init script plus the library, only on pages that need them). Any script must carry the per-page
   CSP nonce. Standalone pages inline the libraries; served pages fetch them
   from `/__mdv/`.
 - Watch folders, not files, because editors often save by renaming a temp
@@ -328,6 +368,28 @@ cargo test   # includes a check that the bundle is safe to inline
 
 Check the tarball against the `integrity` hash from
 `https://registry.npmjs.org/mermaid/$v` before using it.
+
+## Updating Vega-Lite, abcjs and SmilesDrawer
+
+```sh
+# Check each tarball against `integrity` from https://registry.npmjs.org/NAME/VERSION.
+for p in vega@X vega-lite@Y vega-interpreter@Z abcjs@A smiles-drawer@B; do
+  curl -sSL https://registry.npmjs.org/${p%@*}/-/${p%@*}-${p#*@}.tgz | (mkdir -p /tmp/${p%@*} && tar xz -C /tmp/${p%@*})
+done
+# vega-interpreter is an ES module; wrap it to use the vega global.
+{ echo '(function () {'
+  sed -e "s/^import { \(.*\) } from 'vega-util';/const { \1 } = vega;/" \
+      -e "s/^export { expression as expressionInterpreter };/window.vegaInterpreter = { expressionInterpreter: expression };/" \
+      /tmp/vega-interpreter/package/build/vega-interpreter.js
+  echo '})();'; } > /tmp/interp.js
+cat /tmp/vega/package/build/vega.min.js <(printf '\n;\n') /tmp/vega-lite/package/build/vega-lite.min.js \
+    <(printf '\n;\n') /tmp/interp.js | gzip -9 -n > assets/libs/vega.js.gz
+gzip -9 -n -c /tmp/abcjs/package/dist/abcjs-basic-min.js > assets/libs/abcjs.js.gz
+gzip -9 -n -c /tmp/smiles-drawer/package/dist/smiles-drawer.min.js > assets/libs/smiles-drawer.js.gz
+# Copy each LICENSE to assets/libs/LICENSE-NAME, set `version` in src/libraries.rs.
+cargo test   # checks the bundles are safe to inline
+cargo test --test browser library_diagrams
+```
 
 ## Updating KaTeX
 

@@ -46,6 +46,13 @@ Just one section of a note:
 > [!example]+ Open, but foldable
 > A `+` makes it foldable, starting open.
 
+## Tags
+
+Tag a note with `#tags` in the text, like #example or the nested
+#projects/garden, or with `tags:` in its front matter (as [[Ideas]] does).
+Click a tag, or press <kbd>#</kbd>, for the Tags tab: every tag in the
+vault, and the notes using each.
+
 ## Highlights and comments
 
 ==Highlighted text== stands out. Comments are left out of the page: there's

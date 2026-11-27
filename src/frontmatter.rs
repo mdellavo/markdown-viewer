@@ -60,7 +60,20 @@ fn value_html(value: &Yaml) -> String {
             let mut row = String::new();
             for (k, v) in map {
                 head.push_str(&format!("<th>{}</th>", scalar(k)));
-                row.push_str(&format!("<td>{}</td>", value_html(v)));
+                let tags = k
+                    .as_str()
+                    .filter(|k| crate::tags::is_tags_key(k))
+                    .map(|_| crate::tags::front_matter_tags(v))
+                    .filter(|t| !t.is_empty());
+                match tags {
+                    // Tags as chips, like the text's #tags.
+                    Some(tags) => {
+                        let chips: Vec<String> =
+                            tags.iter().map(|t| crate::tags::chip(t)).collect();
+                        row.push_str(&format!("<td class=\"mdv-tags\">{}</td>", chips.join(" ")));
+                    }
+                    None => row.push_str(&format!("<td>{}</td>", value_html(v))),
+                }
             }
             format!("<table><thead><tr>{head}</tr></thead><tbody><tr>{row}</tr></tbody></table>")
         }
@@ -113,8 +126,9 @@ mod tests {
             "{html}"
         );
         assert!(html.contains("<div>A &lt;b&gt;</div>"), "escaped: {html}");
+        // Tags are chips; other lists stay nested tables.
         assert!(
-            html.contains("<td><div>x</div></td><td><div>y</div></td>"),
+            html.contains("<td class=\"mdv-tags\"><a class=\"mdv-tag\" data-mdv-tag=\"x\">#x</a> <a class=\"mdv-tag\""),
             "{html}"
         );
         assert!(html.contains("<th>draft</th>") && html.contains("<div>true</div>"));

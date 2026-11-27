@@ -173,8 +173,17 @@ in `@media print`. `@page` sets the paper size and margins.
 | `.mdv-front-matter` | the front matter table |
 | `table.mdv-data`, `.mdv-data-note` | a CSV or TSV file's table, and the row count under it |
 | `div.mermaid` | a Mermaid diagram |
-| `.mdv-map`, `.mdv-map-grid`, `.mdv-map-area`, `.mdv-map-line`, `.mdv-map-point` | a GeoJSON or TopoJSON map, its grid, and its areas, lines and points |
-| `.mdv-stl`, `.mdv-stl polygon` | an STL model, and its triangles (shaded through the `--l` lightness, 0.3 to 1) |
+| `.mdv-map`, `.mdv-map-grid`, `.mdv-map-area`, `.mdv-map-line`, `.mdv-map-point` | a map (GeoJSON, TopoJSON, GPX, KML, WKT), its grid, and its areas, lines and points |
+| `.mdv-stl`, `.mdv-stl polygon` | a 3D model (STL, OBJ, PLY, OFF), and its triangles (shaded through the `--l` lightness, 0.3 to 1) |
+| `.mdv-diagram` | a drawn diagram: with `.mdv-bob`, `.mdv-pikchr`, `.mdv-wavedrom`, `.mdv-qr`, `.mdv-chess`, `.mdv-dot`, `.mdv-plantuml`, `.mdv-d2`, `.mdv-vega`, `.mdv-abc` or `.mdv-smiles` |
+| `.mdv-diagram-invalid`, `.mdv-diagram-missing` | a block that couldn't be drawn (with the reason), or whose program isn't installed |
+| `.mdv-wave-line`, `.mdv-wave-bus`, `.mdv-wave-2` … `.mdv-wave-9`, `.mdv-wave-x`, `.mdv-wave-name`, `.mdv-wave-data` | WaveDrom: signal lines, bus values and their fill colours, unknown values, lane names and value labels |
+| `.mdv-chess-light`, `.mdv-chess-dark`, `.mdv-chess-moved`, `.mdv-chess-white`, `.mdv-chess-black` | chess squares, the last move's squares, and the pieces |
+| `a.mdv-tag`, `td.mdv-tags` | a tag chip (`#tag` in Obsidian notes, front matter `tags:`), and the front matter cell holding them |
+| `.mdv-color` | the swatch after a colour in inline code |
+| `.mdv-molecule`, `.mdv-molecule-3d`, `.mdv-mol-bond`, `.mdv-mol-label`, `.mdv-mol-stick`, `circle.mdv-el-O` (and other elements) | molecules: structure bonds and atom labels, and 3D sticks and atoms by element |
+| `.mdv-calendar`, `.mdv-cal-month`, `.mdv-cal-day`, `.mdv-cal-time`, `.mdv-cal-zone`, `.mdv-cal-note`, `.mdv-cal-desc` | a calendar's table, month rows, dates, times, time zones, places and descriptions |
+| `video.mdv-video`, `audio.mdv-audio` | players for video and audio linked like images |
 | `abbr[title]` | an abbreviation |
 | `dl`, `dt`, `dd` | a definition list |
 | `.math-display`, `.math-inline` | math |

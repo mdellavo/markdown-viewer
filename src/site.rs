@@ -142,6 +142,8 @@ fn prepare(root: &Path, out: &Path) -> Result<PathBuf> {
 struct Libs {
     math: bool,
     mermaid: bool,
+    /// Vega-Lite, abcjs, SmilesDrawer (libraries.rs ids).
+    others: std::collections::BTreeSet<&'static str>,
 }
 
 struct Site<'a> {
@@ -181,7 +183,8 @@ impl Site<'_> {
             };
             self.renderer.render_doc(text, Some(&ctx))
         } else {
-            self.renderer.render_body(text)
+            self.renderer
+                .render_in(text, Some(&self.root.join(dir)), None)
         };
         let body = self.rewrite(&body, dir, assets);
 
@@ -207,6 +210,9 @@ impl Site<'_> {
         let html = self.renderer.wrap_page(&body, &options);
         libs.math |= html.contains(&format!("{SITE_DIR}/katex.js"));
         libs.mermaid |= html.contains(&format!("{SITE_DIR}/mermaid.js"));
+        for lib in crate::libraries::used(&body) {
+            libs.others.insert(lib.id);
+        }
         let path = self.out.join(to);
         if let Some(p) = path.parent() {
             std::fs::create_dir_all(p)?;
@@ -402,6 +408,11 @@ fn write_support(out: &Path, files: &[String], libs: &Libs) -> Result<()> {
     }
     if libs.mermaid {
         std::fs::write(dir.join("mermaid.js"), crate::render::mermaid_js())?;
+    }
+    for id in &libs.others {
+        if let Some(lib) = crate::libraries::by_id(id) {
+            std::fs::write(dir.join(format!("{id}.js")), crate::libraries::js(lib))?;
+        }
     }
     // GitHub Pages runs Jekyll, which hides folders starting with "_".
     std::fs::write(out.join(".nojekyll"), "")?;

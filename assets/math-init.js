@@ -11,6 +11,15 @@
   if (jsSrc) jsSrc = new URL(jsSrc, location.href).href;
   if (cssSrc) cssSrc = new URL(cssSrc, location.href).href;
   var loading = null;
+  // Start once the page has been drawn, so its text shows before a library
+  // loads and runs (at most 500 ms later, e.g. in a background tab).
+  function afterPaint() {
+    return new Promise(function (resolve) {
+      // A frame's callback runs before it's drawn; the next one, after.
+      requestAnimationFrame(function () { requestAnimationFrame(function () { setTimeout(resolve, 0); }); });
+      setTimeout(resolve, 500);
+    });
+  }
 
   // Standalone pages inline KaTeX; served pages fetch it on first use.
   function load() {
@@ -63,7 +72,9 @@
 
   (window.mdvEnhancers = window.mdvEnhancers || []).push(render);
   // live.js waits for these before comparing updates with the page.
-  (window.mdvInitial = window.mdvInitial || []).push(render(document.querySelector(".markdown-body")).catch(function (e) {
+  (window.mdvInitial = window.mdvInitial || []).push(afterPaint().then(function () {
+    return render(document.querySelector(".markdown-body"));
+  }).catch(function (e) {
     console.error("markdown-viewer:", e);
   }));
 })();

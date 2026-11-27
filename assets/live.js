@@ -21,6 +21,12 @@
     return el.outerHTML.replace(/ data-sourcepos="[^"]*"/g, "");
   }
 
+  // A place to prepare content off the page: inert, so its images, video
+  // and audio aren't fetched until it's on the page.
+  function staging() {
+    return document.createElement("template").content;
+  }
+
   function parse(html) {
     var tpl = document.createElement("template");
     tpl.innerHTML = html;
@@ -110,11 +116,12 @@
   // (unless the file changed in between), so just remember it, replacing
   // the page only if it differs, and never jump to a "change".
   function firstSync(blocks, version) {
-    var next = document.createElement("div");
+    var next = staging();
     blocks.forEach(function (b) { next.appendChild(b.cloneNode(true)); });
-    // Wait for the page's own first render (diagrams, math) too, or a
-    // half-drawn page would compare as changed.
-    return Promise.all([enhance(next), Promise.all(window.mdvInitial || [])]).then(function () {
+    // Wait for the page's own first render (diagrams, math) first, or a
+    // half-drawn page would compare as changed; its drawings are then
+    // remembered, so drawing the copy is quick.
+    return Promise.all(window.mdvInitial || []).then(function () { return enhance(next); }).then(function () {
       if (version !== latest) return;
       lastKeys = blocks.map(key);
       var folds = saveFolds(body);
@@ -138,7 +145,7 @@
     while (head < oldN && head < newN && lastKeys[head] === keys[head]) head++;
     var tail = 0;
     while (tail < oldN - head && tail < newN - head && lastKeys[oldN - 1 - tail] === keys[newN - 1 - tail]) tail++;
-    var fresh = document.createElement("div");
+    var fresh = staging();
     blocks.slice(head, newN - tail).forEach(function (b) { fresh.appendChild(b); });
     return enhance(fresh).then(function () {
       if (version !== latest) return;

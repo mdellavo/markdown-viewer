@@ -10,22 +10,31 @@ use clap::{CommandFactory, Parser};
 
 mod abbr;
 mod about;
+mod asciimath;
 mod browser;
+mod calendar;
+mod chess;
 mod codeblocks;
 mod config;
 mod desktop;
+mod diagrams;
 mod diffview;
 mod docs;
 mod editor;
+mod embeds;
 #[cfg(target_os = "macos")]
 mod finder;
 mod frontmatter;
 mod geo;
+mod geoformats;
 mod gitdiff;
 mod github;
 mod instances;
+mod libraries;
 mod links;
 mod lint;
+mod modelformats;
+mod molecules;
 mod obsidian;
 mod pdf;
 mod platform;
@@ -38,9 +47,11 @@ mod site;
 mod source;
 mod stl;
 mod tables;
+mod tags;
 mod tasks;
 mod theme;
 mod toc;
+mod wavedrom;
 
 use config::{Config, Prefs};
 use render::{FrontMatter, PageOptions, RenderOptions, Renderer, Style, Theme};
@@ -570,7 +581,7 @@ fn run(cli: Cli) -> Result<()> {
     }
     if let Source::Diff { file, rev } = &source {
         let old = diffview::old_text(file, rev)?;
-        body = diffview::render(renderer.options(), &old, &markdown, rev);
+        body = diffview::render(renderer.options(), file, &old, &markdown, rev);
     }
 
     if let Some(output) = &cli.output {
@@ -672,7 +683,7 @@ fn render_standalone(settings: &Settings, markdown: &str, dir: &Path) -> (Render
         };
         renderer.render_doc(markdown, Some(&ctx))
     } else {
-        renderer.render_body(markdown)
+        renderer.render_in(markdown, Some(dir), None)
     };
     (renderer, body)
 }
@@ -873,6 +884,17 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
     rt.block_on(async move {
         let renderer = Arc::new(Renderer::with_options(settings.render_options(true, &root)));
         let docs = docs::Docs::new(root.clone(), renderer)?;
+        // Render the first page while the browser starts, so it's ready when
+        // asked for (pages are otherwise rendered on their first request).
+        if matches!(source, Source::File(_) | Source::Folder(_)) {
+            let first = main
+                .clone()
+                .unwrap_or_else(|| docs::readme(&root).unwrap_or_else(|| root.clone()));
+            let docs = docs.clone();
+            tokio::task::spawn_blocking(move || {
+                let _ = docs.subscribe(&first);
+            });
+        }
         if let (Source::Text { name, text, .. }, Some(key)) = (source, &main) {
             // The Recent page is generated; it has no source worth showing.
             if *name != "Recent" {
@@ -891,7 +913,7 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
             let new = read(file)?;
             docs.add_virtual(
                 key,
-                diffview::render(docs.renderer().options(), &old, &new, rev),
+                diffview::render(docs.renderer().options(), file, &old, &new, rev),
             );
             follow_diff(docs.clone(), key.clone(), file.clone(), rev.clone());
         }
@@ -1193,7 +1215,7 @@ fn follow_diff(docs: Arc<docs::Docs>, key: PathBuf, file: PathBuf, rev: String) 
             if last.as_ref() == Some(&(old.clone(), new.clone())) {
                 continue;
             }
-            let html = diffview::render(docs.renderer().options(), &old, &new, &rev);
+            let html = diffview::render(docs.renderer().options(), &file, &old, &new, &rev);
             docs.set_virtual(&key, html);
             last = Some((old, new));
         }
