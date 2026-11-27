@@ -169,7 +169,10 @@ impl Prefs {
             self.theme = update.theme;
         }
         if let Some(sidebar) = update.sidebar
-            && matches!(sidebar.as_str(), "" | "contents" | "files" | "links")
+            && matches!(
+                sidebar.as_str(),
+                "" | "contents" | "files" | "links" | "recent"
+            )
         {
             self.sidebar = Some(sidebar);
         }

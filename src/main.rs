@@ -340,6 +340,7 @@ impl Settings {
             fixed_theme: self.theme_flag.is_some(),
             number_headings: self.number_headings,
             hide_word_count: !self.word_count,
+            recent: self.recent,
             ..Default::default()
         }
     }
@@ -835,6 +836,9 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
             if cli.clipboard && cli.watch && !cli.background {
                 follow_clipboard(docs.clone(), key.clone(), root.clone(), text.clone());
             }
+            if *name == "Recent" {
+                follow_recent(docs.clone(), key.clone(), root.clone(), text.clone());
+            }
         }
         if let (Source::Url { remote, text, .. }, Some(key)) = (source, &main) {
             docs.set_source(key, text);
@@ -1103,6 +1107,26 @@ fn follow_clipboard(docs: Arc<docs::Docs>, key: PathBuf, root: PathBuf, mut last
                 let html = docs.render_text(&text, &root);
                 docs.set_source(&key, &text);
                 docs.set_virtual(&key, html);
+                last = text;
+            }
+        }
+    });
+}
+
+/// Keep the Recent page current: items removed, opened from other
+/// viewers, or simply older.
+fn follow_recent(docs: Arc<docs::Docs>, key: PathBuf, root: PathBuf, mut last: String) {
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(Duration::from_secs(2)).await;
+            let at = root.clone();
+            let Ok(text) =
+                tokio::task::spawn_blocking(move || recent::page(&Prefs::load().recent, &at)).await
+            else {
+                continue;
+            };
+            if text != last {
+                docs.set_virtual(&key, docs.render_text(&text, &root));
                 last = text;
             }
         }

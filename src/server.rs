@@ -47,6 +47,9 @@ const SOURCE_PATH: &str = "/__mdv/source";
 const GITDIFF_PATH: &str = "/__mdv/gitdiff";
 const CHECK_PATH: &str = "/__mdv/check";
 const BACKLINKS_PATH: &str = "/__mdv/backlinks";
+const RECENT_PATH: &str = "/__mdv/recent";
+const RECENT_REMOVE_PATH: &str = "/__mdv/recent/remove";
+const RECENT_OPEN_PATH: &str = "/__mdv/recent/open";
 
 /// What to serve and how.
 pub struct ServeOptions {
@@ -251,6 +254,9 @@ impl Server {
             .route(GITDIFF_PATH, get(gitdiff))
             .route(CHECK_PATH, get(check_links))
             .route(BACKLINKS_PATH, get(backlinks))
+            .route(RECENT_PATH, get(recent_list))
+            .route(RECENT_REMOVE_PATH, post(recent_remove))
+            .route(RECENT_OPEN_PATH, post(recent_open))
             .route(MERMAID_PATH, get(mermaid_js))
             .route(KATEX_JS_PATH, get(katex_js))
             .route(KATEX_CSS_PATH, get(katex_css))
@@ -436,6 +442,67 @@ async fn remember(state: &AppState, update: Prefs) {
     if state.remember {
         let _ =
             tokio::task::spawn_blocking(move || Prefs::update(|saved| saved.merge(update))).await;
+    }
+}
+
+/// Recently opened files, for the sidebar's Recent tab.
+async fn recent_list(State(state): State<AppState>) -> Response {
+    let enabled = state.live.lock().unwrap().page.recent;
+    let root = state.docs.root().to_path_buf();
+    let items = if enabled {
+        tokio::task::spawn_blocking(move || crate::recent::shown(&Prefs::load().recent, &root))
+            .await
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    no_store(Json(serde_json::json!({ "enabled": enabled, "items": items })).into_response())
+}
+
+#[derive(Deserialize)]
+struct RecentPath {
+    path: String,
+}
+
+/// Forget one recent item.
+async fn recent_remove(headers: HeaderMap, Json(req): Json<RecentPath>) -> StatusCode {
+    if headers.get("x-mdv").is_none() {
+        return StatusCode::FORBIDDEN;
+    }
+    match tokio::task::spawn_blocking(move || crate::recent::forget(&req.path)).await {
+        Ok(Ok(())) => StatusCode::NO_CONTENT,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+/// Open a recent item that this viewer doesn't serve, by running
+/// markdown-viewer for it (which reuses a viewer already showing it).
+/// Only paths in the remembered list are opened.
+async fn recent_open(headers: HeaderMap, Json(req): Json<RecentPath>) -> StatusCode {
+    if headers.get("x-mdv").is_none() {
+        return StatusCode::FORBIDDEN;
+    }
+    let known = Prefs::load().recent.iter().any(|r| r.path == req.path);
+    if !known || !Path::new(&req.path).exists() {
+        return StatusCode::NOT_FOUND;
+    }
+    let Ok(exe) = std::env::current_exe() else {
+        return StatusCode::INTERNAL_SERVER_ERROR;
+    };
+    let mut cmd = std::process::Command::new(exe);
+    cmd.arg("--")
+        .arg(&req.path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    crate::platform::detach(&mut cmd);
+    match cmd.spawn() {
+        Ok(mut child) => {
+            // Reap it when it exits (it hands off to a background viewer).
+            std::thread::spawn(move || child.wait());
+            StatusCode::NO_CONTENT
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 

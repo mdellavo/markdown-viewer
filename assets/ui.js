@@ -35,6 +35,8 @@
     "arrow-left": ["M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 0-1.06l4.25-4.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L4.81 7h7.44a.75.75 0 0 1 0 1.5H4.81l2.97 2.97a.75.75 0 0 1 0 1.06Z"],
     "arrow-right": ["M8.22 2.97a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l2.97-2.97H3.75a.75.75 0 0 1 0-1.5h7.44L8.22 4.03a.75.75 0 0 1 0-1.06Z"],
     "sync": ["M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z"],
+    "history": ["m.427 1.927 1.215 1.215a8.002 8.002 0 1 1-1.6 5.685.75.75 0 1 1 1.493-.154 6.5 6.5 0 1 0 1.18-4.458l1.358 1.358A.25.25 0 0 1 3.896 6H.25A.25.25 0 0 1 0 5.75V2.104a.25.25 0 0 1 .427-.177ZM7.75 4a.75.75 0 0 1 .75.75v2.992l2.028.812a.75.75 0 0 1-.557 1.392l-2.5-1A.751.751 0 0 1 7 8.25v-3.5A.75.75 0 0 1 7.75 4Z"],
+    "cross-reference": ["M2.75 3.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h4.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 13H9.06l-2.573 2.573A1.458 1.458 0 0 1 4 14.543V13H2.75A1.75 1.75 0 0 1 1 11.25v-7.5C1 2.784 1.784 2 2.75 2h5.5a.75.75 0 0 1 0 1.5ZM16 1.25v4.146a.25.25 0 0 1-.427.177L14.03 4.03l-3.75 3.75a.749.749 0 0 1-1.275-.326.749.749 0 0 1 .215-.734l3.75-3.75-1.543-1.543A.25.25 0 0 1 11.604 1h4.146a.25.25 0 0 1 .25.25Z"],
     "file": ["M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"],
   };
   function icon(name) {
@@ -128,13 +130,27 @@
 
   var sidebar = el("nav", { "class": "mdv-ui mdv-sidebar", "aria-label": "Document" });
   var tabs = el("div", { "class": "mdv-tabs", role: "tablist" });
-  var contentsTab = el("button", { type: "button", role: "tab", "aria-selected": "true" }, "Contents");
-  var filesTab = el("button", { type: "button", role: "tab", "aria-selected": "false" }, "Files");
+  // Tabs are an icon and a name; only the selected tab shows its name, so
+  // four of them fit the sidebar. The name is the tooltip and label.
+  function tab(name, iconName, selected) {
+    var b = el("button", { type: "button", role: "tab", "aria-selected": String(selected), title: name, "aria-label": name },
+      icon(iconName));
+    var label = el("span", { "class": "mdv-tab-label" });
+    label.textContent = name;
+    b.append(label);
+    return b;
+  }
+  var contentsTab = tab("Contents", "list-unordered", true);
+  var filesTab = tab("Files", "file-directory", false);
   var closeBtn = el("button", { type: "button", "class": "mdv-close", title: "Close (Esc)", "aria-label": "Close sidebar" }, icon("x"));
   tabs.append(contentsTab);
-  var linksTab = el("button", { type: "button", role: "tab", "aria-selected": "false" }, "Backlinks");
+  var linksTab = tab("Backlinks", "cross-reference", false);
   if (hasFiles) tabs.append(filesTab);
   if (served) tabs.append(linksTab);
+  // Recent files, when the viewer remembers them.
+  var hasRecent = served && script.hasAttribute("data-recent");
+  var recentTab = tab("Recent", "history", false);
+  if (hasRecent) tabs.append(recentTab);
   tabs.append(closeBtn);
   var contentsPanel = el("div", { "class": "mdv-panel", role: "tabpanel" });
   var filesPanel = el("div", { "class": "mdv-panel", role: "tabpanel", hidden: "" });
@@ -144,7 +160,8 @@
   var hitList = el("div");
   filesPanel.append(filter, fileList, hitList);
   var linksPanel = el("div", { "class": "mdv-panel", role: "tabpanel", hidden: "" });
-  sidebar.append(tabs, contentsPanel, filesPanel, linksPanel);
+  var recentPanel = el("div", { "class": "mdv-panel", role: "tabpanel", hidden: "" });
+  sidebar.append(tabs, contentsPanel, filesPanel, linksPanel, recentPanel);
 
   var KEYS = [
     ["[ / ]", "Back / forward (also Alt-\u2190 / Alt-\u2192)"],
@@ -160,6 +177,7 @@
     ["c", "Copy the page (rich text, and Markdown as plain text)"],
     ["w", "Show or hide the word count and reading time"],
     served ? ["b", "Show backlinks: other files linking here"] : null,
+    hasRecent ? ["h", "Show recent files"] : null,
     served ? ["l", "Check this page's links"] : null,
     served ? ["D", "Show what changed since the last git commit"] : null,
     ["j / k", "Scroll down / up"],
@@ -585,10 +603,10 @@
   function sidebarOpen() { return root.classList.contains("mdv-sidebar-open"); }
   var currentTab = "contents";
   function selectTab(name) {
-    if ((name === "files" && !hasFiles) || (name === "links" && !served) ||
-        ["contents", "files", "links"].indexOf(name) === -1) name = "contents";
+    if ((name === "files" && !hasFiles) || (name === "links" && !served) || (name === "recent" && !hasRecent) ||
+        ["contents", "files", "links", "recent"].indexOf(name) === -1) name = "contents";
     currentTab = name;
-    var panels = { contents: [contentsPanel, contentsTab], files: [filesPanel, filesTab], links: [linksPanel, linksTab] };
+    var panels = { contents: [contentsPanel, contentsTab], files: [filesPanel, filesTab], links: [linksPanel, linksTab], recent: [recentPanel, recentTab] };
     for (var n in panels) {
       panels[n][0].hidden = n !== name;
       panels[n][1].setAttribute("aria-selected", String(n === name));
@@ -597,6 +615,7 @@
     filesBtn.setAttribute("aria-pressed", String(sidebarOpen() && name === "files"));
     if (name === "files") loadFiles();
     if (name === "links") loadBacklinks();
+    if (name === "recent") loadRecent();
   }
   function openSidebar(name, focusFilter) {
     root.classList.add("mdv-sidebar-open");
@@ -859,8 +878,9 @@
 
   // Restore the sidebar the way it was last left.
   var initialSidebar = root.getAttribute("data-mdv-sidebar");
-  if ((initialSidebar === "files" && !hasFiles) || (initialSidebar === "links" && !served)) initialSidebar = "contents";
-  if (initialSidebar === "contents" || initialSidebar === "files" || initialSidebar === "links") {
+  if ((initialSidebar === "files" && !hasFiles) || (initialSidebar === "links" && !served) ||
+      (initialSidebar === "recent" && !hasRecent)) initialSidebar = "contents";
+  if (["contents", "files", "links", "recent"].indexOf(initialSidebar) !== -1) {
     root.classList.add("mdv-sidebar-open");
     selectTab(initialSidebar);
   } else {
@@ -1121,6 +1141,7 @@
       case "?": overlay.hidden = !overlay.hidden; if (!overlay.hidden) loadAboutLocal(); break;
       case ",": if (!canSettings) return; openSettings(); break;
       case "w": toggleWordCount(); break;
+      case "h": if (!hasRecent) return; toggleSidebar("recent"); break;
       case "[": history.back(); break;
       case "]": history.forward(); break;
       case "r": location.reload(); break;
@@ -1796,6 +1817,95 @@
     });
   }
   linksTab.addEventListener("click", function () { openSidebar("links"); });
+
+  // ---- Recent files -------------------------------------------------------------
+  // The sidebar's Recent tab, and the Recent page's rows. Items inside the
+  // served folder are links; others ask the viewer to open them (in a
+  // viewer of their own). Removing forgets an item; the Recent page also
+  // updates itself from the server.
+  var RECENT_ICONS = { folder: "file-directory", markdown: "book", table: "table", file: "file" };
+  function postRecent(action, path) {
+    return fetch("/__mdv/recent/" + action, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-MDV": "1" },
+      body: JSON.stringify({ path: path }),
+    }).then(function (r) { if (!r.ok) throw new Error("error " + r.status); });
+  }
+  function openRecent(path) {
+    postRecent("open", path).then(function () { showToast("Opening in a new window\u2026"); },
+      function () { showToast("Couldn't open it"); });
+  }
+  function removeRecent(path, row) {
+    postRecent("remove", path).then(function () {
+      var list = row.parentElement;
+      row.remove();
+      // Drop an emptied group (on the Recent page) and its title.
+      if (list && list.classList.contains("mdv-recent-list") && !list.children.length) {
+        var title = list.previousElementSibling;
+        if (title && title.classList.contains("mdv-recent-group")) title.remove();
+        list.remove();
+      }
+      if (currentTab === "recent" && !recentPanel.querySelector(".mdv-recent-row")) loadRecent();
+    }, function () { showToast("Couldn't remove it"); });
+  }
+  function loadRecent() {
+    if (!hasRecent) return;
+    fetch("/__mdv/recent").then(function (r) { return r.json(); }).then(function (data) {
+      recentPanel.textContent = "";
+      var items = data.items || [];
+      if (!items.length) {
+        recentPanel.append(el("div", { "class": "mdv-empty" }, "Nothing opened yet"));
+        return;
+      }
+      var group = null;
+      items.forEach(function (item) {
+        if (item.group !== group) {
+          group = item.group;
+          var heading = el("div", { "class": "mdv-dir" });
+          heading.textContent = group;
+          recentPanel.append(heading);
+        }
+        var row = el("div", { "class": "mdv-recent-row" });
+        var link = el("a", { "class": "mdv-tree-row", href: item.href || "#", title: item.path }, icon(RECENT_ICONS[item.kind] || "file"));
+        var text = el("span", { "class": "mdv-recent-text" });
+        var name = el("span", { "class": "mdv-tree-name" });
+        name.textContent = item.kind === "folder" ? item.name + "/" : item.name;
+        var sub = el("span", { "class": "mdv-recent-sub" });
+        var where = el("span", { "class": "mdv-recent-folder" });
+        where.textContent = item.folder;
+        var when = el("span", { "class": "mdv-recent-ago" });
+        when.textContent = "\u00b7 " + item.ago;
+        sub.append(where, when);
+        text.append(name, sub);
+        link.append(text);
+        if (item.href && item.href.split("#")[0] === location.pathname) link.classList.add("mdv-active");
+        if (!item.href) link.addEventListener("click", function (e) { e.preventDefault(); openRecent(item.path); });
+        var remove = el("button", { type: "button", "class": "mdv-recent-remove", title: "Remove from Recent",
+          "aria-label": "Remove " + item.name + " from Recent" }, icon("x"));
+        remove.addEventListener("click", function () { removeRecent(item.path, row); });
+        row.append(link, remove);
+        recentPanel.append(row);
+      });
+    }).catch(function () {
+      recentPanel.textContent = "";
+      recentPanel.append(el("div", { "class": "mdv-empty" }, "Couldn't load recent files"));
+    });
+  }
+  recentTab.addEventListener("click", function () { openSidebar("recent"); });
+  // The Recent page's own rows (it's re-rendered by live updates, so
+  // listen on the document).
+  document.addEventListener("click", function (e) {
+    var item = e.target.closest && e.target.closest(".markdown-body .mdv-recent-item");
+    if (!item) return;
+    var path = item.getAttribute("data-path");
+    if (e.target.closest(".mdv-recent-remove")) {
+      e.preventDefault();
+      removeRecent(path, item);
+    } else if (e.target.closest("a[data-mdv-recent-open]")) {
+      e.preventDefault();
+      openRecent(path);
+    }
+  });
 
   addCopyButtons(body);
   buildContents();

@@ -6,6 +6,24 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-27
+
+### Added
+
+- A **Recent** tab in the sidebar (<kbd>h</kbd>) lists the files and
+  folders you opened lately on every served page. Files outside the
+  folder being viewed open in a viewer of their own.
+- Remove an item from the recent list with its × button, on the Recent
+  page or in the sidebar.
+
+### Changed
+
+- Sidebar tabs are icons, with the selected tab's name beside its icon,
+  so all four fit (names show on hover).
+- The Recent page is a list of rows grouped by when you opened them, with
+  icons for files, folders and tables, and it updates itself when the list
+  changes.
+
 ## [0.11.0] - 2026-11-26
 
 ### Added
@@ -327,7 +345,8 @@ and this project uses [Semantic Versioning](https://semver.org/).
 - Stopping `--watch` with Ctrl-C closes the window markdown-viewer opened.
   Tabs, and pages opened by hand, stay open with a "stopped" banner.
 
-[Unreleased]: https://github.com/mdellavo/markdown-viewer/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/mdellavo/markdown-viewer/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.8.0...v0.9.0

@@ -186,7 +186,10 @@ cargo install markdown-viewer-rs     # build from source (see Building)
 - Reopening a file takes you back to where you were reading.
 - Recent files: `markdown-viewer --recent`, or `markdown-viewer` with no
   arguments in your home folder, lists the files and folders you opened
-  lately, newest first, each a click away.
+  lately, newest first and grouped by when, each a click away. They're
+  also in the sidebar's **Recent** tab (<kbd>h</kbd>) on every page. Remove
+  one with its × button. Files outside the folder being viewed open in a
+  viewer of their own.
 - Opening a file that's already being viewed brings its window to the front
   instead of opening another.
 - Click an image or diagram to zoom; scroll to zoom further and drag to pan.
@@ -353,6 +356,7 @@ code block shows its copy button.
 | <kbd>+</kbd> / <kbd>-</kbd> / <kbd>0</kbd> | Larger / smaller / normal text |
 | <kbd>c</kbd> | Copy the page |
 | <kbd>b</kbd> | Backlinks: other files that link here (when serving) |
+| <kbd>h</kbd> | Recent files, in the sidebar (when serving) |
 | <kbd>l</kbd> | Check this page's links (when serving) |
 | <kbd>D</kbd> | Show what changed since the last git commit (when serving) |
 | <kbd>j</kbd> / <kbd>k</kbd> | Scroll down / up |
@@ -812,8 +816,10 @@ app and the Linux desktop entry are thin launchers for the same command.
   that a page links to.
 - **Recent files:** the list stays on your computer, in the state file
   next to your reading positions. The Recent page is served from your home
-  folder, the same as browsing it would be. Set `recent = false` to stop
-  recording.
+  folder, the same as browsing it would be. A page can ask the viewer to
+  open a recent item outside its folder, but only one that's in the list,
+  and only with the custom header other websites can't send. Set
+  `recent = false` to stop recording.
 - **GitHub references:** only change links on the page; nothing is fetched
   from GitHub.
 - **PDF export:** runs the browser headless with a throwaway profile, so it

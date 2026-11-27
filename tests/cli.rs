@@ -1504,6 +1504,32 @@ fn recent_files_are_remembered_and_listed() {
     );
     assert!(page.contains("href=\"/notes/todo%20list.md\""), "{page}");
     assert!(http_get(a, "/notes/todo%20list.md", a).contains("Todo"));
+
+    // The list as JSON (the sidebar's Recent tab).
+    let list = http_get(a, "/__mdv/recent", a);
+    assert!(
+        list.contains("\"href\":\"/notes/todo%20list.md\""),
+        "{list}"
+    );
+    assert!(list.contains("\"enabled\":true"), "{list}");
+    // Only remembered paths can be opened, and only by the viewer's pages.
+    let other = home_path.join("other.md");
+    std::fs::write(&other, "# Other\n").unwrap();
+    let body = serde_json::json!({ "path": other }).to_string();
+    assert!(post(a, "/__mdv/recent/open", &body).starts_with("HTTP/1.1 404"));
+    let no_header = http(
+        a,
+        &format!(
+            "POST /__mdv/recent/remove HTTP/1.1\r\nHost: {a}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        ),
+    );
+    assert!(no_header.starts_with("HTTP/1.1 403"), "{no_header}");
+    // Removing forgets it.
+    let todo = serde_json::json!({ "path": notes.join("todo list.md") }).to_string();
+    assert!(post(a, "/__mdv/recent/remove", &todo).starts_with("HTTP/1.1 204"));
+    let state = std::fs::read_to_string(test_dir().join("state.json")).unwrap();
+    assert!(!state.contains("todo list.md"), "{state}");
 }
 
 #[test]

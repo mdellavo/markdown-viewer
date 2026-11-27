@@ -60,8 +60,13 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   `$XDG_DATA_HOME`). `packaging/linux/markdown-viewer.desktop` is the
   packaged copy; a test keeps it equal to `desktop::entry`.
 - `src/recent.rs`: recently opened files (`Prefs::recent`, recorded on
-  launch, never changed by pages) and the Recent page, a virtual document
-  served from the home folder.
+  launch) and the Recent page, a virtual document served from the home
+  folder: Markdown with one raw HTML block of rows (`.mdv-recent-item`),
+  re-rendered every 2 s by `follow_recent` in main.rs. `recent::shown`
+  feeds both it and `/__mdv/recent` (the sidebar's Recent tab). Pages can
+  only remove items (`POST /__mdv/recent/remove`) or open one that is in
+  the list (`POST /__mdv/recent/open` runs markdown-viewer for it), both
+  with the `X-MDV` header.
 - Sortable tables live in `ui.js`; like callout folds, `live.js` asks it to
   restore the file's row order before an update (`mdvSort.save`) and
   re-sorts after, so source positions stay right.

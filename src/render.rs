@@ -59,6 +59,8 @@ pub struct PageOptions {
     pub git_changes: bool,
     /// Leave the word count and reading time out of the toolbar.
     pub hide_word_count: bool,
+    /// Recent files are remembered: served pages get a Recent tab.
+    pub recent: bool,
     /// The theme was given with `--theme`; a standalone page shouldn't
     /// replace it with one remembered in the browser.
     pub fixed_theme: bool,
@@ -389,9 +391,14 @@ impl Renderer {
                 }
                 None => String::new(),
             };
+            let recent_attr = if page.served && page.recent {
+                " data-recent"
+            } else {
+                ""
+            };
             let _ = write!(
                 out,
-                "<script nonce=\"{nonce}\" data-served=\"{}\" data-doc=\"{doc}\"{site_attr}{} data-about=\"{}\">\n{UI_JS}</script>\n",
+                "<script nonce=\"{nonce}\" data-served=\"{}\" data-doc=\"{doc}\"{site_attr}{recent_attr}{} data-about=\"{}\">\n{UI_JS}</script>\n",
                 page.served,
                 match (page.settings, page.source) {
                     (true, true) => " data-settings data-source",

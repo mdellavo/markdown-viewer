@@ -1266,3 +1266,74 @@ fn outside_links_open_new_windows_and_the_toolbar_navigates() {
         "the reloaded page",
     );
 }
+
+#[test]
+fn recent_items_can_be_removed_from_the_page_and_sidebar() {
+    let Some(browser) = browser() else { return };
+    let home = tempfile::tempdir().unwrap();
+    let home = dunce::canonicalize(home.path()).unwrap();
+    std::fs::create_dir_all(home.join("notes")).unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let mut recent = Vec::new();
+    for (i, name) in ["a.md", "b.md", "c.md"].iter().enumerate() {
+        let path = home.join("notes").join(name);
+        std::fs::write(&path, format!("# {name}\n")).unwrap();
+        recent.push(serde_json::json!({ "path": path, "at": now - i as u64 * 60 }));
+    }
+    let state = test_dir().join("state.json");
+    std::fs::write(&state, serde_json::json!({ "recent": recent }).to_string()).unwrap();
+    let mut cmd = mdv();
+    cmd.arg("--recent")
+        .env("HOME", &home)
+        .env("USERPROFILE", &home);
+    let server = start(cmd);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    let count = "document.querySelectorAll('.markdown-body .mdv-recent-item').length";
+    until(&tab, &format!("{count} === 3"), "three rows on the page");
+
+    // Remove from the page: the row goes, and the state file forgets it.
+    js(
+        &tab,
+        "document.querySelector('.mdv-recent-item[data-path$=\"b.md\"] .mdv-recent-remove').click(); return 0;",
+    );
+    until(&tab, &format!("{count} === 2"), "the row removed");
+    let saved = || std::fs::read_to_string(&state).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while saved().contains("b.md") && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    assert!(!saved().contains("b.md"), "{}", saved());
+
+    // The sidebar tab lists the rest; removing there works too, and the
+    // page catches up.
+    press(&tab, "h");
+    until(
+        &tab,
+        "document.querySelectorAll('.mdv-recent-row').length === 2",
+        "two rows in the sidebar",
+    );
+    js(
+        &tab,
+        "document.querySelector('.mdv-recent-row a[title$=\"c.md\"]').parentElement.querySelector('.mdv-recent-remove').click(); return 0;",
+    );
+    until(
+        &tab,
+        "document.querySelectorAll('.mdv-recent-row').length === 1",
+        "one row left in the sidebar",
+    );
+    until(
+        &tab,
+        &format!("{count} === 1"),
+        "the page updated by the server",
+    );
+
+    // Rows link to their pages.
+    let href = js(
+        &tab,
+        "return document.querySelector('.mdv-recent-row a').getAttribute('href');",
+    );
+    assert_eq!(href, "/notes/a.md");
+}
