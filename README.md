@@ -726,6 +726,121 @@ Releases are built by GitHub Actions when a `v*` tag is pushed; see
 - **PDF export:** runs the browser headless with a throwaway profile, so it
   never touches your own browser profile.
 
+## Todo
+
+> [!NOTE]
+> These are ideas, not promises: not all of them will be implemented, and
+> any that are may end up working differently. The viewer stays a viewer, so
+> editing features are out of scope.
+
+**Navigating a vault or folder**
+
+- [ ] Quick switcher: <kbd>Ctrl</kbd>/<kbd>⌘</kbd>-<kbd>O</kbd> for a fuzzy
+  finder over file names, headings and aliases.
+- [ ] Hover previews of linked notes and headings, and of footnotes.
+- [ ] Graph view: how notes link, for the whole folder or this note's
+  neighbours.
+- [ ] Tags: `#tags` and front matter `tags:` as chips, and a Tags sidebar
+  tab listing notes by tag.
+- [ ] Unlinked mentions: notes that name this one without linking to it.
+- [ ] Back and forward history inside the viewer
+  (<kbd>Alt</kbd>-<kbd>←</kbd> / <kbd>→</kbd>), restoring the scroll
+  position.
+- [ ] Bookmarks for notes and headings, as a sidebar tab.
+- [ ] Command palette (<kbd>⌘</kbd>/<kbd>Ctrl</kbd>-<kbd>K</kbd>): one
+  search over files, headings and viewer commands.
+- [ ] Task overview: every open task across the folder, grouped by file,
+  with ticking working there too.
+- [ ] Task progress ("4 of 9 done") in the toolbar and on each list, and a
+  key to hide finished items.
+
+**Obsidian syntax**
+
+- [ ] Block references: `^block-id` anchors, `[[Note#^id]]` links and
+  `![[Note#^id]]` embeds.
+- [ ] `aliases:` for wiki links, and typed display of properties (dates,
+  links, lists, checkboxes).
+- [ ] Read-only Dataview queries (```` ```dataview ```` tables and lists
+  from the vault's front matter).
+- [ ] JSON Canvas: `.canvas` files as a pannable board.
+- [ ] More embeds: `![[file.pdf]]` (with `#page=N`), audio, video and
+  `![[file.csv]]`.
+- [ ] Excalidraw drawings (`.excalidraw`, `.excalidraw.md`).
+
+**Rendering**
+
+- [ ] KaTeX macros (`\R`, `\vec` …) from front matter or the settings file.
+- [ ] Includes: `<!-- include chapter2.md -->` to assemble long documents,
+  with live updates following the included files.
+- [ ] Custom processors: pipe the Markdown through a command (Pandoc, a
+  preprocessor) before rendering.
+- [ ] More themes: GitHub's dark dimmed and high-contrast variants.
+
+**Other formats**
+
+- [ ] Jupyter notebooks (`.ipynb`), with cells and outputs.
+- [ ] GeoJSON and TopoJSON maps, and STL models, as GitHub shows them.
+- [ ] Definition lists, abbreviations, `^superscript^` / `~subscript~`.
+- [ ] PlantUML, Graphviz (DOT) and D2 diagrams, through a local binary
+  when installed.
+
+**Reading**
+
+- [ ] Focus mode: dim everything but the current paragraph or section,
+  with a reading ruler.
+- [ ] A reading progress bar and a heading minimap.
+- [ ] Readability statistics: reading level, sentence length, longest
+  paragraphs and overused words, each linked to its place.
+- [ ] The headings as a zoomable mind map.
+- [ ] Split view: two documents side by side, or the page and its source
+  scrolling together.
+- [ ] Speaker notes and a presenter view (timer, next slide) for
+  presentation mode.
+- [ ] Fold a section by clicking its heading, remembered per file.
+- [ ] Mark every block that changed on save, not only the first.
+- [ ] A rendered git diff (`--diff HEAD~3`): inserted text in green,
+  deleted text struck through.
+- [ ] Proofing: highlight doubled words, passive voice and your own list
+  of words to watch for.
+
+**Working with an editor**
+
+- [ ] Preview unsaved edits: the VS Code extension sends the buffer as you
+  type.
+- [ ] Scroll the editor from the preview (`--goto` in reverse).
+
+**Exporting**
+
+- [ ] EPUB export, for a file or a folder, and DOCX through Pandoc when
+  it's installed.
+- [ ] PDF options: paper size, margins, page numbers, header and footer, a
+  cover page from the front matter, and bookmarks from the headings.
+- [ ] Slides to PDF, one slide per page.
+- [ ] Export from the viewer: a toolbar menu for PDF, HTML or rich text.
+- [ ] Save a Mermaid diagram or math block as SVG or PNG.
+- [ ] Graph, tags and backlinks in `-o` static sites.
+- [ ] Search in exported sites, from an index written at export time
+  (working from disk too).
+- [ ] `-o site/ --watch`: rebuild only the changed pages on save.
+- [ ] Site navigation: page order and titles from front matter,
+  previous/next links and a `sitemap.xml`.
+
+**Sharing and devices**
+
+- [ ] `--host`: let other devices on your network view the page, protected
+  by a token in the address, with a QR code in the terminal for phones.
+
+**Platform and packaging**
+
+- [ ] Quick Look on macOS: press space on a `.md` file in Finder.
+- [ ] A native window (WKWebView on macOS): real menus and a remembered
+  window size, whatever your default browser is.
+- [ ] The VS Code extension on the Marketplace and Open VSX.
+- [ ] A Nix flake and a winget package.
+- [ ] A GitHub Action and a pre-commit hook for `--check-links` and
+  `--lint`.
+- [ ] An optional update check, off by default.
+
 ## License
 
 MIT. Includes:
