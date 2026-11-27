@@ -98,6 +98,9 @@ pub struct Renderer {
     render: RenderOptions,
     highlighter: SyntectAdapter,
     mermaid: MermaidAdapter,
+    geojson: DrawingAdapter,
+    topojson: DrawingAdapter,
+    stl: DrawingAdapter,
 }
 
 /// How to treat YAML front matter.
@@ -151,6 +154,27 @@ impl CodefenceRendererAdapter for MermaidAdapter {
     }
 }
 
+/// Turns ```geojson, ```topojson and ```stl fences into drawings (maps and
+/// 3D models, as GitHub shows them), made here as SVG (geo.rs, stl.rs).
+struct DrawingAdapter {
+    sourcepos: bool,
+    draw: fn(&str, &str) -> String,
+}
+
+impl CodefenceRendererAdapter for DrawingAdapter {
+    fn write(
+        &self,
+        output: &mut dyn std::fmt::Write,
+        fence: &CodefenceMeta<'_>,
+    ) -> std::fmt::Result {
+        let pos = match (self.sourcepos, fence.sourcepos) {
+            (true, Some(sp)) => format!(" data-sourcepos=\"{sp}\""),
+            _ => String::new(),
+        };
+        output.write_str(&(self.draw)(fence.code, &pos))
+    }
+}
+
 impl Default for Renderer {
     fn default() -> Self {
         Self::new()
@@ -179,6 +203,11 @@ impl Renderer {
         ext.math_dollars = true;
         ext.math_dollars_block = true;
         ext.math_code = true;
+        // Beyond GitHub: definition lists, ^superscript^ and ~subscript~
+        // (single tildes; ~~strikethrough~~ keeps working).
+        ext.description_lists = true;
+        ext.superscript = true;
+        ext.subscript = true;
         options.render.github_pre_lang = true;
         options.render.tasklist_classes = true;
         // Raw HTML (e.g. `<p align="center"><img …></p>`) is common in READMEs.
@@ -205,6 +234,18 @@ impl Renderer {
             options,
             mermaid: MermaidAdapter {
                 sourcepos: render.sourcepos,
+            },
+            geojson: DrawingAdapter {
+                sourcepos: render.sourcepos,
+                draw: crate::geo::geojson,
+            },
+            topojson: DrawingAdapter {
+                sourcepos: render.sourcepos,
+                draw: crate::geo::topojson,
+            },
+            stl: DrawingAdapter {
+                sourcepos: render.sourcepos,
+                draw: crate::stl::render,
             },
             render,
             highlighter,
@@ -259,12 +300,16 @@ impl Renderer {
     ) -> String {
         let mut plugins = Plugins::default();
         plugins.render.codefence_syntax_highlighter = Some(&self.highlighter);
-        plugins
-            .render
-            .codefence_renderers
-            .insert("mermaid".into(), &self.mermaid);
+        let renderers = &mut plugins.render.codefence_renderers;
+        renderers.insert("mermaid".into(), &self.mermaid);
+        renderers.insert("geojson".into(), &self.geojson);
+        renderers.insert("topojson".into(), &self.topojson);
+        renderers.insert("stl".into(), &self.stl);
+        // Abbreviation definitions come out first (as blank lines).
+        let abbrs = crate::abbr::extract(markdown);
+        let source = abbrs.as_ref().map_or(markdown, |(text, _)| text.as_str());
         let mut html = crate::github::finish(markdown_to_html_with_plugins(
-            markdown,
+            source,
             &self.options,
             &plugins,
         ));
@@ -278,6 +323,9 @@ impl Renderer {
         }
         if let Some(repo) = &self.render.github {
             html = crate::references::finish(&html, repo);
+        }
+        if let Some((_, defs)) = &abbrs {
+            html = crate::abbr::finish(&html, defs);
         }
         if self.render.front_matter == FrontMatter::Table
             && let Some((yaml, end)) = crate::frontmatter::extract(markdown)

@@ -25,6 +25,7 @@ Register-ArgumentCompleter -Native -CommandName 'markdown-viewer' -ScriptBlock {
             [CompletionResult]::new('--output', '--output', [CompletionResultType]::ParameterName, 'Write the rendered HTML to this file ("-" for stdout) instead of opening it. For a folder, write a static site into this folder')
             [CompletionResult]::new('--pdf', '--pdf', [CompletionResultType]::ParameterName, 'Write a PDF to this file instead of opening it (needs Chrome, Chromium, Edge, Brave or Vivaldi)')
             [CompletionResult]::new('--goto', '--goto', [CompletionResultType]::ParameterName, 'Scroll a running viewer to FILE:LINE, starting one if needed. For editor commands (see editors/ in the repository)')
+            [CompletionResult]::new('--diff', '--diff', [CompletionResultType]::ParameterName, 'Show FILE with what changed since a git revision marked: added text in green, removed text struck through in red (e.g. --diff HEAD for uncommitted changes, --diff HEAD~3, --diff main)')
             [CompletionResult]::new('-p', '-p', [CompletionResultType]::ParameterName, 'Port for --watch (default: any free port)')
             [CompletionResult]::new('--port', '--port', [CompletionResultType]::ParameterName, 'Port for --watch (default: any free port)')
             [CompletionResult]::new('--browser', '--browser', [CompletionResultType]::ParameterName, 'Browser to open instead of the default (e.g. "Google Chrome", "firefox")')

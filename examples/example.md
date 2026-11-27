@@ -40,6 +40,11 @@ Like this.
 
 Escaped characters stay literal: \*not italic\*, \`not code\`, \# not a heading.
 
+Beyond GitHub: E = mc^2^ and H~2~O, with `^superscript^` and
+`~subscript~` (on GitHub, single tildes strike through). Abbreviations
+defined at the end of the file, such as HTML and GFM, show their meaning on
+hover.
+
 ## Headings
 
 # Heading level 1
@@ -125,6 +130,15 @@ Task list:
 - [x] Math
 - [ ] Native window
   - [x] Nested tasks work too
+
+Definition list (beyond GitHub):
+
+Markdown
+: A plain-text format for writing documents.
+
+markdown-viewer
+: Renders Markdown the way GitHub does.
+: Updates the page as you save.
 
 ## Tables
 
@@ -436,3 +450,94 @@ timeline
     0.1.0 : Rendering : Live reload : Homebrew
     Unreleased : Mermaid : New window
 ```
+
+## Maps and 3D models
+
+As on GitHub, `geojson` and `topojson` blocks are drawn as maps, and `stl`
+blocks as 3D models. Maps are drawn without map tiles (they'd need the
+web): shapes over a latitude and longitude grid, with each feature's
+properties on hover. Drag a model to turn it.
+
+```geojson
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "properties": { "name": "Boston", "marker-color": "#cf222e" },
+      "geometry": { "type": "Point", "coordinates": [-71.06, 42.36] } },
+    { "type": "Feature", "properties": { "name": "Providence" },
+      "geometry": { "type": "Point", "coordinates": [-71.41, 41.82] } },
+    { "type": "Feature", "properties": { "name": "Route" },
+      "geometry": { "type": "LineString", "coordinates": [[-71.06, 42.36], [-71.25, 42.05], [-71.41, 41.82]] } },
+    { "type": "Feature", "properties": { "name": "Area", "fill": "#2da44e", "stroke": "#2da44e" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-71.8, 42.0], [-71.5, 42.0], [-71.5, 42.25], [-71.8, 42.25], [-71.8, 42.0]]] } }
+  ]
+}
+```
+
+```topojson
+{
+  "type": "Topology",
+  "transform": { "scale": [0.001, 0.001], "translate": [-72, 41] },
+  "objects": {
+    "shapes": { "type": "GeometryCollection", "geometries": [
+      { "type": "Polygon", "arcs": [[0, 1]], "properties": { "name": "West" } },
+      { "type": "Polygon", "arcs": [[-2, 2]], "properties": { "name": "East" } }
+    ] }
+  },
+  "arcs": [
+    [[500, 0], [-500, 0], [0, 1000], [500, 0]],
+    [[500, 1000], [0, -1000]],
+    [[500, 1000], [500, 0], [0, -1000], [-500, 0]]
+  ]
+}
+```
+
+```stl
+solid pyramid
+facet normal 0 0 -1
+  outer loop
+    vertex 0 0 0
+    vertex 1 1 0
+    vertex 1 0 0
+  endloop
+endfacet
+facet normal 0 0 -1
+  outer loop
+    vertex 0 0 0
+    vertex 0 1 0
+    vertex 1 1 0
+  endloop
+endfacet
+facet normal 0 -0.89 0.45
+  outer loop
+    vertex 0 0 0
+    vertex 1 0 0
+    vertex 0.5 0.5 1
+  endloop
+endfacet
+facet normal 0.89 0 0.45
+  outer loop
+    vertex 1 0 0
+    vertex 1 1 0
+    vertex 0.5 0.5 1
+  endloop
+endfacet
+facet normal 0 0.89 0.45
+  outer loop
+    vertex 1 1 0
+    vertex 0 1 0
+    vertex 0.5 0.5 1
+  endloop
+endfacet
+facet normal -0.89 0 0.45
+  outer loop
+    vertex 0 1 0
+    vertex 0 0 0
+    vertex 0.5 0.5 1
+  endloop
+endfacet
+endsolid pyramid
+```
+
+*[HTML]: HyperText Markup Language
+*[GFM]: GitHub Flavored Markdown

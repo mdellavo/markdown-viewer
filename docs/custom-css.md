@@ -173,6 +173,10 @@ in `@media print`. `@page` sets the paper size and margins.
 | `.mdv-front-matter` | the front matter table |
 | `table.mdv-data`, `.mdv-data-note` | a CSV or TSV file's table, and the row count under it |
 | `div.mermaid` | a Mermaid diagram |
+| `.mdv-map`, `.mdv-map-grid`, `.mdv-map-area`, `.mdv-map-line`, `.mdv-map-point` | a GeoJSON or TopoJSON map, its grid, and its areas, lines and points |
+| `.mdv-stl`, `.mdv-stl polygon` | an STL model, and its triangles (shaded through the `--l` lightness, 0.3 to 1) |
+| `abbr[title]` | an abbreviation |
+| `dl`, `dt`, `dd` | a definition list |
 | `.math-display`, `.math-inline` | math |
 | `.mdv-ref` | a GitHub reference (`#123`, `@user`) |
 | `.mdv-embed-note` | an embedded Obsidian note (`![[Note]]`) |

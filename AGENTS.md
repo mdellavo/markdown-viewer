@@ -51,6 +51,24 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   is Markdown or these; `markdown_files` stays Markdown-only for search,
   links and wiki links, `document_files` adds them for the file list and
   sites).
+- `src/geo.rs` and `src/stl.rs`: ```` ```geojson ````/```` ```topojson ````
+  maps and ```` ```stl ```` models, drawn as SVG at render time (fence
+  renderers in render.rs, like Mermaid's), so they need no script and stay
+  offline. Each is one top-level `<figure>` for live updates. STL figures
+  carry rounded vertices in `data-mdv-mesh` and ui.js turns them by
+  redrawing with the same projection and shading as `stl::faces`; the page
+  draws from those same rounded vertices, so the two match exactly (a
+  browser test checks). Keep the maths in step.
+- `src/diffview.rs`: `--diff REV`. The old text comes from `git show
+  REV:./name`; both versions are rendered without source positions and
+  split into top-level blocks, which are compared (LCS). Changed text
+  blocks are compared token by token, keeping only the new version's tags
+  (removed tags are dropped, their text kept in `<del class="mdv-del">`), so
+  the markup stays balanced; other blocks are shown whole in
+  `.mdv-diff-del`/`.mdv-diff-ins`. Served, it's a virtual document that
+  `follow_diff` in main.rs recomputes when the file changes.
+- `src/abbr.rs`: `*[ABBR]: meaning` definitions, blanked before rendering
+  (keeping line numbers) and wrapped in `<abbr>` afterwards, outside code.
 - `src/references.rs`: GitHub references (`#123`, `@user`, commits),
   linked in rendered HTML outside links, code and math. The repository
   comes from the git remote (`RenderOptions::github`).

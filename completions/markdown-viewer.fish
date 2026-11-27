@@ -1,6 +1,7 @@
 complete -c markdown-viewer -s o -l output -d 'Write the rendered HTML to this file ("-" for stdout) instead of opening it. For a folder, write a static site into this folder' -r -F
 complete -c markdown-viewer -l pdf -d 'Write a PDF to this file instead of opening it (needs Chrome, Chromium, Edge, Brave or Vivaldi)' -r -F
 complete -c markdown-viewer -l goto -d 'Scroll a running viewer to FILE:LINE, starting one if needed. For editor commands (see editors/ in the repository)' -r
+complete -c markdown-viewer -l diff -d 'Show FILE with what changed since a git revision marked: added text in green, removed text struck through in red (e.g. --diff HEAD for uncommitted changes, --diff HEAD~3, --diff main)' -r
 complete -c markdown-viewer -s p -l port -d 'Port for --watch (default: any free port)' -r
 complete -c markdown-viewer -l browser -d 'Browser to open instead of the default (e.g. "Google Chrome", "firefox")' -r
 complete -c markdown-viewer -l theme -d 'Colour theme (default: the one you last chose in the viewer, else auto). Press t in the viewer to switch' -r -f -a "auto\t'Follow the operating system\'s light/dark setting'

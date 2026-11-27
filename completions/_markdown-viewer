@@ -19,6 +19,7 @@ _markdown-viewer() {
 '(-w --watch --pdf)--output=[Write the rendered HTML to this file ("-" for stdout) instead of opening it. For a folder, write a static site into this folder]:PATH:_files' \
 '(-w --watch)--pdf=[Write a PDF to this file instead of opening it (needs Chrome, Chromium, Edge, Brave or Vivaldi)]:PATH:_files' \
 '(--clipboard -o --output --pdf)--goto=[Scroll a running viewer to FILE\:LINE, starting one if needed. For editor commands (see editors/ in the repository)]:FILE:LINE:_default' \
+'(--clipboard --goto --check-links --lint --recent)--diff=[Show FILE with what changed since a git revision marked\: added text in green, removed text struck through in red (e.g. --diff HEAD for uncommitted changes, --diff HEAD~3, --diff main)]:REV:_default' \
 '-p+[Port for --watch (default\: any free port)]:PORT:_default' \
 '--port=[Port for --watch (default\: any free port)]:PORT:_default' \
 '--browser=[Browser to open instead of the default (e.g. "Google Chrome", "firefox")]:NAME:_default' \

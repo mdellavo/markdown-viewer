@@ -125,6 +125,24 @@ cargo install markdown-viewer-rs     # build from source (see Building)
   All diagram types are supported: flowchart, sequence, class, state,
   entity-relationship, Gantt, pie, git graph, mindmap, timeline and more. A
   diagram with errors stays visible as source, with the error on hover.
+- Maps and 3D models, from the same code blocks GitHub draws:
+  - ```` ```geojson ```` and ```` ```topojson ```` blocks become maps:
+    points, lines and areas over a latitude and longitude grid, with each
+    feature's properties on hover, and GitHub's style properties (`stroke`,
+    `fill`, `marker-color` and so on). Click a map to enlarge it. GitHub
+    draws them on map tiles from the web; here they stay offline, without
+    tiles.
+  - ```` ```stl ```` blocks (ASCII STL) become shaded 3D models. Drag one to
+    turn it, and double-click to go back.
+  - Both are drawn when the page is built, so they're in exports and PDFs
+    too. A block that can't be drawn shows its source and the reason.
+- Beyond GitHub:
+  - Definition lists: a term, then lines starting with `: `.
+  - `^superscript^` and `~subscript~`. (On GitHub, single tildes strike
+    through; here only `~~double~~` does.)
+  - Abbreviations: `*[HTML]: HyperText Markup Language` anywhere in the
+    file shows that meaning when you hover over "HTML". The definition
+    lines themselves don't appear.
 - Raw HTML, as READMEs often use it: centered images, `<details>`, `<kbd>`,
   `<sub>`/`<sup>`.
 - YAML front matter shown as a table, as on GitHub (or hidden with
@@ -207,6 +225,12 @@ cargo install markdown-viewer-rs     # build from source (see Building)
   runs.
 - Show what changed since the last git commit (<kbd>D</kbd>): changed blocks
   get a bar in the margin, like an editor's gutter.
+- A rendered diff: `markdown-viewer notes.md --diff HEAD~3` shows the page
+  with what changed since that git revision marked: added words in green,
+  removed words struck through in red, and changed code blocks, diagrams
+  and maps shown old and new. A summary at the top counts the words. It
+  follows the file as you save, and works with `-o` and `--pdf` too. Use
+  `--diff HEAD` for uncommitted changes, or a branch, tag or commit.
 - Copy the whole page (<kbd>c</kbd>): rich text for Docs, Slack or email, with
   the Markdown as plain text.
 - Check the page's links (<kbd>l</kbd>), or every file's with
@@ -281,6 +305,7 @@ markdown-viewer --lint docs/             # report writing problems (exit status 
 markdown-viewer data.csv                 # a CSV or TSV file as a table
 markdown-viewer https://github.com/o/r   # a repository's README, or any Markdown URL
 markdown-viewer --recent                 # files and folders you opened lately
+markdown-viewer notes.md --diff HEAD~3   # what changed since a git revision
 markdown-viewer --goto README.md:42      # scroll a running preview to line 42
 markdown-viewer --version                # version, commit and build details
 ```
@@ -310,6 +335,7 @@ markdown-viewer --version                # version, commit and build details
 | `--check-links` | Check the links in a file or folder and report broken ones |
 | `--online` | With `--check-links`: also check web links (needs `curl`) |
 | `--lint` | Report writing problems in a file or folder (see [Linting](#linting)) |
+| `--diff <REV>` | Show the file with what changed since a git revision marked: added text in green, removed text struck through in red |
 | `--recent` | Show the files and folders you opened recently |
 | `--keep-running` | With `--watch`: keep serving after the window is closed (until Ctrl-C) |
 | `--exit-when-closed` | With `--watch`: exit once the page has been closed for 5 seconds, even with `--no-open` (the default otherwise) |
@@ -878,8 +904,8 @@ app and the Linux desktop entry are thin launchers for the same command.
 **Other formats**
 
 - [ ] Jupyter notebooks (`.ipynb`), with cells and outputs.
-- [ ] GeoJSON and TopoJSON maps, and STL models, as GitHub shows them.
-- [ ] Definition lists, abbreviations, `^superscript^` / `~subscript~`.
+- [x] GeoJSON and TopoJSON maps, and STL models, as GitHub shows them.
+- [x] Definition lists, abbreviations, `^superscript^` / `~subscript~`.
 - [ ] PlantUML, Graphviz (DOT) and D2 diagrams, through a local binary
   when installed.
 
@@ -897,7 +923,7 @@ app and the Linux desktop entry are thin launchers for the same command.
   presentation mode.
 - [ ] Fold a section by clicking its heading, remembered per file.
 - [ ] Mark every block that changed on save, not only the first.
-- [ ] A rendered git diff (`--diff HEAD~3`): inserted text in green,
+- [x] A rendered git diff (`--diff HEAD~3`): inserted text in green,
   deleted text struck through.
 - [ ] Proofing: highlight doubled words, passive voice and your own list
   of words to watch for.

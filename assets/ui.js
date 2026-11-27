@@ -12,6 +12,8 @@
   var hasFiles = served || siteRoot !== null;
   var currentDoc = script.dataset.doc || "";
   var root = document.documentElement;
+  // For styles that only make sense with this script (the STL drag hint).
+  root.setAttribute("data-mdv-ui", "");
   var body = document.querySelector(".markdown-body");
 
   // Icons: Primer Octicons (MIT), see assets/LICENSE-octicons.
@@ -1222,7 +1224,7 @@
   body.addEventListener("dblclick", function (e) {
     if (!canEdit) return;
     var t = e.target;
-    if (t.closest("a, button, input, .mdv-ui, img, div.mermaid")) return;
+    if (t.closest("a, button, input, .mdv-ui, img, div.mermaid, .mdv-map, .mdv-stl")) return;
     var node = t.closest("[data-sourcepos]");
     if (!node) return;
     var sel = window.getSelection && window.getSelection();
@@ -1343,7 +1345,7 @@
       openZoom(copy);
       return;
     }
-    var diagram = e.target.closest("div.mermaid");
+    var diagram = e.target.closest("div.mermaid, .mdv-map:not(.mdv-map-invalid)");
     if (diagram && diagram.querySelector("svg")) {
       var svg = diagram.querySelector("svg").cloneNode(true);
       var vb = svg.viewBox && svg.viewBox.baseVal;
@@ -1352,6 +1354,80 @@
       svg.style.height = "auto";
       openZoom(svg);
     }
+  });
+
+  // ---- Turning STL models -------------------------------------------------------
+  // The page draws each model from one angle (stl.rs); dragging turns it,
+  // redrawing its triangles from the vertices in data-mdv-mesh with the
+  // same maths as stl.rs. Double-click goes back to the first view.
+  var STL_YAW = -0.6, STL_PITCH = 1.0;
+  var stlState = new WeakMap();
+  function stlModel(fig) {
+    var m = stlState.get(fig);
+    if (!m) {
+      var n = fig.getAttribute("data-mdv-mesh").split(",").map(Number);
+      m = { mesh: n, yaw: STL_YAW, pitch: STL_PITCH, polys: fig.querySelectorAll("polygon") };
+      stlState.set(fig, m);
+    }
+    return m;
+  }
+  function drawStl(m) {
+    var cy = Math.cos(m.yaw), sy = Math.sin(m.yaw), cp = Math.cos(m.pitch), sp = Math.sin(m.pitch);
+    var v = m.mesh, faces = [], half = 200, scale = half * 0.92;
+    for (var i = 0; i + 8 < v.length; i += 9) {
+      var p = [];
+      for (var k = 0; k < 3; k++) {
+        var x0 = v[i + k * 3], y0 = v[i + k * 3 + 1], z0 = v[i + k * 3 + 2];
+        var x = x0 * cy - y0 * sy, y = x0 * sy + y0 * cy;
+        p.push([x, -(y * cp + z0 * sp), -y * sp + z0 * cp]);
+      }
+      var a = [p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2]];
+      var b = [p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2]];
+      var nx = a[1] * b[2] - a[2] * b[1], ny = a[2] * b[0] - a[0] * b[2], nz = a[0] * b[1] - a[1] * b[0];
+      var len = Math.max(Math.sqrt(nx * nx + ny * ny + nz * nz), 1e-12);
+      var dot = Math.abs((nx * -0.4 + ny * -0.5 + nz * 0.77) / len);
+      faces.push({
+        pts: p.map(function (q) { return (half + q[0] * scale).toFixed(1) + "," + (half + q[1] * scale).toFixed(1); }).join(" "),
+        depth: (p[0][2] + p[1][2] + p[2][2]) / 3,
+        light: 0.3 + 0.7 * dot,
+      });
+    }
+    faces.sort(function (f, g) { return f.depth - g.depth; });
+    faces.forEach(function (f, j) {
+      var poly = m.polys[j];
+      if (!poly) return;
+      poly.setAttribute("points", f.pts);
+      poly.style.setProperty("--l", f.light.toFixed(2));
+    });
+  }
+  var stlDrag = null;
+  document.addEventListener("pointerdown", function (e) {
+    var fig = e.target.closest && e.target.closest(".markdown-body .mdv-stl[data-mdv-mesh]");
+    if (!fig || e.button !== 0) return;
+    e.preventDefault();
+    stlDrag = { model: stlModel(fig), x: e.clientX, y: e.clientY, frame: 0, svg: fig.querySelector("svg") };
+    stlDrag.svg.style.cursor = "grabbing";
+  });
+  document.addEventListener("pointermove", function (e) {
+    if (!stlDrag) return;
+    var d = stlDrag;
+    d.model.yaw += (e.clientX - d.x) * 0.01;
+    d.model.pitch += (e.clientY - d.y) * 0.01;
+    d.x = e.clientX;
+    d.y = e.clientY;
+    if (!d.frame) d.frame = requestAnimationFrame(function () { d.frame = 0; drawStl(d.model); });
+  });
+  document.addEventListener("pointerup", function () {
+    if (stlDrag) stlDrag.svg.style.cursor = "";
+    stlDrag = null;
+  });
+  document.addEventListener("dblclick", function (e) {
+    var fig = e.target.closest && e.target.closest(".markdown-body .mdv-stl[data-mdv-mesh]");
+    if (!fig) return;
+    var m = stlModel(fig);
+    m.yaw = STL_YAW;
+    m.pitch = STL_PITCH;
+    drawStl(m);
   });
 
   // ---- Presentation mode ---------------------------------------------------

@@ -224,9 +224,27 @@ fn example_renders_every_feature() {
         "mdv-line mdv-hl",
         "mdv-numbered",
         "hl-",
+        "<sup>2</sup>",
+        "H<sub>2</sub>O",
+        "<dt>Markdown</dt>",
+        "<abbr title=\"HyperText Markup Language\">HTML</abbr>",
+        "<abbr title=\"GitHub Flavored Markdown\">GFM</abbr>",
+        "<circle class=\"mdv-map-point\"",
+        "<title>name: Boston</title>",
+        "<figure class=\"mdv-stl\" data-mdv-mesh=",
     ] {
         assert!(body.contains(needle), "missing {needle:?}");
     }
+    assert_eq!(
+        count("<figure class=\"mdv-map\""),
+        2,
+        "a GeoJSON and a TopoJSON map"
+    );
+    assert!(!body.contains("Can't draw"), "every drawing is valid");
+    assert!(
+        !body.contains("*[HTML]"),
+        "abbreviation definitions are hidden"
+    );
     // The page CSP allows only nonce'd scripts, so the example's <script> can't run.
     assert!(html.contains("script-src 'nonce-"));
 }
@@ -2031,4 +2049,88 @@ fn source_highlighting_can_be_turned_off() {
         "{off}"
     );
     let _ = std::fs::remove_file(test_dir().join("config.toml"));
+}
+
+#[test]
+fn diff_marks_changes_since_a_revision() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    if !git(&["init", "-q"]).status.success() {
+        return; // git not available
+    }
+    git(&["config", "user.email", "test@example.com"]);
+    git(&["config", "user.name", "Test"]);
+    let doc = root.join("doc.md");
+    std::fs::write(&doc, "# Notes\n\nThe quick brown fox.\n\nGoing away.\n").unwrap();
+    git(&["add", "doc.md"]);
+    git(&["commit", "-qm", "first"]);
+    std::fs::write(&doc, "# Notes\n\nThe quick red fox.\n\n- new item\n").unwrap();
+
+    let out = mdv()
+        .arg(&doc)
+        .args(["--diff", "HEAD", "-o", "-"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let html = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        html.contains("<title>doc.md (since HEAD)</title>"),
+        "{html}"
+    );
+    assert!(
+        html.contains("<del class=\"mdv-del\">brown</del>"),
+        "{html}"
+    );
+    assert!(html.contains("<ins class=\"mdv-ins\">red</ins>"), "{html}");
+    assert!(html.contains("mdv-diff-del\"><p>Going away.</p>"), "{html}");
+    assert!(html.contains("Changes since <code>HEAD</code>"));
+
+    // Served, the comparison follows the file.
+    let server = start({
+        let mut c = mdv();
+        c.arg("--watch").arg(&doc).args(["--diff", "HEAD"]);
+        c
+    });
+    let a = &server.addr;
+    assert!(http_get(a, "/", a).contains("<ins class=\"mdv-ins\">red</ins>"));
+    std::fs::write(&doc, "# Notes\n\nThe quick green fox.\n").unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let page = http_get(a, "/", a);
+        if page.contains("<ins class=\"mdv-ins\">green</ins>") {
+            break;
+        }
+        assert!(std::time::Instant::now() < deadline, "no update: {page}");
+        std::thread::sleep(Duration::from_millis(200));
+    }
+
+    // A revision git doesn't know, and a file outside git, are errors.
+    let bad = mdv()
+        .arg(&doc)
+        .args(["--diff", "nope", "-o", "-"])
+        .output()
+        .unwrap();
+    assert!(!bad.status.success());
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("git couldn't find nope"));
+    let outside = tempfile::tempdir().unwrap();
+    let lone = outside.path().join("lone.md");
+    std::fs::write(&lone, "# Lone\n").unwrap();
+    let bad = mdv()
+        .arg(&lone)
+        .args(["--diff", "HEAD", "-o", "-"])
+        .output()
+        .unwrap();
+    assert!(String::from_utf8_lossy(&bad.stderr).contains("isn't in a git repository"));
 }

@@ -8,16 +8,19 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use clap::{CommandFactory, Parser};
 
+mod abbr;
 mod about;
 mod browser;
 mod codeblocks;
 mod config;
 mod desktop;
+mod diffview;
 mod docs;
 mod editor;
 #[cfg(target_os = "macos")]
 mod finder;
 mod frontmatter;
+mod geo;
 mod gitdiff;
 mod github;
 mod instances;
@@ -33,6 +36,7 @@ mod render;
 mod server;
 mod site;
 mod source;
+mod stl;
 mod tables;
 mod tasks;
 mod theme;
@@ -84,6 +88,12 @@ struct Cli {
     /// and report broken ones; exits with status 1 if any are.
     #[arg(long, conflicts_with_all = ["watch", "output", "pdf", "clipboard", "goto"])]
     check_links: bool,
+
+    /// Show FILE with what changed since a git revision marked: added text
+    /// in green, removed text struck through in red (e.g. --diff HEAD for
+    /// uncommitted changes, --diff HEAD~3, --diff main).
+    #[arg(long, value_name = "REV", conflicts_with_all = ["clipboard", "goto", "check_links", "lint", "recent"])]
+    diff: Option<String>,
 
     /// Show the files and folders you opened recently (also what you get
     /// with no FILE in your home folder).
@@ -357,6 +367,11 @@ enum Source {
         text: String,
         root: PathBuf,
     },
+    /// A file compared with an earlier git revision (`--diff`).
+    Diff {
+        file: PathBuf,
+        rev: String,
+    },
     /// Markdown from the web, served from an empty folder of its own.
     Url {
         remote: Box<remote::Remote>,
@@ -484,6 +499,15 @@ fn run(cli: Cli) -> Result<()> {
         }
     };
 
+    let source = match (source, &cli.diff) {
+        (Source::File(file), Some(rev)) => Source::Diff {
+            file,
+            rev: rev.clone(),
+        },
+        (_, Some(_)) => bail!("--diff needs a Markdown file in a git repository"),
+        (source, None) => source,
+    };
+
     // Remember what was opened (not exported) for the Recent page.
     if settings.recent
         && cli.output.is_none()
@@ -517,6 +541,13 @@ fn run(cli: Cli) -> Result<()> {
             server::file_title(path),
         ),
         Source::Text { name, text, root } => (text.clone(), root.clone(), name.to_string()),
+        Source::Diff { file, rev } => (
+            read(file)?,
+            file.parent()
+                .context("file has no parent folder")?
+                .to_path_buf(),
+            format!("{} (since {rev})", server::file_title(file)),
+        ),
         Source::Url { remote, text, root } => (text.clone(), root.clone(), remote.title()),
     };
     // Without --watch, a page is served in the background (which always
@@ -536,6 +567,10 @@ fn run(cli: Cli) -> Result<()> {
     }
     if let Source::Url { remote, .. } = &source {
         body = remote::absolutize(&body, remote);
+    }
+    if let Source::Diff { file, rev } = &source {
+        let old = diffview::old_text(file, rev)?;
+        body = diffview::render(renderer.options(), &old, &markdown, rev);
     }
 
     if let Some(output) = &cli.output {
@@ -801,6 +836,17 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
         Source::Text { name, root, .. } => {
             (root.clone(), Some(root.join(format!("({name})"))), None)
         }
+        // Served from the file's folder (so images load); a second launch
+        // for the same file and revision reuses this viewer.
+        Source::Diff { file, rev } => {
+            let parent = file.parent().context("file has no parent folder")?;
+            let name = server::file_title(file);
+            (
+                parent.to_path_buf(),
+                Some(parent.join(format!("({name} since {rev})"))),
+                Some(PathBuf::from(format!("{}#diff={rev}", file.display()))),
+            )
+        }
         // A second launch for the same address reuses this viewer.
         Source::Url { remote, root, .. } => (
             root.clone(),
@@ -839,6 +885,15 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
             if *name == "Recent" {
                 follow_recent(docs.clone(), key.clone(), root.clone(), text.clone());
             }
+        }
+        if let (Source::Diff { file, rev }, Some(key)) = (source, &main) {
+            let old = diffview::old_text(file, rev)?;
+            let new = read(file)?;
+            docs.add_virtual(
+                key,
+                diffview::render(docs.renderer().options(), &old, &new, rev),
+            );
+            follow_diff(docs.clone(), key.clone(), file.clone(), rev.clone());
         }
         if let (Source::Url { remote, text, .. }, Some(key)) = (source, &main) {
             docs.set_source(key, text);
@@ -916,6 +971,7 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
         let shown = match source {
             Source::Text { name, .. } => name.to_string(),
             Source::Url { remote, .. } => remote.url.clone(),
+            Source::Diff { file, rev } => format!("{} (changes since {rev})", file.display()),
             _ => identity
                 .as_ref()
                 .map(|p| p.display().to_string())
@@ -1109,6 +1165,37 @@ fn follow_clipboard(docs: Arc<docs::Docs>, key: PathBuf, root: PathBuf, mut last
                 docs.set_virtual(&key, html);
                 last = text;
             }
+        }
+    });
+}
+
+/// Keep a `--diff` page current: compare again when the file changes (and
+/// now and then, as the revision can move, e.g. HEAD after a commit).
+fn follow_diff(docs: Arc<docs::Docs>, key: PathBuf, file: PathBuf, rev: String) {
+    tokio::spawn(async move {
+        let mut last: Option<(String, String)> = None;
+        let mut ticks = 0u32;
+        loop {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            ticks += 1;
+            let Ok(new) = tokio::fs::read_to_string(&file).await else {
+                continue;
+            };
+            let changed = last.as_ref().is_none_or(|(_, text)| *text != new);
+            if !changed && !ticks.is_multiple_of(10) {
+                continue;
+            }
+            let (f, r) = (file.clone(), rev.clone());
+            let Ok(Ok(old)) = tokio::task::spawn_blocking(move || diffview::old_text(&f, &r)).await
+            else {
+                continue;
+            };
+            if last.as_ref() == Some(&(old.clone(), new.clone())) {
+                continue;
+            }
+            let html = diffview::render(docs.renderer().options(), &old, &new, &rev);
+            docs.set_virtual(&key, html);
+            last = Some((old, new));
         }
     });
 }

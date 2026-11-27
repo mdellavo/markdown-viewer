@@ -1337,3 +1337,55 @@ fn recent_items_can_be_removed_from_the_page_and_sidebar() {
     );
     assert_eq!(href, "/notes/a.md");
 }
+
+#[test]
+fn stl_models_turn_when_dragged() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("model.md");
+    std::fs::write(
+        &md,
+        "# Model\n\n```stl\nsolid t\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\n\
+         facet normal 0 1 0\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 0 1\nendloop\nendfacet\nendsolid t\n```\n",
+    )
+    .unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    until(
+        &tab,
+        "document.querySelector('.mdv-stl polygon')",
+        "the model",
+    );
+    let points = "return [...document.querySelectorAll('.mdv-stl polygon')].map(p => p.getAttribute('points')).join('|');";
+    let before = js(&tab, points);
+    // The viewer redraws exactly what the page drew, before any drag.
+    js(
+        &tab,
+        "const svg = document.querySelector('.mdv-stl svg');
+         svg.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+         return 0;",
+    );
+    assert_eq!(js(&tab, points), before, "the same maths as the server");
+    js(
+        &tab,
+        "const svg = document.querySelector('.mdv-stl svg');
+         const r = svg.getBoundingClientRect();
+         const at = (type, dx) => svg.dispatchEvent(new PointerEvent(type, { bubbles: true, button: 0,
+           clientX: r.left + 100 + dx, clientY: r.top + 100 }));
+         at('pointerdown', 0); at('pointermove', 80); at('pointerup', 80);
+         return 0;",
+    );
+    until(
+        &tab,
+        &format!(
+            "[...document.querySelectorAll('.mdv-stl polygon')].map(p => p.getAttribute('points')).join('|') !== {before}"
+        ),
+        "the model turned",
+    );
+    // Double-click goes back to the first view.
+    js(
+        &tab,
+        "document.querySelector('.mdv-stl svg').dispatchEvent(new MouseEvent('dblclick', { bubbles: true })); return 0;",
+    );
+    assert_eq!(js(&tab, points), before);
+}

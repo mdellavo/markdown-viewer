@@ -194,7 +194,49 @@ const CODE_AND_TOC: &str = "\
 @media print { .markdown-body .mdv-toc { break-inside: avoid; background: none; } \
   .markdown-body .mdv-toc summary::before { display: none; } }\n\
 .markdown-body .mdv-data-note { color: var(--fgColor-muted); font-size: 12px; }\n\
-.markdown-body table.mdv-data td { white-space: pre-wrap; }\n";
+.markdown-body table.mdv-data td { white-space: pre-wrap; }\n\
+.markdown-body .mdv-map, .markdown-body .mdv-stl { margin: 0 0 16px; border: 1px solid var(--borderColor-default); \
+  border-radius: 6px; overflow: hidden; background: var(--bgColor-muted); }\n\
+.markdown-body .mdv-map svg, .markdown-body .mdv-stl svg { display: block; width: 100%; height: auto; }\n\
+.markdown-body .mdv-map svg { cursor: zoom-in; }\n\
+.markdown-body .mdv-map-grid path { stroke: var(--borderColor-default); stroke-width: 1; fill: none; }\n\
+.markdown-body .mdv-map-grid text { fill: var(--fgColor-muted); font-size: 11px; }\n\
+.markdown-body .mdv-map-area { fill: var(--fgColor-accent); fill-opacity: .25; stroke: var(--fgColor-accent); \
+  stroke-width: 2; stroke-linejoin: round; }\n\
+.markdown-body .mdv-map-line { fill: none; stroke: var(--fgColor-accent); stroke-width: 3; \
+  stroke-linejoin: round; stroke-linecap: round; }\n\
+.markdown-body .mdv-map-point { fill: var(--fgColor-accent); stroke: var(--bgColor-default); stroke-width: 2; }\n\
+.markdown-body .mdv-map :is(path, circle)[class]:hover { stroke-width: 4; }\n\
+.markdown-body .mdv-stl svg { max-height: 420px; touch-action: none; }\n\
+.markdown-body .mdv-stl[data-mdv-mesh] svg { cursor: grab; }\n\
+.markdown-body .mdv-stl polygon { fill: hsl(212 62% calc(12% + var(--l) * 52%)); \
+  stroke: hsl(212 62% calc(12% + var(--l) * 52%)); stroke-width: .4; stroke-linejoin: round; }\n\
+.markdown-body .mdv-stl-hint { display: none; padding: 4px 10px; color: var(--fgColor-muted); font-size: 12px; \
+  border-top: 1px solid var(--borderColor-muted); }\n\
+:root[data-mdv-ui] .markdown-body .mdv-stl[data-mdv-mesh] .mdv-stl-hint { display: block; }\n\
+.markdown-body :is(.mdv-map, .mdv-stl) figcaption:first-child { padding: 6px 12px; color: var(--fgColor-danger); \
+  font-size: 12px; }\n\
+.markdown-body :is(.mdv-map, .mdv-stl) pre { margin: 0; border-radius: 0; }\n\
+@media print { .markdown-body .mdv-map, .markdown-body .mdv-stl { break-inside: avoid; } \
+  .markdown-body .mdv-stl-hint { display: none !important; } }\n\
+.markdown-body abbr[title] { text-decoration: underline dotted; cursor: help; }\n\
+.markdown-body ins.mdv-ins { background: color-mix(in srgb, var(--fgColor-success) 18%, transparent); color: var(--fgColor-default); \
+  text-decoration: none; border-radius: 3px; padding: 0 2px; box-shadow: inset 0 -1px var(--borderColor-success-emphasis); }\n\
+.markdown-body del.mdv-del { background: color-mix(in srgb, var(--fgColor-danger) 14%, transparent); color: var(--fgColor-danger); \
+  text-decoration: line-through; text-decoration-color: var(--fgColor-danger); border-radius: 3px; padding: 0 2px; }\n\
+.markdown-body .mdv-diff-block { margin: 0 -12px 16px; padding: 8px 12px 1px; border-radius: 6px; \
+  border-left: 4px solid; }\n\
+.markdown-body .mdv-diff-ins { background: color-mix(in srgb, var(--fgColor-success) 18%, transparent); border-color: var(--borderColor-success-emphasis); }\n\
+.markdown-body .mdv-diff-del { background: color-mix(in srgb, var(--fgColor-danger) 14%, transparent); border-color: var(--borderColor-danger-emphasis); \
+  opacity: .75; }\n\
+.markdown-body .mdv-diff-del > :not(pre, figure, div, table) { text-decoration: line-through; \
+  text-decoration-color: var(--fgColor-danger); }\n\
+.markdown-body .mdv-diff-added { color: var(--fgColor-success); font-weight: 600; }\n\
+.markdown-body .mdv-diff-removed { color: var(--fgColor-danger); font-weight: 600; }\n\
+.markdown-body .mdv-diff-summary { margin-bottom: 16px; padding: 8px 12px; border: 1px solid var(--borderColor-default); \
+  border-radius: 6px; background: var(--bgColor-muted); font-size: 14px; }\n\
+@media print { .markdown-body ins.mdv-ins, .markdown-body del.mdv-del, .markdown-body .mdv-diff-block { \
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; } }\n";
 
 /// CSS counters for `data-mdv-number="h1"` (number from h1) or `"h2"`
 /// (a single h1 is the title). Four levels deep.

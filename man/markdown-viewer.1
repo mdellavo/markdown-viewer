@@ -4,7 +4,7 @@
 .SH NAME
 markdown\-viewer \- Render a Markdown file with GitHub styling and live\-reload it in your browser
 .SH SYNOPSIS
-\fBmarkdown\-viewer\fR [\fB\-w\fR|\fB\-\-watch\fR] [\fB\-o\fR|\fB\-\-output\fR] [\fB\-\-pdf\fR] [\fB\-\-clipboard\fR] [\fB\-\-goto\fR] [\fB\-\-if\-running\fR] [\fB\-\-check\-links\fR] [\fB\-\-recent\fR] [\fB\-\-online\fR] [\fB\-\-lint\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-\-no\-open\fR] [\fB\-\-browser\fR] [\fB\-\-app\fR] [\fB\-\-window\fR] [\fB\-\-tab\fR] [\fB\-\-exit\-when\-closed\fR] [\fB\-\-keep\-running\fR] [\fB\-\-install\-finder\fR] [\fB\-\-uninstall\-finder\fR] [\fB\-\-install\-desktop\fR] [\fB\-\-uninstall\-desktop\fR] [\fB\-\-theme\fR] [\fB\-\-style\fR] [\fB\-\-css\fR] [\fB\-\-number\-headings\fR] [\fB\-\-line\-numbers\fR] [\fB\-\-front\-matter\fR] [\fB\-\-obsidian\fR] [\fB\-\-no\-obsidian\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIFILE\fR] 
+\fBmarkdown\-viewer\fR [\fB\-w\fR|\fB\-\-watch\fR] [\fB\-o\fR|\fB\-\-output\fR] [\fB\-\-pdf\fR] [\fB\-\-clipboard\fR] [\fB\-\-goto\fR] [\fB\-\-if\-running\fR] [\fB\-\-check\-links\fR] [\fB\-\-diff\fR] [\fB\-\-recent\fR] [\fB\-\-online\fR] [\fB\-\-lint\fR] [\fB\-p\fR|\fB\-\-port\fR] [\fB\-\-no\-open\fR] [\fB\-\-browser\fR] [\fB\-\-app\fR] [\fB\-\-window\fR] [\fB\-\-tab\fR] [\fB\-\-exit\-when\-closed\fR] [\fB\-\-keep\-running\fR] [\fB\-\-install\-finder\fR] [\fB\-\-uninstall\-finder\fR] [\fB\-\-install\-desktop\fR] [\fB\-\-uninstall\-desktop\fR] [\fB\-\-theme\fR] [\fB\-\-style\fR] [\fB\-\-css\fR] [\fB\-\-number\-headings\fR] [\fB\-\-line\-numbers\fR] [\fB\-\-front\-matter\fR] [\fB\-\-obsidian\fR] [\fB\-\-no\-obsidian\fR] [\fB\-\-editor\fR] [\fB\-h\fR|\fB\-\-help\fR] [\fB\-V\fR|\fB\-\-version\fR] [\fIFILE\fR] 
 .SH DESCRIPTION
 Render a Markdown file with GitHub styling and live\-reload it in your browser
 .SH OPTIONS
@@ -29,6 +29,9 @@ With \-\-goto: do nothing if no viewer is showing the file (for editors followin
 .TP
 \fB\-\-check\-links\fR
 Check links and images in FILE (or every Markdown file in a folder) and report broken ones; exits with status 1 if any are
+.TP
+\fB\-\-diff\fR \fI<REV>\fR
+Show FILE with what changed since a git revision marked: added text in green, removed text struck through in red (e.g. \-\-diff HEAD for uncommitted changes, \-\-diff HEAD~3, \-\-diff main)
 .TP
 \fB\-\-recent\fR
 Show the files and folders you opened recently (also what you get with no FILE in your home folder)

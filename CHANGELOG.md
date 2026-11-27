@@ -6,6 +6,26 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- GeoJSON and TopoJSON maps (```` ```geojson ````, ```` ```topojson ````)
+  and STL 3D models (```` ```stl ````), drawn from the code blocks GitHub
+  draws. Maps show points, lines and areas over a latitude and longitude
+  grid (no web map tiles), with properties on hover and GitHub's style
+  properties; click to enlarge. Models are shaded, and turn when dragged.
+  Both are drawn when the page is built, so exports and PDFs have them.
+- A rendered diff: `--diff REV` shows a file with what changed since a git
+  revision marked, added text in green and removed text struck through in
+  red, with a word count summary. It follows the file as you save, and
+  works with `-o` and `--pdf`.
+- Definition lists, `^superscript^`, `~subscript~` and abbreviations
+  (`*[HTML]: HyperText Markup Language`).
+
+### Changed
+
+- A single-tilde `~text~` is now subscript. On GitHub it strikes through;
+  `~~text~~` still does.
+
 ## [0.12.0] - 2026-11-27
 
 ### Added
