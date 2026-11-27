@@ -862,13 +862,19 @@ fn serve(cli: &Cli, settings: &Settings, source: &Source, start_line: Option<u32
         let page = served_page(settings);
         // The settings dialog: a changed settings file, merged with this
         // run's command-line options exactly as at startup.
+        // Obsidian mode stays as it started: it chose the served root (the
+        // vault) and the watches, which can't change while running.
+        let obsidian_now = settings.render_options(true, &root).obsidian;
         let reconfigure: server::Reconfigure = {
             let cli = cli.clone();
             let root = root.clone();
             Arc::new(move |config: &Config| {
                 let settings = Settings::new(&cli, config.clone())?;
                 Ok(server::Reconfigured {
-                    render: settings.render_options(true, &root),
+                    render: RenderOptions {
+                        obsidian: obsidian_now,
+                        ..settings.render_options(true, &root)
+                    },
                     page: served_page(&settings),
                     custom_css: settings.css_path.clone(),
                     editor: settings.editor.clone(),

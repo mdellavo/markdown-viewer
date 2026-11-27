@@ -51,6 +51,8 @@ pub fn diff(file: &Path) -> Diff {
     };
     let git = |args: &[&str]| {
         Command::new("git")
+            // English messages: the "not a git repository" check reads them.
+            .env("LC_ALL", "C")
             .arg("-C")
             .arg(dir)
             .args(args)

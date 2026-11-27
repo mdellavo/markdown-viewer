@@ -480,11 +480,15 @@ pub fn listing_markdown(root: &Path, dir: &Path) -> String {
     if dirs.is_empty() && files.is_empty() {
         md.push_str("No Markdown files here.\n");
     }
+    // Names are percent-encoded: `#`, `?` and `%` would otherwise be read
+    // as a fragment, a query or an escape.
+    let link =
+        |name: &str| percent_encoding::utf8_percent_encode(name, crate::recent::LINK).to_string();
     for d in &dirs {
-        md.push_str(&format!("- 📁 [{}/](<{}/>)\n", escape_md(d), d));
+        md.push_str(&format!("- 📁 [{}/]({}/)\n", escape_md(d), link(d)));
     }
     for f in &files {
-        md.push_str(&format!("- [{}](<{}>)\n", escape_md(f), f));
+        md.push_str(&format!("- [{}]({})\n", escape_md(f), link(f)));
     }
     md
 }
@@ -571,7 +575,10 @@ mod tests {
         let md = listing_markdown(root, &root.join("docs"));
         assert!(md.starts_with("# docs\n"), "{md}");
         assert!(md.contains("[↑ Parent folder](../)"));
-        assert!(md.contains("- 📁 [deep/](<deep/>)"));
-        assert!(md.contains("- [guide\\.md](<guide.md>)"));
+        assert!(md.contains("- 📁 [deep/](deep/)"));
+        assert!(md.contains("- [guide\\.md](guide.md)"));
+        std::fs::write(root.join("docs/C# 100%.md"), "x").unwrap();
+        let md = listing_markdown(root, &root.join("docs"));
+        assert!(md.contains("(C%23%20100%25.md)"), "{md}");
     }
 }

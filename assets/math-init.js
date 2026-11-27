@@ -7,6 +7,9 @@
   var nonce = script && script.nonce;
   var jsSrc = script && script.dataset.katexJs;
   var cssSrc = script && script.dataset.katexCss;
+  // Against the page's own address, never a <base> in the document.
+  if (jsSrc) jsSrc = new URL(jsSrc, location.href).href;
+  if (cssSrc) cssSrc = new URL(cssSrc, location.href).href;
   var loading = null;
 
   // Standalone pages inline KaTeX; served pages fetch it on first use.

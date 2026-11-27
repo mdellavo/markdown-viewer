@@ -335,11 +335,20 @@ impl Renderer {
             "<!DOCTYPE html>\n<html lang=\"en\" data-mdv-theme=\"{theme}\" data-mdv-sidebar=\"{sidebar}\"{fixed}{resume}{numbering}{scale}{git}>\n<head>\n<meta charset=\"utf-8\">\n"
         );
         out.push_str("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
+        // A <base> in the document would move where relative script
+        // addresses (the libraries served pages load) point. Pages with
+        // their own <base> come first, and the first one wins; the rest
+        // allow none.
+        let base_uri = if page.base_href.is_some() {
+            ""
+        } else {
+            " base-uri 'none';"
+        };
         let _ = writeln!(
             out,
             "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; \
              img-src * data:; media-src *; style-src 'self' 'unsafe-inline'; font-src 'self' data:; \
-             script-src 'nonce-{nonce}'; connect-src 'self'; object-src 'none'; frame-src 'none'\">"
+             script-src 'nonce-{nonce}'; connect-src 'self'; object-src 'none'; frame-src 'none';{base_uri}\">"
         );
         if let Some(base) = &page.base_href {
             let _ = writeln!(out, "<base href=\"{}\">", escape_attr(base));

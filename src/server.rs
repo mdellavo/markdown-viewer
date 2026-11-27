@@ -434,12 +434,8 @@ async fn save_prefs(
 async fn remember(state: &AppState, update: Prefs) {
     state.prefs.lock().unwrap().merge(update.clone());
     if state.remember {
-        let _ = tokio::task::spawn_blocking(move || {
-            let mut saved = Prefs::load();
-            saved.merge(update);
-            saved.save()
-        })
-        .await;
+        let _ =
+            tokio::task::spawn_blocking(move || Prefs::update(|saved| saved.merge(update))).await;
     }
 }
 
@@ -897,7 +893,16 @@ async fn path_handler(State(state): State<AppState>, req: Request) -> Response {
     if path.is_dir() {
         // Relative links on a folder's page need the trailing slash.
         if !url_path.ends_with('/') {
-            return Redirect::permanent(&format!("{url_path}/")).into_response();
+            // Built from the resolved path: the request's own could start
+            // with `//`, which a browser reads as another host.
+            let rel = rel_path(state.docs.root(), &path);
+            let encoded: Vec<String> = rel
+                .split('/')
+                .map(|s| {
+                    percent_encoding::utf8_percent_encode(s, crate::obsidian::SEGMENT).to_string()
+                })
+                .collect();
+            return Redirect::permanent(&format!("/{}/", encoded.join("/"))).into_response();
         }
         return dir_page(&state, &path);
     }
@@ -908,8 +913,23 @@ async fn path_handler(State(state): State<AppState>, req: Request) -> Response {
         Ok(bytes) => {
             let mime = mime_guess::from_path(&path).first_or_octet_stream();
             let mut resp = Response::new(Body::from(bytes));
+            let headers = resp.headers_mut();
             if let Ok(v) = HeaderValue::from_str(mime.as_ref()) {
-                resp.headers_mut().insert(header::CONTENT_TYPE, v);
+                headers.insert(header::CONTENT_TYPE, v);
+            }
+            headers.insert(
+                header::X_CONTENT_TYPE_OPTIONS,
+                HeaderValue::from_static("nosniff"),
+            );
+            // Files from the folder (an HTML page, an SVG) must not run
+            // scripts on the viewer's origin, where they could call its
+            // endpoints. Chrome's PDF viewer doesn't work sandboxed, and a
+            // PDF runs no page scripts.
+            if mime != mime_guess::mime::APPLICATION_PDF {
+                headers.insert(
+                    header::CONTENT_SECURITY_POLICY,
+                    HeaderValue::from_static("sandbox"),
+                );
             }
             no_store(resp)
         }

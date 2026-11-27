@@ -167,8 +167,10 @@ cargo install markdown-viewer-rs     # build from source (see Building)
   current folder) shows the folder's README, or a list of its files. Every
   Markdown file you open from there updates live too.
 - A sidebar with the document's contents, which follows your place as you
-  scroll, and, when serving, a list of the folder's Markdown files with a
-  filter that also searches their text.
+  scroll, and, when serving, the folder's Markdown and CSV files as a tree,
+  like an editor's file explorer: click a folder to open or close it (the
+  current file's folders start open), and filter by name or search the
+  files' text.
 - View the Markdown source (<kbd>v</kbd>, or the toolbar's code button):
   syntax highlighted, with line numbers, kept up to date as the file
   changes. Switching keeps your place in both directions, and
@@ -210,6 +212,12 @@ cargo install markdown-viewer-rs     # build from source (see Building)
 - Word count and reading time in the toolbar; <kbd>w</kbd> (or a click on
   it) hides it to save space, and it stays hidden until you show it again.
   `word_count = false` in the settings file hides it by default.
+- Back, forward and reload buttons in the toolbar, since app windows have
+  no browser controls.
+- Links to web pages, and to files the viewer doesn't show as pages (images,
+  PDFs and so on), open in a new browser window, so the document stays put.
+  Links between Markdown and CSV files, and within the page, stay in the
+  window.
 - Keyboard shortcuts for everything (see [In the viewer](#in-the-viewer)).
 - Your theme and sidebar choices are remembered between runs.
 - In watch mode, relative images load, and links to other `.md` files open as
@@ -326,13 +334,16 @@ behind them.
 
 ### In the viewer
 
-The toolbar in the top-right corner shows the word count and reading time,
-and has buttons for the contents, the file list (when serving), editing the
-source, presenting, the theme and help. Hovering a code block shows its copy
-button.
+The toolbar in the top-right corner starts with back, forward and reload
+buttons (app windows have no browser controls), shows the word count and
+reading time, and has buttons for the contents, the file list (when
+serving), editing the source, presenting, the theme and help. Hovering a
+code block shows its copy button.
 
 | Key | Action |
 |---|---|
+| <kbd>[</kbd> / <kbd>]</kbd> | Back / forward (<kbd>Alt</kbd>-<kbd>←</kbd> / <kbd>Alt</kbd>-<kbd>→</kbd> work too) |
+| <kbd>r</kbd> | Reload |
 | <kbd>t</kbd> | Switch theme: auto, light, dark |
 | <kbd>o</kbd> | Show or hide the contents |
 | <kbd>f</kbd> | Find a file (when serving): type to filter, Enter to open |
@@ -386,8 +397,8 @@ overrides its `theme`.
 You can also change settings in the viewer: press <kbd>,</kbd> or the gear
 in the toolbar. Each change is saved to this file straight away (its
 comments and layout are kept) and applies at once: rendering options update
-the page, the style and custom CSS reload it, and the browser, open mode
-and port are used the next time a page opens. A change the file wouldn't
+the page, the style and custom CSS reload it, and the browser, open mode,
+port and Obsidian mode are used the next time a page opens. A change the file wouldn't
 accept, such as a CSS file that doesn't exist, isn't saved. Command-line
 options still win for the current run, and the dialog says when one does.
 
@@ -683,14 +694,96 @@ cargo build && docs/screenshots.sh && docs/demo.sh
 Releases are built by GitHub Actions when a `v*` tag is pushed; see
 [AGENTS.md](AGENTS.md#releasing).
 
+## Architecture
+
+markdown-viewer is a single Rust binary. Everything a page needs is compiled
+into it: GitHub's stylesheet, the viewer's scripts, Mermaid, KaTeX and its
+fonts, and the icons. It never fetches anything from the internet unless
+you ask it to (web addresses, `--check-links --online`); only images and
+media that a document itself links to are loaded from the web.
+
+```mermaid
+flowchart LR
+    cli["Command line<br/>and settings file"] --> sources
+    sources["Sources<br/>file · folder · stdin<br/>clipboard · web address"] --> renderer
+    renderer["Renderer<br/>Markdown → HTML"] --> page["Page template"]
+    page --> standalone["Standalone HTML<br/>-o, --pdf"]
+    page --> site["Static site<br/>folder -o DIR"]
+    page --> server["Local server<br/>live updates"]
+    server <--> browser["Browser window<br/>viewer UI"]
+    watcher["File watcher"] --> server
+```
+
+**Rendering.** [comrak](https://github.com/kivikakk/comrak) parses GitHub
+Flavored Markdown, and [syntect](https://github.com/trishume/syntect)
+highlights code when the page is built. A series of small passes then
+brings the HTML closer to GitHub and adds the extras: alert icons, heading
+anchors, front matter tables, code block titles and line numbers, the table
+of contents, GitHub references, and Obsidian wiki links, embeds and
+callouts. Diagrams and math are drawn in the browser, by Mermaid and KaTeX.
+CSV and TSV files skip Markdown and become tables directly.
+
+**The page.** One template produces every page. It carries all the themes
+at once (switched by an attribute on `<html>`), the print layout, any custom
+CSS, and a strict Content Security Policy: only the page's own scripts, each
+with a nonce, can run. On top sits the viewer UI (`ui.js`): toolbar, contents
+and files sidebar, settings, help, source view, presentation mode and
+keyboard shortcuts.
+
+**Outputs.** The same rendered page goes to one of four places:
+
+- a self-contained HTML file, with the libraries inlined (`-o`);
+- a PDF, printed by a headless Chrome-family browser (`--pdf`);
+- a static site, one page per file with links rewritten (`-o` for a
+  folder);
+- a local web server, which is how pages are normally viewed.
+
+**Live viewing.** The server ([axum](https://github.com/tokio-rs/axum))
+listens only on `127.0.0.1`. It watches the folders of the documents being
+viewed and re-renders a file when it changes. Pages stay connected through
+Server-Sent Events. An update sends the page's blocks, and `live.js` swaps
+in only the ones that changed, so scroll position, folds and sorting
+survive and long files stay fast. The same connection lets the server know
+when the window has closed.
+
+**Lifetime.** Opening a file without `--watch` starts the server as a
+background process and returns at once. The server stops a few seconds after
+its last window closes. `--watch` runs it in the foreground instead, until
+its window closes or you press Ctrl-C (`--keep-running` waits for Ctrl-C
+only). A small registry of running viewers, kept next to the state file,
+lets a second launch for the same file bring the existing window forward,
+and lets `--goto` from an editor find it.
+
+**Talking back.** A few actions go from the page to the server: ticking a
+task box, opening the editor at a line, saving preferences and settings,
+and checking links. Those that change anything need a header only the
+viewer's own scripts send, so other web pages can't trigger them. The
+server never serves files outside its root: the document's folder (or its
+Obsidian vault), the folder you gave it, or your home folder for the Recent
+page.
+
+**Settings and state.** The settings file (TOML) holds your defaults, and
+the settings dialog edits it in place, keeping your comments. Viewer
+preferences (theme, sidebar, text size, git marks, word count, reading
+positions, recent files)
+live in a separate JSON state file.
+
+**Platforms.** OS-specific code is kept in a few modules: finding and opening
+the browser (as an app window where it can), opening editors, file paths and
+detaching background processes, for macOS, Linux and Windows. The Finder
+app and the Linux desktop entry are thin launchers for the same command.
+
 ## Security
 
 - **Raw HTML:** allowed, because READMEs often use it. The page's
   Content-Security-Policy blocks any script that comes from the Markdown,
-  and KaTeX and Mermaid run in their strict modes.
+  and a `<base>` tag that would change where the page's own scripts load
+  from. KaTeX and Mermaid run in their strict modes.
 - **Watch server:** listens on loopback only and serves only files inside
   the Markdown file's folder (or the folder you gave it). The file list
-  skips hidden folders and doesn't follow symlinked folders.
+  skips hidden folders and doesn't follow symlinked folders. Other files
+  from the folder, such as HTML pages and SVG images, are served
+  sandboxed, so their scripts can't use the viewer.
 - **Other websites:** requests addressed to any other hostname are rejected,
   so a website can't read the files being served. Saving preferences also
   needs a custom header, which other websites can't send to it.

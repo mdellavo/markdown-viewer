@@ -8,9 +8,9 @@ use percent_encoding::{AsciiSet, utf8_percent_encode};
 
 use crate::config::{Prefs, RecentItem};
 
-/// Characters to encode in a path segment of a Markdown link inside a
-/// table cell.
-const LINK: &AsciiSet = &crate::obsidian::SEGMENT
+/// Characters to encode in a path segment of a Markdown link (also inside
+/// a table cell).
+pub(crate) const LINK: &AsciiSet = &crate::obsidian::SEGMENT
     .add(b'|')
     .add(b'(')
     .add(b')')
@@ -30,10 +30,8 @@ fn now() -> u64 {
 
 /// Remember that `path` (a file or folder) was opened.
 pub fn record(path: &Path) {
-    let mut prefs = Prefs::load();
-    add(&mut prefs.recent, path, now());
     // Best effort: an unwritable state file just means no Recent list.
-    let _ = prefs.save();
+    let _ = Prefs::update(|prefs| add(&mut prefs.recent, path, now()));
 }
 
 fn add(list: &mut Vec<RecentItem>, path: &Path, at: u64) {

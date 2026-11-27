@@ -77,7 +77,9 @@ pub fn print(html: &str, out: &Path) -> Result<()> {
     } else {
         std::env::current_dir()?.join(out)
     };
-    let _ = std::fs::remove_file(&out_abs);
+    // Printed to the work folder first, so a failure leaves any existing
+    // PDF alone.
+    let printed = work.path().join("out.pdf");
 
     let output = Command::new(&browser)
         .arg("--headless")
@@ -95,18 +97,24 @@ pub fn print(html: &str, out: &Path) -> Result<()> {
         .arg("--run-all-compositor-stages-before-draw")
         .arg("--no-pdf-header-footer")
         .arg("--print-to-pdf-no-header")
-        .arg(format!("--print-to-pdf={}", out_abs.display()))
+        .arg(format!("--print-to-pdf={}", printed.display()))
         .arg(crate::platform::file_url(&page))
         .output()
         .with_context(|| format!("cannot run {}", browser.display()))?;
 
-    let ok = std::fs::metadata(&out_abs).is_ok_and(|m| m.len() > 0);
+    let ok = std::fs::metadata(&printed).is_ok_and(|m| m.len() > 0);
     if !ok {
         bail!(
             "{} didn't produce a PDF: {}",
             browser.display(),
             String::from_utf8_lossy(&output.stderr).trim()
         );
+    }
+    // Renaming fails across file systems (the temp folder may be on
+    // another one); copy then.
+    if std::fs::rename(&printed, &out_abs).is_err() {
+        std::fs::copy(&printed, &out_abs)
+            .with_context(|| format!("cannot write {}", out_abs.display()))?;
     }
     Ok(())
 }

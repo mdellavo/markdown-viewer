@@ -4,6 +4,8 @@
 (function () {
   var nonce = document.currentScript && document.currentScript.nonce;
   var src = document.currentScript && document.currentScript.dataset.mermaidSrc;
+  // Against the page's own address, never a <base> in the document.
+  if (src) src = new URL(src, location.href).href;
   var cache = new Map();
   // Each drawn diagram's source, so it can be redrawn for another theme.
   var sources = new WeakMap();

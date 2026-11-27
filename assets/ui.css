@@ -23,6 +23,13 @@
 .mdv-toolbar button { padding: 5px 6px; border-radius: 6px; color: var(--fgColor-muted); }
 .mdv-toolbar button:hover { background: var(--bgColor-neutral-muted); color: var(--fgColor-default); }
 .mdv-toolbar button[aria-pressed="true"] { color: var(--fgColor-accent); }
+.mdv-toolbar button:disabled { opacity: .35; cursor: default; background: none; color: var(--fgColor-muted); }
+/* A divider after the back, forward and reload buttons. */
+.mdv-toolbar .mdv-nav-last { margin-right: 4px; position: relative; }
+.mdv-toolbar .mdv-nav-last::after {
+  content: ""; position: absolute; right: -4px; top: 5px; bottom: 5px;
+  border-right: 1px solid var(--borderColor-muted);
+}
 .mdv-stats { padding: 0 8px 0 6px; color: var(--fgColor-muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
 @media (max-width: 600px) { .mdv-stats { display: none; } }
 .mdv-stats { cursor: pointer; }
@@ -57,6 +64,20 @@ html.mdv-sidebar-open .mdv-sidebar { transform: none; box-shadow: 0 0 24px rgba(
 .mdv-panel .mdv-l4 { padding-left: 44px; color: var(--fgColor-muted); font-size: 12px; }
 .mdv-panel .mdv-dir { color: var(--fgColor-muted); font-size: 12px; padding: 8px 8px 2px; }
 .mdv-empty { padding: 8px; color: var(--fgColor-muted); }
+/* Files: a folder tree, with a guide line down each open folder. */
+.mdv-tree { font-size: 13px; }
+.mdv-panel .mdv-tree-row {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 3px 8px; border-radius: 6px; text-align: left;
+  color: var(--fgColor-default); font: inherit; white-space: nowrap;
+}
+.mdv-panel button.mdv-tree-row { background: none; border: 0; cursor: pointer; }
+.mdv-panel .mdv-tree-row:hover { background: var(--bgColor-neutral-muted); }
+.mdv-panel .mdv-tree-row svg { flex: none; width: 16px; height: 16px; fill: var(--fgColor-muted); }
+.mdv-tree-row .mdv-tree-name { overflow: hidden; text-overflow: ellipsis; }
+.mdv-panel a.mdv-tree-row.mdv-active svg { fill: var(--fgColor-accent); }
+.mdv-tree-kids { margin-left: 15px; padding-left: 4px; border-left: 1px solid var(--borderColor-muted); }
+.mdv-tree-kids[hidden] { display: none; }
 .mdv-filter {
   width: 100%; margin: 2px 0 8px; padding: 5px 8px; font: inherit; color: inherit;
   background: var(--bgColor-default); border: 1px solid var(--borderColor-default); border-radius: 6px;

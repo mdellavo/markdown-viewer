@@ -6,6 +6,55 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-26
+
+### Added
+
+- Back, forward and reload buttons at the start of the toolbar (app
+  windows have no browser controls), with <kbd>[</kbd>, <kbd>]</kbd> and
+  <kbd>r</kbd> as shortcuts.
+- Links to web pages, and to local files the viewer doesn't show as pages
+  (images, PDFs and so on), open in a new browser window. Links between
+  documents and within the page stay in the viewer's window.
+
+### Changed
+
+- The Files sidebar is a folder tree, like an editor's file explorer:
+  folders open and close with a click and stay as you left them while you
+  move between pages, the current file's folders start open, and a folder
+  holding just one folder shows as one row (`.github / workflows`).
+  Filtering shows the matches with their folders open.
+
+### Fixed
+
+- Saved preferences, reading positions and the Recent list could be lost
+  when two viewers or two requests saved at once. Saves now hold a lock and
+  replace the file in one step; the settings file is also replaced in one
+  step.
+- Folder listings and exported sites linked wrongly to names containing
+  `#`, `?` or `%`.
+- Compare to git (`D`) marked every line as new outside a repository when
+  git spoke a language other than English.
+- A folder export with both `index.md` and `README.md` lost `index.md`'s
+  page; `index.md` is now the folder's page, and README gets its own.
+- `--pdf` deleted an existing PDF before knowing the new one would be
+  written; a failed run now leaves it alone.
+- Changing the `obsidian` setting in the settings dialog half-applied it
+  to the running viewer. It now applies from the next run, as the dialog
+  says.
+
+### Security
+
+- A `<base>` tag in a document could make served pages load Mermaid or
+  KaTeX from another site, which could then change settings and run the
+  editor command. Pages now refuse `<base>` and load the libraries from
+  the viewer's own address.
+- HTML and SVG files in a served folder ran their scripts on the viewer's
+  address, where they could reach its endpoints. Files from the folder are
+  now served sandboxed (PDFs excepted, which run no page scripts).
+- A request for `//host` on a folder named `host` redirected to that
+  site; folder redirects now stay on the viewer.
+
 ## [0.10.0] - 2026-11-26
 
 ### Added
@@ -278,7 +327,8 @@ and this project uses [Semantic Versioning](https://semver.org/).
 - Stopping `--watch` with Ctrl-C closes the window markdown-viewer opened.
   Tabs, and pages opened by hand, stay open with a "stopped" banner.
 
-[Unreleased]: https://github.com/mdellavo/markdown-viewer/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/mdellavo/markdown-viewer/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.7.1...v0.8.0

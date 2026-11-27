@@ -190,10 +190,35 @@ fn file_finder_and_text_search() {
         "document.activeElement.classList.contains('mdv-filter')",
         "the filter, still",
     );
-    tab.type_str("guid").unwrap();
+    // A tree: the docs folder starts closed (the open file isn't in it)
+    // and opens with a click.
     until(
         &tab,
-        "[...document.querySelectorAll('.mdv-panel:not([hidden]) a')].some(a => a.title === 'docs/guide.md')",
+        "document.querySelector('.mdv-tree-dir > button[title=\"docs/\"][aria-expanded=\"false\"]')",
+        "the closed docs folder",
+    );
+    js(
+        &tab,
+        "document.querySelector('.mdv-tree-dir > button[title=\"docs/\"]').click(); return 0;",
+    );
+    until(
+        &tab,
+        "document.querySelector('.mdv-tree-kids:not([hidden]) a[title=\"docs/guide.md\"]')",
+        "guide.md inside the opened folder",
+    );
+    js(
+        &tab,
+        "document.querySelector('.mdv-tree-dir > button[title=\"docs/\"]').click(); return 0;",
+    );
+    js(
+        &tab,
+        "document.querySelector('.mdv-filter').focus(); return 0;",
+    );
+    tab.type_str("guid").unwrap();
+    // Filtering shows matches with their folders open.
+    until(
+        &tab,
+        "[...document.querySelectorAll('.mdv-panel:not([hidden]) a')].some(a => a.title === 'docs/guide.md' && a.offsetParent)",
         "the file in subfolder docs/",
     );
 
@@ -685,8 +710,18 @@ fn static_site_works_from_disk() {
 
     let url = file_url(&dunce::canonicalize(out.join("index.html")).unwrap());
     let tab = open(&browser, &url);
-    // The Files sidebar lists the site's pages; following a link works.
+    // The Files sidebar lists the site's pages as a tree (folders first);
+    // following a link works.
     press(&tab, "f");
+    until(
+        &tab,
+        "document.querySelector('.mdv-tree-dir > button[title=\"guide/\"]')",
+        "the file tree",
+    );
+    js(
+        &tab,
+        "document.querySelector('.mdv-tree-dir > button[title=\"guide/\"]').click(); return 0;",
+    );
     until(
         &tab,
         "document.querySelectorAll('.mdv-panel:not([hidden]) a[title]').length === 2",
@@ -698,7 +733,7 @@ fn static_site_works_from_disk() {
     );
     assert_eq!(
         hrefs,
-        serde_json::json!("[\"README.html\",\"guide/math.html\"]")
+        serde_json::json!("[\"guide/math.html\",\"README.html\"]")
     );
     js(
         &tab,
@@ -1127,5 +1162,107 @@ fn source_view_keeps_your_place() {
     assert!(
         heading.as_str().unwrap().contains("Section 30"),
         "{heading}"
+    );
+}
+
+#[test]
+fn a_base_in_the_document_cannot_move_the_libraries() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(
+        &md,
+        "<base href=\"https://evil.invalid/\">\n\n# Doc\n\n$$x^2$$\n\n```mermaid\nflowchart LR\n  A --> B\n```\n",
+    )
+    .unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    // The libraries still come from the viewer, so both draw.
+    until(
+        &tab,
+        "document.querySelector('div.mermaid svg')",
+        "the diagram",
+    );
+    until(&tab, "document.querySelector('.katex')", "the math");
+    assert_eq!(
+        js(&tab, "return document.baseURI === location.href;"),
+        serde_json::Value::Bool(true)
+    );
+}
+
+#[test]
+fn outside_links_open_new_windows_and_the_toolbar_navigates() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::create_dir_all(root.join("docs")).unwrap();
+    std::fs::write(
+        root.join("README.md"),
+        "# Home\n\n[web](https://example.com/) [guide](docs/guide.md) \
+         [data](data.csv) [folder](docs) [pic](pic.png) [top](#home) \
+         [mail](mailto:a@example.com)\n",
+    )
+    .unwrap();
+    std::fs::write(root.join("docs/guide.md"), "# Guide\n").unwrap();
+    std::fs::write(root.join("data.csv"), "a,b\n1,2\n").unwrap();
+    std::fs::write(root.join("pic.png"), "").unwrap();
+    let mut cmd = mdv();
+    cmd.arg(root);
+    let server = start(cmd);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+
+    // Which links get a new window (followed with navigation stopped).
+    let targets = js(
+        &tab,
+        "addEventListener('click', e => e.preventDefault());
+         return JSON.stringify([...document.querySelectorAll('.markdown-body p a')].map(a => {
+           a.click(); return a.textContent + ':' + (a.target || 'here');
+         }));",
+    );
+    assert_eq!(
+        targets,
+        serde_json::json!(
+            "[\"web:_blank\",\"guide:here\",\"data:here\",\"folder:here\",\"pic:_blank\",\"top:here\",\"mail:here\"]"
+        )
+    );
+
+    // Back, forward and reload.
+    tab.navigate_to(&format!("http://{}/docs/guide.md", server.addr))
+        .unwrap()
+        .wait_until_navigated()
+        .unwrap();
+    until(&tab, "document.querySelector('.mdv-toolbar')", "the guide");
+    js(
+        &tab,
+        "document.querySelector('button[aria-label=Back]').click(); return 0;",
+    );
+    until(&tab, "location.pathname === '/'", "back to the home page");
+    until(
+        &tab,
+        "document.querySelector('.mdv-toolbar')",
+        "the home page UI",
+    );
+    js(
+        &tab,
+        "document.querySelector('button[aria-label=Forward]').click(); return 0;",
+    );
+    until(
+        &tab,
+        "location.pathname === '/docs/guide.md'",
+        "forward to the guide",
+    );
+    until(
+        &tab,
+        "document.querySelector('.mdv-toolbar')",
+        "the guide UI",
+    );
+    js(
+        &tab,
+        "window.mdvBeforeReload = 1; document.querySelector('button[aria-label=Reload]').click(); return 0;",
+    );
+    until(
+        &tab,
+        "window.mdvBeforeReload === undefined && document.querySelector('.mdv-toolbar')",
+        "the reloaded page",
     );
 }

@@ -75,8 +75,14 @@ pub fn export(
         site.write(rel, &html_name(rel), &text, &mut assets, &mut libs)?;
         pages += 1;
     }
+    let page_names: BTreeSet<String> = files.iter().map(|f| html_name(f)).collect();
     for dir in &folders {
         let index = join(dir, "index.html");
+        // An index.md already became this folder's index.html; its README
+        // still has a page of its own (README.html).
+        if page_names.contains(&index) {
+            continue;
+        }
         let path = root.join(dir);
         match docs::readme(&path) {
             Some(readme) => {
@@ -84,11 +90,9 @@ pub fn export(
                     dir,
                     &readme.file_name().unwrap_or_default().to_string_lossy(),
                 );
-                if html_name(&rel) != index {
-                    let text = std::fs::read_to_string(&readme)
-                        .with_context(|| format!("cannot read {}", readme.display()))?;
-                    site.write(&rel, &index, &text, &mut assets, &mut libs)?;
-                }
+                let text = std::fs::read_to_string(&readme)
+                    .with_context(|| format!("cannot read {}", readme.display()))?;
+                site.write(&rel, &index, &text, &mut assets, &mut libs)?;
             }
             None => {
                 let listing = docs::listing_markdown(root, &path);

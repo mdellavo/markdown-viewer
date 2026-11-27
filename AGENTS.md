@@ -21,7 +21,10 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
 - `src/config.rs`: the settings file (`Config`, TOML, unknown keys are
   errors) and remembered viewer preferences (`Prefs`: theme and sidebar,
   JSON state file). `MARKDOWN_VIEWER_CONFIG` / `MARKDOWN_VIEWER_STATE`
-  override their paths; the tests always set both.
+  override their paths; the tests always set both. Change saved
+  preferences only with `Prefs::update` (a lock across threads and
+  processes, then an atomic replace): viewers and requests save
+  concurrently.
 - `src/theme.rs`: page CSS for all themes at once, switched by
   `<html data-mdv-theme>` (it splits GitHub's stylesheet into shared rules
   and per-scheme variables), the print layout, and `--style` CSS. Theme
@@ -125,7 +128,10 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   a listing), `/__mdv/events?doc=` live-update stream per document
   (Server-Sent Events), `POST /__mdv/prefs` (needs an `X-MDV` header),
   `/__mdv/files`, `/__mdv/{mermaid,katex}.js`, `/__mdv/katex.css`, and
-  static files.
+  static files. Static files are served with `Content-Security-Policy:
+  sandbox` (except PDFs) so a folder's HTML or SVG can't call the
+  endpoints, and pages forbid `<base>` (`base-uri 'none'`) because the
+  library loaders resolve relative addresses; keep both.
 - Settings dialog (`/__mdv/settings`): `config::update_file` edits one key
   with `toml_edit` (keeping comments) and writes only if the file still
   parses and `ServeOptions::reconfigure` (built in main.rs: the new file

@@ -1167,6 +1167,134 @@ fn folder_export_writes_a_site() {
 }
 
 #[test]
+fn folder_export_keeps_index_and_readme() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("src");
+    std::fs::create_dir_all(src.join("docs")).unwrap();
+    std::fs::write(src.join("README.md"), "# Top\n").unwrap();
+    std::fs::write(src.join("docs/index.md"), "# The index\n").unwrap();
+    std::fs::write(src.join("docs/README.md"), "# The readme\n").unwrap();
+    std::fs::write(src.join("C# notes.md"), "# Sharp\n").unwrap();
+    let out = dir.path().join("site");
+    let run = mdv().arg(&src).arg("-o").arg(&out).output().unwrap();
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
+    let index = std::fs::read_to_string(out.join("docs/index.html")).unwrap();
+    assert!(index.contains("The index"), "index.md is the folder's page");
+    let readme = std::fs::read_to_string(out.join("docs/README.html")).unwrap();
+    assert!(readme.contains("The readme"));
+    // A listing links to names with `#` correctly.
+    std::fs::remove_file(src.join("README.md")).unwrap();
+    let out2 = dir.path().join("site2");
+    assert!(
+        mdv()
+            .arg(&src)
+            .arg("-o")
+            .arg(&out2)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let listing = std::fs::read_to_string(out2.join("index.html")).unwrap();
+    assert!(listing.contains("href=\"C%23%20notes.html\""), "{listing}");
+    assert!(out2.join("C# notes.html").is_file());
+}
+
+#[test]
+fn folder_files_cannot_act_on_the_viewer() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(root.join("README.md"), "# Home\n").unwrap();
+    std::fs::write(root.join("page.html"), "<script>alert(1)</script>").unwrap();
+    std::fs::write(
+        root.join("pic.svg"),
+        "<svg xmlns=\"http://www.w3.org/2000/svg\"/>",
+    )
+    .unwrap();
+    std::fs::write(root.join("doc.pdf"), "%PDF-1.4").unwrap();
+    std::fs::create_dir_all(root.join("evil.example")).unwrap();
+    std::fs::create_dir_all(root.join("list/a#b")).unwrap();
+    std::fs::write(root.join("list/a#b/x.md"), "# X\n").unwrap();
+    std::fs::write(root.join("list/100%25.md"), "# P\n").unwrap();
+
+    let server = start({
+        let mut c = mdv();
+        c.arg(root);
+        c
+    });
+    let a = &server.addr;
+
+    // A <base> in a document can't move where the page loads scripts from.
+    let page = http_get(a, "/", a);
+    assert!(page.contains("base-uri 'none'"), "{page}");
+
+    // The folder's own HTML and SVG files run sandboxed; PDFs can't be.
+    for file in ["/page.html", "/pic.svg"] {
+        let resp = http_get(a, file, a).to_lowercase();
+        assert!(resp.contains("content-security-policy: sandbox"), "{resp}");
+        assert!(resp.contains("x-content-type-options: nosniff"));
+    }
+    let pdf = http_get(a, "/doc.pdf", a).to_lowercase();
+    assert!(
+        pdf.starts_with("http/1.1 200") && !pdf.contains("sandbox"),
+        "{pdf}"
+    );
+
+    // A folder redirect stays on this host.
+    let redirect = http_get(a, "//evil.example", a).to_lowercase();
+    assert!(
+        redirect.contains("location: /evil.example/\r\n"),
+        "{redirect}"
+    );
+    let redirect = http_get(a, "/list/a%23b", a).to_lowercase();
+    assert!(
+        redirect.contains("location: /list/a%23b/\r\n"),
+        "{redirect}"
+    );
+
+    // Listing links work for names with `#` and `%`.
+    let listing = http_get(a, "/list/", a);
+    assert!(listing.contains("href=\"a%23b/\""), "{listing}");
+    assert!(listing.contains("href=\"100%2525.md\""), "{listing}");
+    assert!(http_get(a, "/list/100%2525.md", a).starts_with("HTTP/1.1 200"));
+    assert!(http_get(a, "/list/a%23b/x.md", a).starts_with("HTTP/1.1 200"));
+}
+
+#[test]
+fn concurrent_preference_saves_are_all_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let names: Vec<String> = (0..12).map(|i| format!("n{i}.md")).collect();
+    for n in &names {
+        std::fs::write(dir.path().join(n), "# N\n\ntext\n").unwrap();
+    }
+    let state = test_dir().join("state.json");
+    let _ = std::fs::remove_file(&state);
+    let server = start({
+        let mut c = mdv();
+        c.arg(dir.path());
+        c
+    });
+    let a = server.addr.clone();
+    std::thread::scope(|s| {
+        for (i, n) in names.iter().enumerate() {
+            let a = &a;
+            s.spawn(move || {
+                let body = format!(r#"{{"doc":"{n}","line":{}}}"#, i + 1);
+                let resp = post(a, "/__mdv/position", &body);
+                assert!(resp.starts_with("HTTP/1.1 204"), "{resp}");
+            });
+        }
+    });
+    let saved: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&state).unwrap()).unwrap();
+    let positions = saved["positions"].as_object().unwrap();
+    assert_eq!(positions.len(), names.len(), "{saved}");
+}
+
+#[test]
 fn csv_and_tsv_files_are_tables() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("data.csv"), "name,n\n\"a, b\",2\nc,10\n").unwrap();

@@ -29,6 +29,13 @@
     "x": ["M3.72 3.72a.75.75 0 0 1 1.06 0L8 6.94l3.22-3.22a.749.749 0 0 1 1.275.326.749.749 0 0 1-.215.734L9.06 8l3.22 3.22a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215L8 9.06l-3.22 3.22a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L6.94 8 3.72 4.78a.75.75 0 0 1 0-1.06Z"],
     "screen-full": ["M1.75 10a.75.75 0 0 1 .75.75v2.5c0 .138.112.25.25.25h2.5a.75.75 0 0 1 0 1.5h-2.5A1.75 1.75 0 0 1 1 13.25v-2.5a.75.75 0 0 1 .75-.75Zm12.5 0a.75.75 0 0 1 .75.75v2.5A1.75 1.75 0 0 1 13.25 15h-2.5a.75.75 0 0 1 0-1.5h2.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 .75-.75ZM2.75 2.5a.25.25 0 0 0-.25.25v2.5a.75.75 0 0 1-1.5 0v-2.5C1 1.784 1.784 1 2.75 1h2.5a.75.75 0 0 1 0 1.5ZM10 1.75a.75.75 0 0 1 .75-.75h2.5c.966 0 1.75.784 1.75 1.75v2.5a.75.75 0 0 1-1.5 0v-2.5a.25.25 0 0 0-.25-.25h-2.5a.75.75 0 0 1-.75-.75Z"],
     "pencil": ["M11.013 1.427a1.75 1.75 0 0 1 2.474 0l1.086 1.086a1.75 1.75 0 0 1 0 2.474l-8.61 8.61c-.21.21-.47.364-.756.445l-3.251.93a.75.75 0 0 1-.927-.928l.929-3.25c.081-.286.235-.547.445-.758l8.61-8.61Zm.176 4.823L9.75 4.81l-6.286 6.287a.253.253 0 0 0-.064.108l-.558 1.953 1.953-.558a.253.253 0 0 0 .108-.064Zm1.238-3.763a.25.25 0 0 0-.354 0L10.811 3.75l1.439 1.44 1.263-1.263a.25.25 0 0 0 0-.354Z"],
+    "file-directory-open-fill": ["M.513 1.513A1.75 1.75 0 0 1 1.75 1h3.5c.55 0 1.07.26 1.4.7l.9 1.2a.25.25 0 0 0 .2.1H13a1 1 0 0 1 1 1v.5H2.75a.75.75 0 0 0 0 1.5h11.978a1 1 0 0 1 .994 1.117L15 13.25A1.75 1.75 0 0 1 13.25 15H1.75A1.75 1.75 0 0 1 0 13.25V2.75c0-.464.184-.91.513-1.237Z"],
+    "book": ["M0 1.75A.75.75 0 0 1 .75 1h4.253c1.227 0 2.317.59 3 1.501A3.743 3.743 0 0 1 11.006 1h4.245a.75.75 0 0 1 .75.75v10.5a.75.75 0 0 1-.75.75h-4.507a2.25 2.25 0 0 0-1.591.659l-.622.621a.75.75 0 0 1-1.06 0l-.622-.621A2.25 2.25 0 0 0 5.258 13H.75a.75.75 0 0 1-.75-.75Zm7.251 10.324.004-5.073-.002-2.253A2.25 2.25 0 0 0 5.003 2.5H1.5v9h3.757a3.75 3.75 0 0 1 1.994.574ZM8.755 4.75l-.004 7.322a3.752 3.752 0 0 1 1.992-.572H14.5v-9h-3.495a2.25 2.25 0 0 0-2.25 2.25Z"],
+    "table": ["M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v12.5A1.75 1.75 0 0 1 14.25 16H1.75A1.75 1.75 0 0 1 0 14.25ZM6.5 6.5v8h7.75a.25.25 0 0 0 .25-.25V6.5Zm8-1.5V1.75a.25.25 0 0 0-.25-.25H6.5V5Zm-13 1.5v7.75c0 .138.112.25.25.25H5v-8ZM5 5V1.5H1.75a.25.25 0 0 0-.25.25V5Z"],
+    "arrow-left": ["M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 0-1.06l4.25-4.25a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042L4.81 7h7.44a.75.75 0 0 1 0 1.5H4.81l2.97 2.97a.75.75 0 0 1 0 1.06Z"],
+    "arrow-right": ["M8.22 2.97a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042l2.97-2.97H3.75a.75.75 0 0 1 0-1.5h7.44L8.22 4.03a.75.75 0 0 1 0-1.06Z"],
+    "sync": ["M1.705 8.005a.75.75 0 0 1 .834.656 5.5 5.5 0 0 0 9.592 2.97l-1.204-1.204a.25.25 0 0 1 .177-.427h3.646a.25.25 0 0 1 .25.25v3.646a.25.25 0 0 1-.427.177l-1.38-1.38A7.002 7.002 0 0 1 1.05 8.84a.75.75 0 0 1 .656-.834ZM8 2.5a5.487 5.487 0 0 0-4.131 1.869l1.204 1.204A.25.25 0 0 1 4.896 6H1.25A.25.25 0 0 1 1 5.75V2.104a.25.25 0 0 1 .427-.177l1.38 1.38A7.002 7.002 0 0 1 14.95 7.16a.75.75 0 0 1-1.49.178A5.5 5.5 0 0 0 8 2.5Z"],
+    "file": ["M2 1.75C2 .784 2.784 0 3.75 0h6.586c.464 0 .909.184 1.237.513l2.914 2.914c.329.328.513.773.513 1.237v9.586A1.75 1.75 0 0 1 13.25 16h-9.5A1.75 1.75 0 0 1 2 14.25Zm1.75-.25a.25.25 0 0 0-.25.25v12.5c0 .138.112.25.25.25h9.5a.25.25 0 0 0 .25-.25V6h-2.75A1.75 1.75 0 0 1 9 4.25V1.5Zm6.75.062V4.25c0 .138.112.25.25.25h2.688l-.011-.013-2.914-2.914-.013-.011Z"],
   };
   function icon(name) {
     return '<svg viewBox="0 0 16 16" aria-hidden="true">' +
@@ -84,7 +91,27 @@
   // Folder listings have no file to edit.
   var canEdit = served && !!body.querySelector("[data-sourcepos]") &&
     /\.(md|markdown|mdown|mkd|mkdn)$/i.test(currentDoc);
-  toolbar.append(stats, contentsBtn);
+  // Back, forward and reload: app windows have no browser controls.
+  var backBtn = el("button", { type: "button", "class": "mdv-nav", title: "Back ([ or Alt-\u2190)", "aria-label": "Back" }, icon("arrow-left"));
+  var forwardBtn = el("button", { type: "button", "class": "mdv-nav", title: "Forward (] or Alt-\u2192)", "aria-label": "Forward" }, icon("arrow-right"));
+  var reloadBtn = el("button", { type: "button", "class": "mdv-nav mdv-nav-last", title: "Reload (r)", "aria-label": "Reload" }, icon("sync"));
+  backBtn.addEventListener("click", function () { history.back(); });
+  forwardBtn.addEventListener("click", function () { history.forward(); });
+  reloadBtn.addEventListener("click", function () { location.reload(); });
+  // Grey out what can't be done, where the browser can tell (the
+  // Navigation API); elsewhere both stay enabled and do nothing at the ends.
+  function updateNav() {
+    var nav = window.navigation;
+    if (!nav || typeof nav.canGoBack !== "boolean") return;
+    backBtn.disabled = !nav.canGoBack;
+    forwardBtn.disabled = !nav.canGoForward;
+  }
+  updateNav();
+  if (window.navigation && window.navigation.addEventListener) {
+    window.navigation.addEventListener("currententrychange", updateNav);
+  }
+  window.addEventListener("pageshow", updateNav);
+  toolbar.append(backBtn, forwardBtn, reloadBtn, stats, contentsBtn);
   if (hasFiles) toolbar.append(filesBtn);
   if (canEdit) toolbar.append(editBtn);
   // The source view: pages whose Markdown the viewer has (files, and
@@ -120,6 +147,8 @@
   sidebar.append(tabs, contentsPanel, filesPanel, linksPanel);
 
   var KEYS = [
+    ["[ / ]", "Back / forward (also Alt-\u2190 / Alt-\u2192)"],
+    ["r", "Reload"],
     ["t", "Switch theme: auto, light, dark"],
     ["o", "Show or hide the contents"],
     hasFiles ? ["f", "Find a file"] : null,
@@ -395,7 +424,7 @@
         saved = next;
         status.textContent = overridden ? "Saved (a command-line option wins for now)"
           : f.key === "open" || f.key === "browser" || f.key === "port" || f.key === "recent" ||
-            f.key === "lint_ignore" || f.key === "exit_when_closed"
+            f.key === "lint_ignore" || f.key === "exit_when_closed" || f.key === "obsidian"
             ? "Saved, for next time" : "Saved";
         if (f.key === "theme") applyTheme(next || "auto");
         if (f.key === "word_count") showWordCount(next !== false);
@@ -671,6 +700,84 @@
       fileList.append(el("div", { "class": "mdv-empty" }, "Couldn't list files"));
     });
   }
+  // The files as a tree of folders, like an editor's file explorer.
+  // Folders open and close with a click; which are open is kept for this
+  // window's session. The folders above the current file start open, and
+  // while filtering every folder with a match is shown open.
+  var TREE_KEY = "mdv-tree-open";
+  var openDirs = (function () {
+    var set = {};
+    try { (JSON.parse(sessionStorage.getItem(TREE_KEY)) || []).forEach(function (d) { set[d] = true; }); } catch (e) {}
+    var parts = (currentDoc || "").split("/");
+    for (var i = 1; i < parts.length; i++) set[parts.slice(0, i).join("/")] = true;
+    return set;
+  })();
+  function saveOpenDirs() {
+    try { sessionStorage.setItem(TREE_KEY, JSON.stringify(Object.keys(openDirs))); } catch (e) {}
+  }
+  function buildTree(paths) {
+    var root = { dirs: {}, files: [] };
+    paths.forEach(function (f) {
+      var parts = f.split("/"), node = root;
+      for (var i = 0; i < parts.length - 1; i++) {
+        var path = parts.slice(0, i + 1).join("/");
+        node = node.dirs[parts[i]] || (node.dirs[parts[i]] = { path: path, dirs: {}, files: [] });
+      }
+      node.files.push(f);
+    });
+    return root;
+  }
+  function byName(a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); }
+  function fileIcon(f) {
+    if (/\.(md|markdown|mdown|mkd|mkdn)$/i.test(f)) return "book";
+    if (/\.(csv|tsv)$/i.test(f)) return "table";
+    return "file";
+  }
+  function treeRow(tag, attrs, iconName, label) {
+    var row = el(tag, attrs, icon(iconName));
+    row.classList.add("mdv-tree-row");
+    var name = el("span", { "class": "mdv-tree-name" });
+    name.textContent = label;
+    row.append(name);
+    return row;
+  }
+  function renderTree(node, into, filtering) {
+    Object.keys(node.dirs).sort(byName).forEach(function (name) {
+      var dir = node.dirs[name], label = name;
+      // A chain of folders holding only one folder shows as one row
+      // (".github / workflows").
+      while (!dir.files.length && Object.keys(dir.dirs).length === 1) {
+        var only = Object.keys(dir.dirs)[0];
+        label += " / " + only;
+        dir = dir.dirs[only];
+      }
+      var open = filtering || !!openDirs[dir.path];
+      var wrap = el("div", { "class": "mdv-tree-dir" });
+      var row = treeRow("button", { type: "button", title: dir.path + "/", "aria-expanded": String(open) },
+        open ? "file-directory-open-fill" : "file-directory", label);
+      var kids = el("div", { "class": "mdv-tree-kids" });
+      kids.hidden = !open;
+      if (open) renderTree(dir, kids, filtering);
+      row.addEventListener("click", function () {
+        var nowOpen = kids.hidden;
+        if (nowOpen) openDirs[dir.path] = true; else delete openDirs[dir.path];
+        saveOpenDirs();
+        kids.hidden = !nowOpen;
+        row.setAttribute("aria-expanded", String(nowOpen));
+        row.querySelector("svg").outerHTML = icon(nowOpen ? "file-directory-open-fill" : "file-directory");
+        if (nowOpen && !kids.firstChild) renderTree(dir, kids, filtering);
+      });
+      wrap.append(row, kids);
+      into.append(wrap);
+    });
+    node.files.slice().sort(function (a, b) {
+      return byName(a.slice(a.lastIndexOf("/") + 1), b.slice(b.lastIndexOf("/") + 1));
+    }).forEach(function (f) {
+      var a = treeRow("a", { href: fileHref(f), title: f }, fileIcon(f), f.slice(f.lastIndexOf("/") + 1));
+      if (f === currentDoc) a.classList.add("mdv-active");
+      into.append(a);
+    });
+  }
   function renderFiles() {
     var q = filter.value.trim().toLowerCase();
     fileList.textContent = "";
@@ -679,23 +786,11 @@
       fileList.append(el("div", { "class": "mdv-empty" }, q ? "No matching files" : "No Markdown files"));
       return;
     }
-    var lastDir = null;
-    shown.forEach(function (f) {
-      var slash = f.lastIndexOf("/");
-      var dir = slash === -1 ? "" : f.slice(0, slash);
-      if (dir !== lastDir) {
-        if (dir) {
-          var heading = el("div", { "class": "mdv-dir" });
-          heading.textContent = dir + "/";
-          fileList.append(heading);
-        }
-        lastDir = dir;
-      }
-      var a = el("a", { href: fileHref(f), title: f });
-      a.textContent = f.slice(slash + 1);
-      if (f === currentDoc) a.classList.add("mdv-active");
-      fileList.append(a);
-    });
+    var tree = el("div", { "class": "mdv-tree" });
+    renderTree(buildTree(shown), tree, !!q);
+    fileList.append(tree);
+    var active = tree.querySelector("a.mdv-active");
+    if (active && !q) requestAnimationFrame(function () { active.scrollIntoView({ block: "nearest" }); });
   }
   function fileHref(f) {
     if (siteRoot === null) return "/" + f.split("/").map(encodeURIComponent).join("/");
@@ -1026,6 +1121,9 @@
       case "?": overlay.hidden = !overlay.hidden; if (!overlay.hidden) loadAboutLocal(); break;
       case ",": if (!canSettings) return; openSettings(); break;
       case "w": toggleWordCount(); break;
+      case "[": history.back(); break;
+      case "]": history.forward(); break;
+      case "r": location.reload(); break;
       case "Escape":
         if (!overlay.hidden) overlay.hidden = true;
         else if (!settingsOverlay.hidden) settingsOverlay.hidden = true;
@@ -1310,6 +1408,42 @@
     }
   }
   presentBtn.addEventListener("click", startPresenting);
+
+  // ---- Links out of the viewer -----------------------------------------------
+  // Links to web pages, and to local files the viewer doesn't show as pages
+  // (images, PDFs, anything not Markdown or CSV), open in a new browser
+  // window, so the document stays where it was. Links between documents,
+  // and to places on this page, stay in this window. The target is set
+  // when the link is followed, so live updates need nothing extra.
+  var VIEWABLE = /\.(md|markdown|mdown|mkd|mkdn|csv|tsv)$/i;
+  function opensHere(url) {
+    if (url.origin === location.origin && url.pathname === location.pathname &&
+        url.search === location.search) return true; // this page (#anchors)
+    if (url.protocol !== "http:" && url.protocol !== "https:" && url.protocol !== "file:") return true; // mailto: and the like
+    if (siteRoot !== null) {
+      // An exported site: its pages are .html files (or folders) under its root.
+      var base = new URL(siteRoot || "./", location.href).href;
+      return url.href.indexOf(base) === 0 && /(\/|\.html)$/.test(url.pathname);
+    }
+    if (served) {
+      if (url.origin !== location.origin || url.pathname.indexOf("/__mdv/") === 0) return false;
+      var last = url.pathname.slice(url.pathname.lastIndexOf("/") + 1);
+      // A document, or a folder (no extension; the viewer lists it).
+      return VIEWABLE.test(decodeURIComponent(last)) || last.indexOf(".") === -1;
+    }
+    // A standalone page: only web addresses leave.
+    return url.protocol === "file:";
+  }
+  document.addEventListener("click", function (e) {
+    var a = e.target.closest && e.target.closest("a[href]");
+    // In the document or a presentation slide, not the viewer's own UI.
+    if (!a || !a.closest(".markdown-body, .mdv-slide")) return;
+    var url;
+    try { url = new URL(a.href, location.href); } catch (err) { return; }
+    if (opensHere(url)) return;
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+  }, true);
 
   // ---- Folding Obsidian callouts -------------------------------------------
   document.addEventListener("click", function (e) {

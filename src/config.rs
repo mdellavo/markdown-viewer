@@ -201,16 +201,48 @@ impl Prefs {
         }
     }
 
-    pub fn save(&self) -> Result<()> {
+    /// Change the saved preferences: load, apply `change`, save. Several
+    /// viewers and requests share the file, so this holds a lock (across
+    /// threads and processes) for the whole read-modify-write, and the
+    /// file is replaced in one step, so a reader never sees half of it.
+    pub fn update(change: impl FnOnce(&mut Prefs)) -> Result<()> {
+        static IN_PROCESS: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let Some(path) = state_path() else {
             return Ok(());
         };
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
-        std::fs::write(&path, serde_json::to_string_pretty(self)?)
-            .with_context(|| format!("cannot write {}", path.display()))
+        let _guard = IN_PROCESS.lock().unwrap_or_else(|e| e.into_inner());
+        let lock_path = path.with_extension("lock");
+        let lock = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&lock_path)
+            .with_context(|| format!("cannot open {}", lock_path.display()))?;
+        lock.lock()
+            .with_context(|| format!("cannot lock {}", lock_path.display()))?;
+        let mut prefs = Prefs::load();
+        change(&mut prefs);
+        write_atomically(&path, serde_json::to_string_pretty(&prefs)?.as_bytes())
+        // The lock is released when `lock` is dropped.
     }
+}
+
+/// Write `path` by writing a temporary file next to it and renaming it into
+/// place, so it is never seen half-written.
+pub fn write_atomically(path: &Path, contents: &[u8]) -> Result<()> {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let tmp = path.with_file_name(format!(".{name}.{}.tmp", std::process::id()));
+    std::fs::write(&tmp, contents).with_context(|| format!("cannot write {}", tmp.display()))?;
+    std::fs::rename(&tmp, path).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        anyhow::Error::new(e).context(format!("cannot write {}", path.display()))
+    })
 }
 
 /// Change one setting in the settings file (`None` removes it, going back
@@ -234,7 +266,7 @@ pub fn update_file<T>(
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
-    std::fs::write(&path, new).with_context(|| format!("cannot write {}", path.display()))?;
+    write_atomically(&path, new.as_bytes())?;
     Ok(checked)
 }
 
