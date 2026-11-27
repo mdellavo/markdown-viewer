@@ -206,7 +206,8 @@ impl Site<'_> {
             doc: (!is_folder).then(|| doc.to_string()),
             site_root: Some("../".repeat(depth)),
             ..(self.page)(title)
-        };
+        }
+        .with_meta_for(&self.root.join(doc), false);
         let html = self.renderer.wrap_page(&body, &options);
         libs.math |= html.contains(&format!("{SITE_DIR}/katex.js"));
         libs.mermaid |= html.contains(&format!("{SITE_DIR}/mermaid.js"));

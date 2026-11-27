@@ -60,6 +60,9 @@ pub struct Config {
     pub exit_when_closed: Option<bool>,
     /// Syntax highlight the Markdown in the source view (default: on).
     pub source_highlighting: Option<bool>,
+    /// Show when a file last changed in git, and by whom, with an "Edit on
+    /// GitHub" link, at the foot of the page (default: on).
+    pub last_updated: Option<bool>,
 }
 
 impl Config {

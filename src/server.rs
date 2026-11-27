@@ -125,6 +125,57 @@ struct AppState {
     close_on_exit: Arc<AtomicBool>,
     /// Number of pages currently connected to an event stream.
     clients: Arc<watch::Sender<usize>>,
+    /// Claims by new launches reusing this viewer (see `Lifecycle`).
+    lifecycle: Arc<Lifecycle>,
+}
+
+/// How long a claim keeps a viewer that has no page open running, so the
+/// page the claimer is opening can connect.
+const CLAIM_HOLD: Duration = Duration::from_secs(15);
+
+/// Whether a viewer has decided to stop, and when a new launch last
+/// claimed it (`POST /__mdv/claim`). Both under one lock: a claim either
+/// lands before the decision to stop (and delays it) or is refused.
+pub struct Lifecycle {
+    state: Mutex<(bool, Option<std::time::Instant>)>,
+    claimed: tokio::sync::Notify,
+}
+
+impl Lifecycle {
+    fn new() -> Self {
+        Self {
+            state: Mutex::new((false, None)),
+            claimed: tokio::sync::Notify::new(),
+        }
+    }
+
+    /// A new launch wants to show its page here: true if this viewer
+    /// will stay up for it.
+    fn claim(&self) -> bool {
+        let mut state = self.state.lock().unwrap();
+        if state.0 {
+            return false;
+        }
+        state.1 = Some(std::time::Instant::now());
+        drop(state);
+        self.claimed.notify_one();
+        true
+    }
+
+    /// Until when a claim holds the viewer up.
+    fn held_until(&self) -> Option<std::time::Instant> {
+        self.state.lock().unwrap().1.map(|at| at + CLAIM_HOLD)
+    }
+
+    /// Stop, unless a claim is still holding the viewer up.
+    fn try_stop(&self) -> bool {
+        let mut state = self.state.lock().unwrap();
+        if state.1.is_some_and(|at| at.elapsed() < CLAIM_HOLD) {
+            return false;
+        }
+        state.0 = true;
+        true
+    }
 }
 
 /// Lets the caller adjust a running server and announce shutdown.
@@ -133,6 +184,7 @@ pub struct ServerHandle {
     closing: watch::Sender<bool>,
     close_on_exit: Arc<AtomicBool>,
     clients: watch::Receiver<usize>,
+    lifecycle: Arc<Lifecycle>,
 }
 
 impl ServerHandle {
@@ -142,6 +194,8 @@ impl ServerHandle {
 
     /// Tell connected pages the server is stopping.
     pub fn announce_shutdown(&self) {
+        // New launches start their own viewer from now on.
+        self.lifecycle.state.lock().unwrap().0 = true;
         let _ = self.closing.send(true);
     }
 
@@ -151,27 +205,48 @@ impl ServerHandle {
     /// `first_connect`, e.g. because the browser never opened.
     pub async fn abandoned(&self, grace: Duration, first_connect: Option<Duration>) {
         let mut clients = self.clients.clone();
-        // Each wait yields only whether the condition was met, so no borrow
-        // of the channel outlives its statement. With no first_connect limit,
-        // wait for a page however long it takes.
-        let connected = match first_connect {
-            Some(limit) => tokio::time::timeout(limit, clients.wait_for(|n| *n > 0))
-                .await
-                .is_ok_and(|r| r.is_ok()),
-            None => clients.wait_for(|n| *n > 0).await.is_ok(),
-        };
-        if !connected {
-            return;
-        }
+        // How long to wait with no page connected: for the first page,
+        // `first_connect` (forever if None); after the last one leaves,
+        // `grace`. A claim from a new launch (`Lifecycle`) extends it.
+        let mut idle_since = tokio::time::Instant::now();
+        let mut limit = first_connect;
         loop {
-            if clients.wait_for(|n| *n == 0).await.is_err() {
-                return;
+            if *clients.borrow() > 0 {
+                if clients.wait_for(|n| *n == 0).await.is_err() {
+                    return;
+                }
+                idle_since = tokio::time::Instant::now();
+                limit = Some(grace);
+                continue;
             }
-            let back = tokio::time::timeout(grace, clients.wait_for(|n| *n > 0))
-                .await
-                .is_ok_and(|r| r.is_ok());
-            if !back {
-                return;
+            let held = self
+                .lifecycle
+                .held_until()
+                .map(tokio::time::Instant::from_std);
+            let deadline = match (limit, held) {
+                (Some(l), Some(h)) => Some((idle_since + l).max(h)),
+                (Some(l), None) => Some(idle_since + l),
+                // Waiting for the first page however long it takes.
+                (None, _) => None,
+            };
+            let sleep = async {
+                match deadline {
+                    Some(d) => tokio::time::sleep_until(d).await,
+                    None => std::future::pending().await,
+                }
+            };
+            tokio::select! {
+                r = clients.wait_for(|n| *n > 0) => {
+                    if r.is_err() {
+                        return;
+                    }
+                }
+                _ = self.lifecycle.claimed.notified() => {}
+                _ = sleep => {
+                    if *self.clients.borrow() == 0 && self.lifecycle.try_stop() {
+                        return;
+                    }
+                }
             }
         }
     }
@@ -212,10 +287,12 @@ impl Server {
         let (closing_tx, closing) = watch::channel(false);
         let close_on_exit = Arc::new(AtomicBool::new(false));
         let (clients_tx, clients_rx) = watch::channel(0usize);
+        let lifecycle = Arc::new(Lifecycle::new());
         let handle = ServerHandle {
             closing: closing_tx,
             close_on_exit: close_on_exit.clone(),
             clients: clients_rx,
+            lifecycle: lifecycle.clone(),
         };
         let state = AppState {
             docs: opts.docs,
@@ -236,6 +313,7 @@ impl Server {
             closing,
             close_on_exit,
             clients: Arc::new(clients_tx),
+            lifecycle,
         };
         let router = Router::new()
             .route("/", get(index))
@@ -246,6 +324,7 @@ impl Server {
             .route(OPEN_PATH, post(open_in_editor))
             .route(POSITION_PATH, post(save_position))
             .route(crate::instances::WHOAMI_PATH, get(whoami))
+            .route(crate::instances::CLAIM_PATH, post(claim))
             .route(GOTO_PATH, post(goto))
             .route(TASK_PATH, post(set_task))
             .route(ABOUT_PATH, get(about))
@@ -335,12 +414,17 @@ fn dir_page(state: &AppState, dir: &Path) -> Response {
 }
 
 /// A live page for a document (a Markdown file, or a folder listing).
+/// Streamed: the start of the page (its colours, and a "Rendering…" note
+/// if it takes a moment) goes out at once, the rest once it's rendered.
 fn doc_page(state: &AppState, doc: &Path) -> Response {
-    let rx = match state.docs.subscribe(doc) {
-        Ok(rx) => rx,
-        Err(e) => return (StatusCode::NOT_FOUND, format!("{e:#}")).into_response(),
-    };
-    let body = rx.borrow().clone();
+    // (Never wait here: a page being rendered holds the documents' lock.)
+    if state.docs.is_known(doc) == Some(false) && !doc.exists() {
+        return (
+            StatusCode::NOT_FOUND,
+            format!("{} not found", doc.display()),
+        )
+            .into_response();
+    }
     let prefs = state.prefs.lock().unwrap().clone();
     let (template, css_path) = {
         let live = state.live.lock().unwrap();
@@ -374,7 +458,31 @@ fn doc_page(state: &AppState, doc: &Path) -> Response {
             || state.main.as_deref() == Some(doc) && state.docs.source(doc).is_some(),
         ..template
     };
-    no_store(Html(state.docs.renderer().wrap_page(&body, &page)).into_response())
+    let renderer = state.docs.renderer();
+    let (start, nonce) = renderer.page_start(&page);
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<String, Infallible>>(2);
+    let _ = tx.try_send(Ok(start));
+    let docs = state.docs.clone();
+    let doc = doc.to_path_buf();
+    tokio::spawn(async move {
+        let rest = tokio::task::spawn_blocking(move || {
+            // Files say when they last changed in git (folder listings don't).
+            let page = page.with_meta_for(&doc, true);
+            let body = match docs.subscribe(&doc) {
+                Ok(rx) => rx.borrow().clone(),
+                Err(e) => format!(
+                    "<p class=\"mdv-error\">Couldn't show this page: {}</p>",
+                    crate::render::escape_text(&format!("{e:#}"))
+                ),
+            };
+            renderer.page_finish(&body, &page, &nonce)
+        })
+        .await
+        .unwrap_or_default();
+        let _ = tx.send(Ok(rest)).await;
+    });
+    let body = Body::from_stream(tokio_stream::wrappers::ReceiverStream::new(rx));
+    no_store(([(header::CONTENT_TYPE, "text/html; charset=utf-8")], body).into_response())
 }
 
 #[derive(Deserialize)]
@@ -737,6 +845,7 @@ async fn set_setting(
             let mut live = state.live.lock().unwrap();
             let reload = live.page.style != next.page.style
                 || live.page.number_headings != next.page.number_headings
+                || live.page.last_updated != next.page.last_updated
                 || live.custom_css != next.custom_css;
             live.page = next.page;
             live.custom_css = next.custom_css;
@@ -915,6 +1024,20 @@ async fn tags(State(state): State<AppState>) -> Response {
     }
 }
 
+/// A new launch for what this viewer serves will show its page here: stay
+/// up for it (204), or say this viewer is stopping (409) so it starts its
+/// own.
+async fn claim(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if headers.get("x-mdv").is_none() {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    if state.lifecycle.claim() {
+        StatusCode::NO_CONTENT.into_response()
+    } else {
+        StatusCode::CONFLICT.into_response()
+    }
+}
+
 async fn whoami(State(state): State<AppState>) -> Response {
     Json(serde_json::json!({
         "target": state.identity.as_str(),
@@ -1086,6 +1209,21 @@ pub fn file_title(path: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn claims_hold_a_viewer_until_it_decides_to_stop() {
+        let life = Lifecycle::new();
+        assert!(life.held_until().is_none());
+        assert!(life.claim(), "running: the claim is accepted");
+        assert!(life.held_until().is_some());
+        assert!(!life.try_stop(), "a fresh claim holds it up");
+        let stopping = Lifecycle::new();
+        assert!(stopping.try_stop());
+        assert!(
+            !stopping.claim(),
+            "stopping: refused, so the launch starts its own"
+        );
+    }
 
     #[test]
     fn resolve_stays_inside_root() {

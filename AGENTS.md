@@ -101,6 +101,15 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   front matter `tags:` (chips in frontmatter.rs's table, always), and the
   folder's tag index for `/__mdv/tags` (the Tags tab in ui.js; chips carry
   `data-mdv-tag`, lowercased).
+- Served pages stream (`doc_page` in server.rs): `Renderer::page_start`
+  (the head and a "Rendering…" note) is sent at once, then
+  `page_finish` (the article, footer and scripts, sharing the nonce) once
+  `Docs::subscribe` has rendered it, off the async workers. Never block
+  before sending the start: `Docs::is_known` only tries the lock.
+- `src/pagemeta.rs`: the page footer (last git change, author, "Edit on
+  GitHub"), put after the article by `wrap_page` from
+  `PageOptions::page_meta` (`with_meta_for`; served pages cache it 30 s).
+  It's outside `.markdown-body`, so live updates don't touch it.
 - `src/references.rs`: GitHub references (`#123`, `@user`, commits),
   linked in rendered HTML outside links, code and math. The repository
   comes from the git remote (`RenderOptions::github`).
@@ -162,7 +171,11 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   (click-to-source). Commands run without a shell.
 - `src/instances.rs`: registry of running viewers (next to the state file),
   so a second launch for the same target reuses the first
-  (`/__mdv/whoami`), and `browser::focus` brings its window forward.
+  (`/__mdv/whoami`, then `POST /__mdv/claim`: a viewer in its grace period
+  after its window closed stays up 15 s for the new page, or answers 409 if
+  it's already stopping; see `Lifecycle` in server.rs), and `browser::focus`
+  brings its window forward. A registration is only removed by the process
+  that wrote it.
   `--goto` finds a viewer serving the file or a folder containing it and
   posts to `/__mdv/goto`; the server broadcasts a `goto` event to pages.
 - `editors/`: Zed tasks and key binding, and a dependency-free VS Code
@@ -252,7 +265,10 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   remembered and on-screen blocks first, and keep drawings in
   `localStorage` (`mdv-draw:` keys, by content, version and theme).
   render.rs caches highlighted code and drawings by content
-  (`RenderCache`), main.rs renders the first page while the browser opens,
+  (`RenderCache`), main.rs renders the first page while the browser opens
+  (and starts serving, or the background viewer, before any standalone
+  render: only `-o`, `--pdf` and `--no-open` need that), docs.rs skips
+  re-rendering a file whose text and renderer are unchanged (`inputs`),
   and served pages link `/__mdv/page.css`, `/__mdv/ui.css` and
   `/__mdv/ui.js` (versioned, kept by the browser) instead of inlining them.
   live.js prepares content in `<template>`s so media isn't fetched twice.

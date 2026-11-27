@@ -2320,3 +2320,141 @@ fn chart_libraries_are_bundled() {
     let missing = http_get(&server.addr, "/__mdv/lib/nope.js", &server.addr);
     assert!(missing.starts_with("HTTP/1.1 404"), "{missing}");
 }
+
+/// Files in git show when they last changed, by whom, and an "Edit on
+/// GitHub" link at the foot of the page; `last_updated = false` hides it.
+#[test]
+fn pages_say_when_the_file_last_changed() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dunce::canonicalize(dir.path()).unwrap();
+    let git = |args: &[&str]| {
+        Command::new("git")
+            .arg("-C")
+            .arg(&root)
+            .args(args)
+            .env("GIT_AUTHOR_DATE", "2026-03-04T05:06:07Z")
+            .env("GIT_COMMITTER_DATE", "2026-03-04T05:06:07Z")
+            .output()
+            .unwrap()
+    };
+    if !git(&["init", "-q", "-b", "main"]).status.success() {
+        return; // git not available
+    }
+    git(&["config", "user.email", "test@example.com"]);
+    git(&["config", "user.name", "Grace Hopper"]);
+    git(&["remote", "add", "origin", "https://github.com/o/r.git"]);
+    let doc = root.join("doc.md");
+    std::fs::write(&doc, "# Notes\n").unwrap();
+    git(&["add", "doc.md"]);
+    git(&["commit", "-qm", "first"]);
+    let footer = "<footer class=\"mdv-page-meta\"><span>Last updated on <time datetime=\"2026-03-04\">4 March 2026</time> \
+                  by Grace Hopper</span><a href=\"https://github.com/o/r/edit/main/doc.md\"";
+
+    let out = mdv().arg(&doc).args(["-o", "-"]).output().unwrap();
+    let html = String::from_utf8(out.stdout).unwrap();
+    assert!(html.contains(footer), "{html}");
+
+    let mut cmd = mdv();
+    cmd.arg("--watch").arg(&doc);
+    let server = start(cmd);
+    assert!(http_get(&server.addr, "/", &server.addr).contains(footer));
+    drop(server);
+
+    // A file never committed has none.
+    let new = root.join("new.md");
+    std::fs::write(&new, "# New\n").unwrap();
+    let out = mdv().arg(&new).args(["-o", "-"]).output().unwrap();
+    assert!(
+        !String::from_utf8(out.stdout)
+            .unwrap()
+            .contains("mdv-page-meta\">")
+    );
+
+    // Turned off in the settings file.
+    std::fs::write(test_dir().join("config.toml"), "last_updated = false\n").unwrap();
+    let out = mdv().arg(&doc).args(["-o", "-"]).output().unwrap();
+    let _ = std::fs::remove_file(test_dir().join("config.toml"));
+    assert!(
+        !String::from_utf8(out.stdout)
+            .unwrap()
+            .contains("mdv-page-meta\">")
+    );
+}
+
+/// Served pages stream: the start of the page, with a "Rendering…" note,
+/// comes first; the note is hidden once the article arrives.
+#[test]
+fn served_pages_show_a_note_while_rendering() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Hi\n\nThere.\n").unwrap();
+    let mut cmd = mdv();
+    cmd.arg("--watch").arg(&md);
+    let server = start(cmd);
+    let page = http_get(&server.addr, "/", &server.addr);
+    let note = page
+        .find("<div class=\"mdv-loading\" role=\"status\">")
+        .expect("the note");
+    let hide = page
+        .find(".mdv-loading { display: none !important; }")
+        .expect("hidden after");
+    let article = page.find("<article class=\"markdown-body\">").unwrap();
+    assert!(note < hide && hide < article, "{page}");
+    assert!(page.contains("Rendering doc.md…"));
+    assert!(page.contains("<h1>") || page.contains("<h1 "));
+    assert!(http_get(&server.addr, "/nope.md", &server.addr).starts_with("HTTP/1.1 404"));
+}
+
+/// Opening a file again just after its window closed: the viewer is still
+/// in its grace period. The new launch claims it, so it stays up for the
+/// page being opened instead of stopping before that page arrives.
+#[test]
+fn reopening_just_after_closing_keeps_the_viewer() {
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("doc.md");
+    std::fs::write(&md, "# Hi\n").unwrap();
+    let mut first = mdv()
+        .args(["--watch", "--no-open", "--exit-when-closed"])
+        .arg(&md)
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut out = BufReader::new(first.stdout.take().unwrap());
+    let _guard = Running(first);
+    let mut line = String::new();
+    out.read_line(&mut line).unwrap();
+    let addr = line
+        .split(" at http://")
+        .nth(1)
+        .unwrap()
+        .trim()
+        .trim_end_matches('/')
+        .to_string();
+    // A page connects, then its window closes.
+    let page = {
+        let mut sse = TcpStream::connect(&addr).unwrap();
+        sse.set_read_timeout(Some(Duration::from_secs(10))).unwrap();
+        write!(sse, "GET /__mdv/events HTTP/1.1\r\nHost: {addr}\r\n\r\n").unwrap();
+        let mut reader = BufReader::new(sse);
+        wait_for(&mut reader, "Hi");
+        reader
+    };
+    drop(page);
+    std::thread::sleep(Duration::from_millis(500));
+
+    // Opened again during the 5 s grace period: reused…
+    let again = mdv()
+        .args(["--watch", "--no-open"])
+        .arg(&md)
+        .output()
+        .unwrap();
+    let said = String::from_utf8_lossy(&again.stdout);
+    assert!(
+        said.contains(&format!("Already open at http://{addr}/")),
+        "{said}"
+    );
+    // …and still up after the grace period, for the page being opened.
+    std::thread::sleep(Duration::from_secs(6));
+    let page = http_get(&addr, "/", &addr);
+    assert!(page.starts_with("HTTP/1.1 200"), "{page}");
+}

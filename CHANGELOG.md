@@ -6,6 +6,31 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- A file committed to git says at the foot of its page when it last
+  changed and by whom, with an "Edit on GitHub" link when its remote is on
+  GitHub. `last_updated = false` in the settings file turns it off.
+
+### Changed
+
+- Pages no longer open blank while they render: served pages are sent in
+  two parts, so the window shows the page's colours at once, with a
+  "Rendering…" note if it takes more than a moment, and fills in when the
+  page is ready.
+- Opening a file is faster: the browser starts before anything is
+  rendered (the README's window now comes up in about 50 ms instead of
+  250 ms), and a page whose file was saved without changes isn't rendered
+  again.
+
+### Fixed
+
+- Opening a file again just after closing its window could say "Already
+  open" and then show "This site can't be reached": the old viewer stopped
+  before the new page arrived. A new launch now claims the running viewer,
+  which stays up for the page (or, if it's already stopping, the launch
+  starts a new one).
+
 ## [0.14.0] - 2026-11-27
 
 ### Changed

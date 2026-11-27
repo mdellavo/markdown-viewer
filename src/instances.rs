@@ -15,6 +15,8 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 
 pub const WHOAMI_PATH: &str = "/__mdv/whoami";
+/// Asks a running viewer to stay up for a page about to open.
+pub const CLAIM_PATH: &str = "/__mdv/claim";
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Entry {
@@ -29,7 +31,15 @@ pub struct Registration(PathBuf);
 
 impl Drop for Registration {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+        // Only our own entry: a newer viewer for the same target may have
+        // replaced it while this one was stopping.
+        let ours = std::fs::read_to_string(&self.0)
+            .ok()
+            .and_then(|s| serde_json::from_str::<Entry>(&s).ok())
+            .is_some_and(|e| e.pid == std::process::id());
+        if ours {
+            let _ = std::fs::remove_file(&self.0);
+        }
     }
 }
 
@@ -72,7 +82,9 @@ pub fn find(target: &Path) -> Option<String> {
         return None;
     }
     if whoami(entry.port).as_deref() == Some(entry.target.as_str()) {
-        Some(format!("http://127.0.0.1:{}/", entry.port))
+        // Alive, but it may be about to stop (its window just closed): only
+        // reuse it if it agrees to stay up for the page we'll open.
+        claim(entry.port).then(|| format!("http://127.0.0.1:{}/", entry.port))
     } else {
         // Stale (the server crashed or the port was reused): forget it.
         let _ = std::fs::remove_file(&path);
@@ -108,6 +120,27 @@ pub fn send_goto(url: &str, file: &Path, line: u32) -> bool {
         body.len()
     );
     if s.write_all(request.as_bytes()).is_err() {
+        return false;
+    }
+    let mut response = String::new();
+    let _ = s.read_to_string(&mut response);
+    response.starts_with("HTTP/1.1 204")
+}
+
+/// Ask the viewer on `port` to stay up for a page about to open.
+fn claim(port: u16) -> bool {
+    let addr = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    let timeout = Duration::from_millis(800);
+    let Ok(mut s) = TcpStream::connect_timeout(&addr, timeout) else {
+        return false;
+    };
+    let _ = s.set_read_timeout(Some(timeout));
+    if write!(
+        s,
+        "POST {CLAIM_PATH} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nX-MDV: 1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    )
+    .is_err()
+    {
         return false;
     }
     let mut response = String::new();

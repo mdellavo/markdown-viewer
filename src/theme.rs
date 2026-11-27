@@ -59,7 +59,8 @@ impl Style {
         match self {
             Style::Github => "",
             Style::Wide => {
-                ".markdown-body { max-width: none; padding-left: 60px; padding-right: 60px; }\n"
+                ".markdown-body { max-width: none; padding-left: 60px; padding-right: 60px; }\n\
+                 .mdv-page-meta { max-width: none; padding-left: 60px; padding-right: 60px; }\n"
             }
             Style::Book => {
                 ".markdown-body { max-width: 760px; font-size: 18px; line-height: 1.7; \
@@ -67,7 +68,8 @@ impl Style {
                  \"Palatino Linotype\", Palatino, Georgia, serif; }\n\
                  .markdown-body h1, .markdown-body h2 { border-bottom: none; padding-bottom: 0; }\n\
                  .markdown-body h1, .markdown-body h2, .markdown-body h3 { font-weight: 600; }\n\
-                 .markdown-body p { hyphens: auto; }\n"
+                 .markdown-body p { hyphens: auto; }\n\
+                 .mdv-page-meta { max-width: 760px; }\n"
             }
             Style::Compact => {
                 ".markdown-body { max-width: 1100px; font-size: 14px; line-height: 1.45; \
@@ -75,7 +77,8 @@ impl Style {
                  .markdown-body p, .markdown-body ul, .markdown-body ol, .markdown-body pre, \
                  .markdown-body table, .markdown-body blockquote { margin-bottom: 10px; }\n\
                  .markdown-body h1, .markdown-body h2, .markdown-body h3 { margin-top: 18px; \
-                 margin-bottom: 10px; }\n"
+                 margin-bottom: 10px; }\n\
+                 .mdv-page-meta { max-width: 1100px; padding: 0 32px 24px; }\n"
             }
         }
     }
@@ -289,6 +292,12 @@ const CODE_AND_TOC: &str = "\
 .markdown-body video.mdv-video { border-radius: 6px; max-height: 70vh; }\n\
 @media print { .markdown-body .mdv-mol-hint { display: none !important; } }\n\
 @media print { .markdown-body .mdv-diagram { break-inside: avoid; } }\n\
+.mdv-page-meta { box-sizing: border-box; max-width: 980px; margin: 0 auto; padding: 0 45px 32px; display: flex; \
+  flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; color: var(--fgColor-muted); \
+  font: 12px -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Noto Sans\", Helvetica, Arial, sans-serif; }\n\
+.mdv-page-meta a { color: var(--fgColor-accent); text-decoration: none; }\n\
+.mdv-page-meta a:hover { text-decoration: underline; }\n\
+@media (max-width: 767px) { .mdv-page-meta { padding: 0 15px 24px; } }\n\
 .markdown-body abbr[title] { text-decoration: underline dotted; cursor: help; }\n\
 .markdown-body a.mdv-tag { display: inline-block; padding: 0 .6em; border-radius: 2em; font-size: 85%; line-height: 1.6; \
   color: var(--fgColor-accent); background: color-mix(in srgb, var(--fgColor-accent) 12%, transparent); text-decoration: none; \

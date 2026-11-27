@@ -297,6 +297,8 @@
     { key: "line_numbers", label: "Number the lines of code blocks", type: "bool", def: false },
     { key: "source_highlighting", label: "Highlight the Markdown in the source view (v)", type: "bool", def: true,
       help: "Off shows it plain, which is quicker for very long files." },
+    { key: "last_updated", label: "Show when the file last changed in git, with an Edit on GitHub link", type: "bool", def: true,
+      help: "At the foot of the page." },
     { key: "word_count", label: "Show the word count and reading time", type: "bool", def: true,
       help: "w in the viewer shows or hides it too." },
     { key: "front_matter", label: "Front matter", type: "select", def: "table",

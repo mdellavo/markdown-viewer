@@ -51,6 +51,14 @@ pub struct Docs {
     sources: Mutex<HashMap<PathBuf, String>>,
     watched: Mutex<HashSet<PathBuf>>,
     debouncer: Mutex<Debouncer<RecommendedWatcher, RecommendedCache>>,
+    /// What each file's last render was made from (`inputs`), so a file
+    /// event that changed nothing (a save without edits, a touch) doesn't
+    /// render it again.
+    rendered_from: Mutex<HashMap<PathBuf, u64>>,
+    /// Bumped when the renderer changes, which changes every page.
+    generation: std::sync::atomic::AtomicU64,
+    /// Pages rendered (for tests).
+    renders: std::sync::atomic::AtomicUsize,
 }
 
 impl Docs {
@@ -73,6 +81,9 @@ impl Docs {
             sources: Mutex::default(),
             watched: Mutex::default(),
             debouncer: Mutex::new(debouncer),
+            rendered_from: Mutex::default(),
+            generation: Default::default(),
+            renders: Default::default(),
         });
         // In a vault, pages depend on other notes (embeds, backlinks), so
         // watch all of it.
@@ -103,6 +114,8 @@ impl Docs {
     /// viewed (pages update as after an edit).
     pub fn set_renderer(&self, renderer: Arc<Renderer>) {
         *self.renderer.write().unwrap() = renderer;
+        self.generation
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         let all: Vec<PathBuf> = self.channels.lock().unwrap().keys().cloned().collect();
         self.refresh(all);
     }
@@ -111,13 +124,29 @@ impl Docs {
         &self.root
     }
 
+    /// Whether a document is known (rendered, or with no file behind it),
+    /// without waiting: `None` while another page is being rendered.
+    pub fn is_known(&self, doc: &Path) -> Option<bool> {
+        self.channels
+            .try_lock()
+            .ok()
+            .map(|channels| channels.contains_key(doc))
+    }
+
     /// Live, rendered HTML for a document (canonical path under the root).
     pub fn subscribe(&self, doc: &Path) -> Result<watch::Receiver<String>> {
         let mut channels = self.channels.lock().unwrap();
         if let Some(tx) = channels.get(doc) {
             return Ok(tx.subscribe());
         }
+        let inputs = self.inputs(doc);
         let html = self.render(doc)?;
+        if let Some(inputs) = inputs {
+            self.rendered_from
+                .lock()
+                .unwrap()
+                .insert(doc.to_path_buf(), inputs);
+        }
         let (tx, rx) = watch::channel(html);
         channels.insert(doc.to_path_buf(), tx);
         drop(channels);
@@ -170,8 +199,19 @@ impl Docs {
             let Some(tx) = channels.get(&doc) else {
                 continue;
             };
+            // Unchanged since its last render: nothing to do.
+            let inputs = self.inputs(&doc);
+            if inputs.is_some() && self.rendered_from.lock().unwrap().get(&doc) == inputs.as_ref() {
+                continue;
+            }
             // The file may briefly not exist mid-save; keep the last good render.
             if let Ok(html) = self.render(&doc) {
+                if let Some(inputs) = inputs {
+                    self.rendered_from
+                        .lock()
+                        .unwrap()
+                        .insert(doc.clone(), inputs);
+                }
                 tx.send_if_modified(|current| {
                     if *current == html {
                         false
@@ -184,7 +224,33 @@ impl Docs {
         }
     }
 
+    /// A hash of everything a file's page is made from: its text and the
+    /// renderer. `None` when the page depends on more than that (folder
+    /// listings, and Obsidian notes, which embed and link other notes), so
+    /// it's always rendered again.
+    fn inputs(&self, doc: &Path) -> Option<u64> {
+        use std::hash::{Hash, Hasher};
+        if doc.is_dir() || self.renderer().options().obsidian {
+            return None;
+        }
+        let text = std::fs::read(doc).ok()?;
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        text.hash(&mut h);
+        self.generation
+            .load(std::sync::atomic::Ordering::SeqCst)
+            .hash(&mut h);
+        Some(h.finish())
+    }
+
+    /// How many pages have been rendered (for tests).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn render_count(&self) -> usize {
+        self.renders.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
     fn render(&self, doc: &Path) -> Result<String> {
+        self.renders
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if doc.is_dir() {
             return Ok(self
                 .renderer()
@@ -587,5 +653,31 @@ mod tests {
         std::fs::write(root.join("docs/C# 100%.md"), "x").unwrap();
         let md = listing_markdown(root, &root.join("docs"));
         assert!(md.contains("(C%23%20100%25.md)"), "{md}");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn unchanged_files_are_not_rendered_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let doc = root.join("doc.md");
+        std::fs::write(&doc, "# One\n").unwrap();
+        let docs = Docs::new(root.clone(), Arc::new(Renderer::new())).unwrap();
+        let rx = docs.subscribe(&doc).unwrap();
+        assert_eq!(docs.render_count(), 1);
+        // A save without edits (or a touch): nothing to redo.
+        std::fs::write(&doc, "# One\n").unwrap();
+        docs.refresh(vec![doc.clone()]);
+        assert_eq!(docs.render_count(), 1);
+        std::fs::write(&doc, "# Two\n").unwrap();
+        docs.refresh(vec![doc.clone()]);
+        assert_eq!(docs.render_count(), 2);
+        assert!(rx.borrow().contains("Two"));
+        // New settings change every page.
+        docs.set_renderer(Arc::new(Renderer::new()));
+        assert_eq!(docs.render_count(), 3);
+        // Folder listings depend on more than one file: always redone.
+        let _listing = docs.subscribe(&root).unwrap();
+        docs.refresh(vec![root.clone()]);
+        assert_eq!(docs.render_count(), 5);
     }
 }

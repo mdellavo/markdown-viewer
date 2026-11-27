@@ -36,6 +36,7 @@ mod lint;
 mod modelformats;
 mod molecules;
 mod obsidian;
+mod pagemeta;
 mod pdf;
 mod platform;
 mod recent;
@@ -258,6 +259,7 @@ struct Settings {
     exit_when_closed: bool,
     /// Highlight the source view.
     source_highlighting: bool,
+    last_updated: bool,
     line_numbers: bool,
     front_matter: FrontMatter,
     /// `None`: decide by whether the file is in an Obsidian vault.
@@ -310,6 +312,7 @@ impl Settings {
             word_count: config.word_count.unwrap_or(true),
             exit_when_closed: config.exit_when_closed.unwrap_or(true),
             source_highlighting: config.source_highlighting.unwrap_or(true),
+            last_updated: config.last_updated.unwrap_or(true),
             line_numbers: cli.line_numbers || config.line_numbers.unwrap_or(false),
             front_matter: cli.front_matter.or(config.front_matter).unwrap_or_default(),
             obsidian,
@@ -362,6 +365,8 @@ impl Settings {
             number_headings: self.number_headings,
             hide_word_count: !self.word_count,
             recent: self.recent,
+            last_updated: self.last_updated,
+            github_repo: self.github_repo.clone(),
             ..Default::default()
         }
     }
@@ -570,6 +575,28 @@ fn run(cli: Cli) -> Result<()> {
         bail!("--port needs --watch, or a page to open");
     }
 
+    // Served and background viewers render the page themselves: start
+    // them before rendering anything here, so the window opens sooner.
+    if cli.output.is_none() && cli.pdf.is_none() {
+        if watch {
+            return serve(&cli, &settings, &source, goto.map(|(_, line)| line));
+        }
+        // Opening a page: a viewer serves it in the background (so it has
+        // everything a served page has: settings, live reload…) and stops
+        // when the window is closed. We return once it's serving.
+        if !cli.no_open && !cli.background {
+            let stdin_text = match &source {
+                Source::Text {
+                    name: "stdin",
+                    text,
+                    ..
+                } => Some(text.as_str()),
+                _ => None,
+            };
+            return launch_in_background(stdin_text);
+        }
+    }
+
     let (renderer, mut body) = render_standalone(&settings, &markdown, &dir);
     if let Source::File(path) = &source
         && let Some(delim) = tables::delimiter(path)
@@ -585,7 +612,7 @@ fn run(cli: Cli) -> Result<()> {
     }
 
     if let Some(output) = &cli.output {
-        let page = settings.page(title, settings.export_theme());
+        let page = with_meta(settings.page(title, settings.export_theme()), &source);
         let html = renderer.wrap_page(&body, &page);
         if output.as_os_str() == "-" {
             std::io::stdout().write_all(html.as_bytes())?;
@@ -600,30 +627,11 @@ fn run(cli: Cli) -> Result<()> {
         // PDFs are always light: they're for printing and sharing.
         let page = PageOptions {
             base_href: Some(dir_url(&dir)),
-            ..settings.page(title, Theme::Light)
+            ..with_meta(settings.page(title, Theme::Light), &source)
         };
         pdf::print(&renderer.wrap_page(&body, &page), out)?;
         say(&format!("Wrote {}", out.display()));
         return Ok(());
-    }
-
-    if watch {
-        return serve(&cli, &settings, &source, goto.map(|(_, line)| line));
-    }
-
-    // Opening a page: a viewer serves it in the background (so it has
-    // everything a served page has: settings, live reload…) and stops when
-    // the window is closed. We return once it's serving.
-    if !cli.no_open && !cli.background {
-        let stdin_text = match &source {
-            Source::Text {
-                name: "stdin",
-                text,
-                ..
-            } => Some(text.as_str()),
-            _ => None,
-        };
-        return launch_in_background(stdin_text);
     }
 
     // --no-open: write a self-contained page to the temp dir.
@@ -633,7 +641,10 @@ fn run(cli: Cli) -> Result<()> {
         ui: true,
         sidebar: prefs.sidebar.clone(),
         hide_word_count: !prefs.word_count.unwrap_or(settings.word_count),
-        ..settings.page(title.clone(), settings.viewing_theme(&prefs))
+        ..with_meta(
+            settings.page(title.clone(), settings.viewing_theme(&prefs)),
+            &source,
+        )
     };
     let key = match &source {
         Source::File(path) => path.clone(),
@@ -1148,6 +1159,14 @@ fn served_page(settings: &Settings) -> PageOptions {
         ui: true,
         custom_css: None,
         ..settings.page(String::new(), Theme::Auto)
+    }
+}
+
+/// A page of a file gets the footer saying when it last changed in git.
+fn with_meta(page: PageOptions, source: &Source) -> PageOptions {
+    match source {
+        Source::File(path) => page.with_meta_for(path, false),
+        _ => page,
     }
 }
 

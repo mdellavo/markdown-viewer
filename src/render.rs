@@ -89,6 +89,27 @@ pub struct PageOptions {
     pub settings: bool,
     /// The viewer can show the page's Markdown source.
     pub source: bool,
+    /// Show when the file last changed in git (the `last_updated` setting).
+    pub last_updated: bool,
+    /// The GitHub repository from the settings file, for "Edit on GitHub".
+    pub github_repo: Option<String>,
+    /// The footer's details, for a file in git.
+    pub page_meta: Option<crate::pagemeta::PageMeta>,
+}
+
+impl PageOptions {
+    /// With the footer details for `file`, if they're wanted and it's in git.
+    pub fn with_meta_for(mut self, file: &std::path::Path, cached: bool) -> Self {
+        if self.last_updated && file.is_file() {
+            let repo = self.github_repo.as_deref();
+            self.page_meta = if cached {
+                crate::pagemeta::cached(file, repo)
+            } else {
+                crate::pagemeta::for_file(file, repo)
+            };
+        }
+        self
+    }
 }
 
 /// Files of a static site, under `_mdv/` at its root.
@@ -541,7 +562,54 @@ impl Renderer {
     /// Wrap an already-rendered body fragment in a full HTML document.
     pub fn wrap_page(&self, body: &str, page: &PageOptions) -> String {
         let nonce = nonce();
-        let mut out = String::with_capacity(body.len() + 64 * 1024);
+        let mut out = self.page_head(page, &nonce, Some(body));
+        out.push_str(&self.page_rest(body, page, &nonce));
+        out
+    }
+
+    /// The start of a page whose body isn't rendered yet, to send at once
+    /// (served pages stream: the browser shows the page's colours and a
+    /// "Rendering…" note instead of a blank window), and its nonce for
+    /// `page_finish`.
+    pub fn page_start(&self, page: &PageOptions) -> (String, String) {
+        let nonce = nonce();
+        let mut out = self.page_head(page, &nonce, None);
+        // Shown only if rendering takes a moment (it fades in after 150 ms),
+        // and hidden by `page_finish`.
+        let _ = writeln!(
+            out,
+            "<div class=\"mdv-loading\" role=\"status\"><style>\
+             .mdv-loading {{ position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; \
+             gap: 10px; font: 14px -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif; \
+             color: var(--fgColor-muted, #59636e); opacity: 0; animation: mdv-loading-in .2s .15s forwards; }}\
+             .mdv-loading span {{ width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; \
+             border-right-color: transparent; animation: mdv-spin .8s linear infinite; }}\
+             @keyframes mdv-loading-in {{ to {{ opacity: 1; }} }} @keyframes mdv-spin {{ to {{ transform: rotate(1turn); }} }}\
+             </style><span></span>Rendering {}…</div>",
+            escape_text(&page.title)
+        );
+        (out, nonce)
+    }
+
+    /// The rest of a page begun with `page_start`.
+    pub fn page_finish(&self, body: &str, page: &PageOptions, nonce: &str) -> String {
+        let mut out = String::from("<style>.mdv-loading { display: none !important; }</style>\n");
+        // The start assumed one h1 at most when numbering headings.
+        if page.number_headings && body.matches("<h1").count() > 1 {
+            let _ = writeln!(
+                out,
+                "<script nonce=\"{nonce}\">document.documentElement.setAttribute(\"data-mdv-number\", \"h1\")</script>"
+            );
+        }
+        out.push_str(&self.page_rest(body, page, nonce));
+        out
+    }
+
+    /// The page up to `<body>`. `body`, when known, decides how headings
+    /// are numbered and whether math styles are inlined.
+    fn page_head(&self, page: &PageOptions, nonce: &str, body: Option<&str>) -> String {
+        let body = body.unwrap_or("");
+        let mut out = String::with_capacity(64 * 1024);
         let theme = page.theme.as_str();
         let sidebar = escape_attr(page.sidebar.as_deref().unwrap_or(""));
         let fixed = if page.fixed_theme {
@@ -624,9 +692,7 @@ impl Renderer {
         if page.ui && !shared {
             out.push_str(UI_CSS);
         }
-        let has_mermaid = body.contains(MERMAID_MARKER);
-        let has_math = body.contains(MATH_MARKER);
-        if has_math && !page.served && page.site_root.is_none() {
+        if body.contains(MATH_MARKER) && !page.served && page.site_root.is_none() {
             out.push_str(KATEX_CSS);
         }
         out.push_str("</style>\n");
@@ -635,9 +701,22 @@ impl Renderer {
         if let Some(css) = &page.custom_css {
             let _ = write!(out, "<style>\n{}\n</style>\n", css.replace("</", "<\\/"));
         }
-        out.push_str("</head>\n<body>\n<article class=\"markdown-body\">\n");
+        out.push_str("</head>\n<body>\n");
+        out
+    }
+
+    /// The page from the article on: the body, the footer and the scripts.
+    fn page_rest(&self, body: &str, page: &PageOptions, nonce: &str) -> String {
+        let mut out = String::with_capacity(body.len() + 16 * 1024);
+        let shared = page.served && page.site_root.is_none();
+        let has_mermaid = body.contains(MERMAID_MARKER);
+        let has_math = body.contains(MATH_MARKER);
+        out.push_str("<article class=\"markdown-body\">\n");
         out.push_str(body);
         out.push_str("</article>\n");
+        if let Some(meta) = &page.page_meta {
+            out.push_str(&crate::pagemeta::footer(meta));
+        }
         // The UI goes first so a remembered theme is applied before
         // diagrams are drawn.
         let site = page.site_root.as_deref().map(escape_attr);

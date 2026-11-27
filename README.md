@@ -234,7 +234,14 @@ cargo install markdown-viewer-rs     # build from source (see Building)
   libraries load; diagrams on screen are drawn first, and drawings are
   remembered by the browser, so reloading or coming back shows them at
   once. When serving, the first page is rendered while the browser opens,
-  and unchanged code blocks and drawings aren't redone on each save.
+  and unchanged code blocks and drawings aren't redone on each save (nor
+  is a page whose file was saved without changes). Opening a file starts
+  the browser before the page is rendered, so the window comes up in about
+  50 ms whatever the file's size, with a "Rendering…" note until a large
+  page is ready.
+- A file committed to git says at the foot of its page when it last
+  changed and by whom, with an **Edit on GitHub** link when its remote is
+  on GitHub (`last_updated = false` in the settings file turns this off).
 - Watch mode (`--watch`) updates the page whenever you save:
   - It scrolls to the first thing you changed and briefly highlights it.
     Otherwise your scroll position is kept.
@@ -513,6 +520,7 @@ recent = false          # don't remember opened files for the Recent page
 word_count = false      # hide the word count and reading time (w toggles it)
 exit_when_closed = false  # keep serving after the window closes (until Ctrl-C)
 source_highlighting = false  # show the source view (v) without highlighting
+last_updated = false    # no "Last updated … / Edit on GitHub" footer
 ```
 
 Unknown keys are reported as errors, so typos don't go unnoticed. Set
@@ -939,11 +947,12 @@ app and the Linux desktop entry are thin launchers for the same command.
   finder over file names, headings and aliases.
 - [ ] Command palette (<kbd>⌘</kbd>/<kbd>Ctrl</kbd>-<kbd>K</kbd>): one
   search over files, headings and viewer commands.
-- [ ] Hover previews of linked notes and headings, and of footnotes.
+- [ ] Hover previews of linked notes and headings, and of footnotes, and
+  tooltips showing where a web link goes.
 - [ ] Graph view: how notes link, for the whole folder or this note's
-  neighbours.
+  neighbours, and a heatmap of the most linked notes.
 - [ ] Unlinked mentions: notes that name this one without linking to it.
-- [ ] Bookmarks for notes and headings, as a sidebar tab.
+- [ ] Bookmarks for notes, headings and searches, as a sidebar tab.
 - [ ] A sticky breadcrumb of the headings you're under, while scrolling.
 - [ ] Recently changed: the folder's files by modification time, as a
   sidebar tab.
@@ -958,6 +967,13 @@ app and the Linux desktop entry are thin launchers for the same command.
 - [ ] Open a random note (Obsidian's "random note"), for rediscovering a
   vault.
 - [ ] Reopen last session: the files you had open, at the same places.
+- [ ] Note hierarchies from dotted names (`project.ideas.md`) shown as a
+  tree, and placeholder notes for links to notes not written yet (as in
+  Dendron and Foam).
+- [ ] Search hits highlighted on the page a search result opens.
+- [ ] Tags: nested tags (`#projects/garden`) as a tree in the Tags tab,
+  tag search in the file finder (`#tag`), and the tag chips of a folder
+  listing's files.
 
 **Obsidian and plugin syntax**
 
@@ -975,6 +991,11 @@ app and the Linux desktop entry are thin launchers for the same command.
   `![[song.mp3]]` as players, and `![[file.csv]]` and `![[part.stl]]`
   drawn as they are with `![](…)`.
 - [ ] Excalidraw drawings (`.excalidraw`, `.excalidraw.md`).
+- [ ] Flashcards: review `#card` notes and `Q::A` lines with spaced
+  repetition, as in Logseq and Obsidian's plugins (only the review
+  schedule is saved, not the notes).
+- [ ] Fold nested list items (outliner style, as in Logseq), remembered
+  per file.
 - [ ] Inline footnotes (`^[a note right here]`) and `==highlights==`
   outside Obsidian mode too.
 - [ ] Callout options: `> [!note|wide]` metadata and custom callout types
@@ -995,6 +1016,8 @@ app and the Linux desktop entry are thin launchers for the same command.
   extension.
 - [ ] Inline AsciiMath in running text (not only blocks), and V3000
   molfiles.
+- [ ] 3D models with their colours and materials (glTF, 3MF, OBJ with
+  `.mtl`), and molecules as ribbons for proteins.
 - [ ] Redraw a page when a file it shows as an image changes (models, maps,
   molecules, calendars), not only when the Markdown is saved.
 - [ ] Other Markdown dialects' extras: MkDocs admonitions (`!!! note`),
@@ -1007,6 +1030,11 @@ app and the Linux desktop entry are thin launchers for the same command.
 - [ ] CriticMarkup review marks (`{++added++}`, `{--removed--}`,
   `{>>comment<<}`), shown like the rendered diff.
 - [ ] Page breaks for printing and PDFs (`<!-- pagebreak -->`).
+- [ ] Code annotations: `# (1)` markers in code blocks that open a note,
+  as in MkDocs Material.
+- [ ] Collapsible code blocks (```` ```python fold ````) and tab sets, as in
+  Quarto.
+- [ ] GitLab's `[[_TOC_]]` table of contents marker.
 - [ ] More themes: GitHub's dark dimmed and high-contrast variants, and a
   sepia reading theme.
 
@@ -1033,6 +1061,8 @@ app and the Linux desktop entry are thin launchers for the same command.
 - [ ] MusicXML sheet music.
 - [ ] More diagrams through installed programs, like Graphviz: TikZ (via
   LaTeX), Mscgen, blockdiag/seqdiag, Structurizr and draw.io files.
+- [ ] Kroki diagram types through a Kroki server you run yourself (pages
+  stay offline otherwise).
 - [ ] Calendar times in your own time zone, and a month grid view.
 
 **Git**
@@ -1058,6 +1088,12 @@ app and the Linux desktop entry are thin launchers for the same command.
   scrolling together.
 - [ ] Speaker notes and a presenter view (timer, next slide) for
   presentation mode.
+- [ ] Marp-style slide directives (`<!-- paginate: true -->`, a class or
+  background per slide), slide themes, step-by-step reveals, and an
+  overview grid of all slides.
+- [ ] Keyword highlighting from a word list, and word-frequency and
+  repetition reports (as in Marked 2).
+- [ ] A word count target, with progress in the toolbar.
 - [ ] Fold a section by clicking its heading in the page, remembered per
   file.
 - [ ] Mark every block that changed on save, not only the first.
@@ -1067,6 +1103,23 @@ app and the Linux desktop entry are thin launchers for the same command.
   section in the contents.
 - [ ] Proofing: highlight doubled words, passive voice and your own list
   of words to watch for.
+
+**Speed**
+
+- [ ] Keep highlighted code and drawings on disk between runs (keyed by
+  their text and the version), so a file's first page in a new viewer is
+  as quick as a re-render (about 3 ms instead of 90–180 ms).
+- [ ] Render the other files in a folder in the background, and fetch a
+  linked page when the pointer rests on its link, so moving between
+  files is instant.
+- [ ] Very large files: render the visible part first, then the rest.
+- [ ] Share drawn diagrams between windows and with exports: the page
+  sends what Mermaid and the chart libraries drew back to the viewer,
+  which keeps it for other pages, `-o` and static sites.
+- [ ] Lighter exports: `-o` pages with diagrams drawn ahead of time as SVG
+  (through a headless browser), so they don't carry 5 MB of Mermaid.
+- [ ] Load the highlighter's grammars for the languages a folder uses in
+  the background at startup.
 
 **Working with an editor**
 
@@ -1082,7 +1135,10 @@ app and the Linux desktop entry are thin launchers for the same command.
   it's installed.
 - [ ] PDF options: paper size, margins, page numbers, header and footer, a
   cover page from the front matter, and bookmarks from the headings.
-- [ ] Slides to PDF, one slide per page.
+- [ ] Slides to PDF, one slide per page, and to PowerPoint.
+- [ ] A print-all page: a folder joined into one document, in the order
+  of a `SUMMARY.md` (as in mdBook) or the file names, to print or save as
+  one PDF.
 - [ ] Export from the viewer: a toolbar menu for PDF, HTML or rich text.
 - [ ] `-o` with local images, video and audio embedded too (today they're
   linked), so the page can be emailed as one attachment.
@@ -1094,6 +1150,8 @@ app and the Linux desktop entry are thin launchers for the same command.
 - [ ] Search in exported sites, from an index written at export time
   (working from disk too).
 - [ ] `-o site/ --watch`: rebuild only the changed pages on save.
+- [ ] Versioned sites: a version picker for docs exported from several git
+  tags (as Docusaurus does).
 - [ ] Site navigation: page order and titles from front matter,
   previous/next links and a `sitemap.xml`.
 
@@ -1108,12 +1166,20 @@ app and the Linux desktop entry are thin launchers for the same command.
   preview handler for Windows Explorer.
 - [ ] A native window (WKWebView on macOS): real menus and a remembered
   window size, whatever your default browser is.
+- [ ] Optionally gather pages as tabs in one window (`open = "tabs"`),
+  keeping the tab-less app window as the default.
+- [ ] A browser per file type or folder in the settings file, and a
+  toolbar button to open the page in your everyday browser.
 - [ ] The VS Code extension on the Marketplace and Open VSX.
 - [ ] A Nix flake, a winget package, a Flatpak, and a Windows installer
   that registers `.md` files.
 - [ ] A GitHub Action and a pre-commit hook for `--check-links` and
   `--lint`.
 - [ ] An optional update check, off by default.
+- [ ] A terminal mode (`--terminal`): read a file in the terminal, with
+  paging, links and search (as Glow and Frogmouth do).
+- [ ] A browser extension that renders `.md` files opened directly in the
+  browser (`file://` and raw GitHub links) the same way.
 
 ## License
 
