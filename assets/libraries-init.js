@@ -233,6 +233,18 @@
       if (staging.firstChild && staging.firstChild.tagName === "FIGURE") figs[i].replaceWith(staging.firstChild);
     }
   }
+  // Before the first paint: drawings this browser kept go in at once, so
+  // the page doesn't move when they arrive (drawBlock finishes without
+  // waiting for them).
+  function drawRemembered(root) {
+    kinds.forEach(function (kind) {
+      root.querySelectorAll("pre.mdv-lib." + kind.cls).forEach(function (pre) {
+        if (stored(keyOf(kind, pre.textContent))) drawBlock(kind, pre);
+      });
+    });
+  }
+  try { drawRemembered(document.querySelector(".markdown-body")); } catch (e) { console.error("markdown-viewer:", e); }
+
   (window.mdvRetheme = window.mdvRetheme || []).push(retheme);
   (window.mdvEnhancers = window.mdvEnhancers || []).push(render);
   (window.mdvInitial = window.mdvInitial || []).push(afterPaint().then(function () {

@@ -6,6 +6,19 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Faster and steadier pages: diagrams and charts the browser remembers are
+  shown before the page first appears instead of just after.
+- Local images in PNG, GIF, JPEG and WebP get their size from the file, so
+  the page doesn't move down as each one loads.
+- Long pages (150 blocks or more) skip laying out and drawing what's off
+  screen until you scroll near it.
+- Saves show up sooner: about 40 ms from save to page instead of 70.
+- Moving between pages in the viewer fades (Chromium browsers; not with
+  reduced motion), and the reading position is restored again once
+  diagrams have drawn.
+
 ## [0.15.0] - 2026-11-27
 
 ### Added

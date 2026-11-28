@@ -12,9 +12,13 @@
   var hasFiles = served || siteRoot !== null;
   var currentDoc = script.dataset.doc || "";
   var root = document.documentElement;
+  var LONG_PAGE = 150;
   // For styles that only make sense with this script (the STL drag hint).
   root.setAttribute("data-mdv-ui", "");
   var body = document.querySelector(".markdown-body");
+  // Long pages: blocks off screen aren't laid out or drawn until they come
+  // near (content-visibility in ui.css), so they open and resize quickly.
+  if (body && body.childElementCount >= LONG_PAGE) root.setAttribute("data-mdv-long", "");
 
   // Icons: Primer Octicons (MIT), see assets/LICENSE-octicons.
   var ICONS = {
@@ -1294,6 +1298,13 @@
   // Diagrams and math change the page's height as they render, so restore
   // again shortly after, unless the reader has started scrolling.
   restorePosition();
+  // And once the page's own drawings are in (their scripts come after
+  // this one, so wait for the page to finish loading them).
+  document.addEventListener("DOMContentLoaded", function () {
+    Promise.all(window.mdvInitial || []).then(function () {
+      if (!userScrolled) restorePosition();
+    });
+  });
   [400, 1200].forEach(function (ms) {
     setTimeout(function () { if (!userScrolled) restorePosition(); }, ms);
   });

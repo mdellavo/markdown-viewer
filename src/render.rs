@@ -524,6 +524,7 @@ impl Renderer {
         html = crate::embeds::media(html);
         if let Some(dir) = dir {
             html = crate::embeds::finish(html, dir);
+            html = crate::embeds::sizes(html, dir);
         }
         html = crate::toc::finish(html);
         if self.render.obsidian

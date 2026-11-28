@@ -239,6 +239,12 @@ cargo install markdown-viewer-rs     # build from source (see Building)
   the browser before the page is rendered, so the window comes up in about
   50 ms whatever the file's size, with a "Rendering…" note until a large
   page is ready.
+- Steady while it loads: diagrams the browser remembers are in place
+  before the page first shows, local images keep their space before they
+  load (their size is read from the file), and on long pages the parts
+  off screen aren't laid out until you scroll near them. Saves reach the
+  page in about 40 ms, and moving between pages fades instead of
+  flashing.
 - A file committed to git says at the foot of its page when it last
   changed and by whom, with an **Edit on GitHub** link when its remote is
   on GitHub (`last_updated = false` in the settings file turns this off).

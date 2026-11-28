@@ -185,6 +185,7 @@ in `@media print`. `@page` sets the paper size and margins.
 | `.mdv-molecule`, `.mdv-molecule-3d`, `.mdv-mol-bond`, `.mdv-mol-label`, `.mdv-mol-stick`, `circle.mdv-el-O` (and other elements) | molecules: structure bonds and atom labels, and 3D sticks and atoms by element |
 | `.mdv-calendar`, `.mdv-cal-month`, `.mdv-cal-day`, `.mdv-cal-time`, `.mdv-cal-zone`, `.mdv-cal-note`, `.mdv-cal-desc` | a calendar's table, month rows, dates, times, time zones, places and descriptions |
 | `video.mdv-video`, `audio.mdv-audio` | players for video and audio linked like images |
+| `img[data-mdv-sized]` | a local image given its file's `width` and `height` (styled `height: auto`, so it keeps its proportions) |
 | `abbr[title]` | an abbreviation |
 | `dl`, `dt`, `dd` | a definition list |
 | `.math-display`, `.math-inline` | math |
@@ -193,6 +194,7 @@ in `@media print`. `@page` sets the paper size and margins.
 | `.mdv-wikilink-missing` | a wiki link to a note that doesn't exist |
 | `.task-list-item`, `.task-list-item-checkbox` | task list items |
 | `:root[data-mdv-number] .markdown-body h2::before` | heading numbers (`--number-headings`) |
+| `:root[data-mdv-long]` | a long page, whose top-level blocks use `content-visibility: auto` (they're laid out when near the screen, and contain their content: set `content-visibility: visible` on a block whose content should overflow it) |
 
 The viewer's UI (`.mdv-toolbar`, `.mdv-sidebar` and other `.mdv-ui`
 elements) can be styled too, but its structure may change between

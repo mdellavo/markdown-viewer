@@ -290,6 +290,7 @@ const CODE_AND_TOC: &str = "\
 .markdown-body :is(.mdv-cal-zone, .mdv-cal-note, .mdv-cal-desc) { color: var(--fgColor-muted); font-size: 12px; }\n\
 .markdown-body :is(video.mdv-video, audio.mdv-audio) { max-width: 100%; vertical-align: middle; }\n\
 .markdown-body video.mdv-video { border-radius: 6px; max-height: 70vh; }\n\
+.markdown-body img[data-mdv-sized] { height: auto; }\n\
 @media print { .markdown-body .mdv-mol-hint { display: none !important; } }\n\
 @media print { .markdown-body .mdv-diagram { break-inside: avoid; } }\n\
 .mdv-page-meta { box-sizing: border-box; max-width: 980px; margin: 0 auto; padding: 0 45px 32px; display: flex; \

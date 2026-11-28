@@ -83,11 +83,36 @@
     return loading;
   }
 
+  function keyFor(t, pre) { return "mermaid " + version + " " + t + "\n" + pre.textContent; }
+  function place(pre, svg, code) {
+    var div = document.createElement("div");
+    div.className = "mermaid";
+    div.innerHTML = svg;
+    // Keep the source line, for click-to-source and reading positions.
+    if (pre.hasAttribute("data-sourcepos")) div.setAttribute("data-sourcepos", pre.getAttribute("data-sourcepos"));
+    sources.set(div, code);
+    pre.replaceWith(div);
+  }
+
+  // Before the first paint: diagrams this browser has drawn before go in
+  // at once, so the page doesn't move when they arrive. (Fetching the
+  // library early for the others, with a preload, made them slower.)
+  function drawRemembered(root) {
+    var t = theme();
+    Array.prototype.forEach.call(root.querySelectorAll("pre.mermaid"), function (pre) {
+      var key = keyFor(t, pre);
+      var svg = cache.get(key) || stored(key);
+      if (!svg) return;
+      cache.set(key, svg);
+      place(pre, svg, pre.textContent);
+    });
+  }
+
   async function render(root) {
     var blocks = Array.prototype.slice.call(root.querySelectorAll("pre.mermaid"));
     if (!blocks.length) return;
     var t = theme();
-    var keyOf = function (pre) { return "mermaid " + version + " " + t + "\n" + pre.textContent; };
+    var keyOf = function (pre) { return keyFor(t, pre); };
     var known = function (pre) {
       var key = keyOf(pre);
       if (!cache.has(key)) {
@@ -128,13 +153,7 @@
           continue;
         }
       }
-      var div = document.createElement("div");
-      div.className = "mermaid";
-      div.innerHTML = svg;
-      // Keep the source line, for click-to-source and reading positions.
-      if (pre.hasAttribute("data-sourcepos")) div.setAttribute("data-sourcepos", pre.getAttribute("data-sourcepos"));
-      sources.set(div, code);
-      pre.replaceWith(div);
+      place(pre, svg, code);
     }
   }
 
@@ -161,6 +180,7 @@
   (window.mdvRetheme = window.mdvRetheme || []).push(retheme);
 
   (window.mdvEnhancers = window.mdvEnhancers || []).push(render);
+  try { drawRemembered(document.querySelector(".markdown-body")); } catch (e) { console.error("markdown-viewer:", e); }
   // live.js waits for these before comparing updates with the page.
   (window.mdvInitial = window.mdvInitial || []).push(afterPaint().then(function () {
     return render(document.querySelector(".markdown-body"));

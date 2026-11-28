@@ -272,6 +272,14 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   and served pages link `/__mdv/page.css`, `/__mdv/ui.css` and
   `/__mdv/ui.js` (versioned, kept by the browser) instead of inlining them.
   live.js prepares content in `<template>`s so media isn't fetched twice.
+  The init scripts put remembered drawings in synchronously
+  (`drawRemembered`, before the first paint). Don't preload the libraries:
+  a preload made the first Mermaid drawing about 50 ms slower, and holds
+  the page's load event. `embeds::sizes` gives local images their
+  `width`/`height` from the file header. ui.js marks pages of 150+ blocks
+  `data-mdv-long`, and ui.css gives their blocks (not headings, whose link
+  icons would be clipped) `content-visibility: auto`. docs.rs debounces
+  file events by only 20 ms.
 - `window.mdvInitial`: promises for the page's own first render;
   `live.js` waits for them before comparing, and never jumps on the first
   sync after connecting.

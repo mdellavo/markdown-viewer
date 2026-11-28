@@ -292,6 +292,23 @@ html.mdv-sidebar-open .mdv-sidebar { transform: none; box-shadow: 0 0 24px rgba(
 .mdv-setting-rules { display: flex; flex-direction: column; gap: 2px; }
 .mdv-setting-rules label { display: flex; align-items: center; gap: 4px; }
 
+/* Long pages (data-mdv-long, from ui.js): blocks off screen are skipped
+   until they come near; sizes are guesses until a block has been seen
+   (then remembered). Not headings, whose link icons sit outside them, and
+   containment would clip. */
+:root[data-mdv-long] .markdown-body > :is(p, ul, ol, pre, table, blockquote, dl, details, figure, div) {
+  content-visibility: auto; contain-intrinsic-size: auto 160px;
+}
+:root[data-mdv-long] .markdown-body > p { contain-intrinsic-size: auto 3.5em; }
+@media print { :root[data-mdv-long] .markdown-body > * { content-visibility: visible; } }
+
+/* Moving between pages fades instead of switching at once (same-origin
+   navigations, Chromium). */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition { navigation: auto; }
+}
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .15s; }
+
 /* Source view (v): the highlighted Markdown in place of the page. */
 .mdv-source-view { display: none; }
 /* The page keeps its layout while hidden (content-visibility, not

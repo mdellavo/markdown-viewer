@@ -173,6 +173,156 @@ fn draw_paragraph(p: &str, dir: &Path) -> Option<String> {
     }))
 }
 
+/// Local images get their size (`width`, `height` and `data-mdv-sized`,
+/// which the page styles keep in proportion), so the page holds their
+/// space while they load instead of moving down when each arrives. Only
+/// images without a size of their own.
+pub fn sizes(html: String, dir: &Path) -> String {
+    if !html.contains("<img ") {
+        return html;
+    }
+    let mut out = String::with_capacity(html.len() + 256);
+    let mut rest = html.as_str();
+    while let Some(i) = rest.find("<img ") {
+        out.push_str(&rest[..i]);
+        let tag_end = rest[i..].find('>').map_or(rest.len(), |e| i + e + 1);
+        let tag = &rest[i..tag_end];
+        let size = (|| {
+            if attr(tag, "width").is_some() || attr(tag, "height").is_some() {
+                return None;
+            }
+            let src = attr(tag, "src")?;
+            if src.contains("://") || src.starts_with('/') || src.starts_with("data:") {
+                return None;
+            }
+            let path = src.split(['?', '#']).next()?;
+            let path = percent_decode_str(path).decode_utf8().ok()?;
+            image_size(&dir.join(path.as_ref()))
+        })();
+        match size {
+            Some((w, h)) => {
+                out.push_str("<img");
+                let _ = std::fmt::Write::write_fmt(
+                    &mut out,
+                    format_args!(" width=\"{w}\" height=\"{h}\" data-mdv-sized"),
+                );
+                out.push_str(&tag[4..]);
+            }
+            None => out.push_str(tag),
+        }
+        rest = &rest[tag_end..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// The pixel size of a PNG, GIF, JPEG or WebP file, from its header.
+fn image_size(file: &Path) -> Option<(u32, u32)> {
+    use std::io::Read;
+    let mut head = Vec::new();
+    // JPEG sizes come after any metadata, which is usually well under this.
+    std::fs::File::open(file)
+        .ok()?
+        .take(256 * 1024)
+        .read_to_end(&mut head)
+        .ok()?;
+    let size = header_size(&head)?;
+    (size.0 > 0 && size.1 > 0).then_some(size)
+}
+
+fn header_size(b: &[u8]) -> Option<(u32, u32)> {
+    let be16 = |i: usize| Some(u16::from_be_bytes(b.get(i..i + 2)?.try_into().ok()?) as u32);
+    let le16 = |i: usize| Some(u16::from_le_bytes(b.get(i..i + 2)?.try_into().ok()?) as u32);
+    let be32 = |i: usize| Some(u32::from_be_bytes(b.get(i..i + 4)?.try_into().ok()?));
+    let le24 = |i: usize| {
+        let x = b.get(i..i + 3)?;
+        Some(x[0] as u32 | (x[1] as u32) << 8 | (x[2] as u32) << 16)
+    };
+    if b.starts_with(b"\x89PNG\r\n\x1a\n") && b.get(12..16)? == b"IHDR" {
+        return Some((be32(16)?, be32(20)?));
+    }
+    if b.starts_with(b"GIF8") {
+        return Some((le16(6)?, le16(8)?));
+    }
+    if b.starts_with(b"RIFF") && b.get(8..12)? == b"WEBP" {
+        return match b.get(12..16)? {
+            b"VP8 " => Some((le16(26)? & 0x3fff, le16(28)? & 0x3fff)),
+            b"VP8L" => {
+                let x = u32::from_le_bytes(b.get(21..25)?.try_into().ok()?);
+                Some(((x & 0x3fff) + 1, ((x >> 14) & 0x3fff) + 1))
+            }
+            b"VP8X" => Some((le24(24)? + 1, le24(27)? + 1)),
+            _ => None,
+        };
+    }
+    if b.starts_with(&[0xff, 0xd8]) {
+        let mut i = 2;
+        loop {
+            while *b.get(i)? != 0xff {
+                i += 1;
+            }
+            while *b.get(i)? == 0xff {
+                i += 1;
+            }
+            let marker = *b.get(i)?;
+            i += 1;
+            if matches!(marker, 0xd8 | 0x01 | 0xd0..=0xd7) {
+                continue;
+            }
+            let len = be16(i)? as usize;
+            // Start of frame (not DHT 0xc4, JPG 0xc8 or DAC 0xcc).
+            if matches!(marker, 0xc0..=0xcf) && !matches!(marker, 0xc4 | 0xc8 | 0xcc) {
+                let (h, w) = (be16(i + 3)?, be16(i + 5)?);
+                // EXIF orientation may turn the picture, which browsers
+                // follow; leave those unsized rather than guess.
+                return (!rotated(&b[..i])).then_some((w, h));
+            }
+            if marker == 0xd9 || len < 2 {
+                return None;
+            }
+            i += len;
+        }
+    }
+    None
+}
+
+/// Whether a JPEG's EXIF data says the picture is turned a quarter.
+fn rotated(b: &[u8]) -> bool {
+    let Some(at) = b.windows(6).position(|w| w == b"Exif\0\0") else {
+        return false;
+    };
+    let t = &b[at + 6..];
+    let little = t.starts_with(b"II");
+    let u16_at = |i: usize| {
+        t.get(i..i + 2).map(|x| {
+            if little {
+                u16::from_le_bytes([x[0], x[1]])
+            } else {
+                u16::from_be_bytes([x[0], x[1]])
+            }
+        })
+    };
+    let u32_at = |i: usize| {
+        t.get(i..i + 4).map(|x| {
+            let x = [x[0], x[1], x[2], x[3]];
+            if little {
+                u32::from_le_bytes(x)
+            } else {
+                u32::from_be_bytes(x)
+            }
+        })
+    };
+    let Some(ifd) = u32_at(4) else { return false };
+    let ifd = ifd as usize;
+    let Some(count) = u16_at(ifd) else {
+        return false;
+    };
+    (0..count as usize).any(|n| {
+        let e = ifd + 2 + n * 12;
+        u16_at(e) == Some(0x0112) && u16_at(e + 8).is_some_and(|o| (5..=8).contains(&o))
+    })
+}
+
 /// An attribute's value, with comrak's escaping undone.
 fn attr(tag: &str, name: &str) -> Option<String> {
     let key = format!(" {name}=\"");
@@ -190,6 +340,39 @@ fn attr(tag: &str, name: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn local_images_get_their_size() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        let mut png = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+        png.extend(640u32.to_be_bytes());
+        png.extend(480u32.to_be_bytes());
+        std::fs::write(d.join("a b.png"), &png).unwrap();
+        std::fs::write(d.join("g.gif"), b"GIF89a\x20\x00\x10\x00").unwrap();
+        // SOI, an APP0 segment, then a baseline frame of 300x200.
+        let jpeg = [
+            0xff, 0xd8, 0xff, 0xe0, 0, 4, 0, 0, 0xff, 0xc0, 0, 11, 8, 0, 200, 1, 44, 3,
+        ];
+        std::fs::write(d.join("p.jpg"), jpeg).unwrap();
+        let mut webp = b"RIFF\0\0\0\0WEBPVP8X\0\0\0\0\0\0\0\0".to_vec();
+        webp.extend([99, 0, 0, 49, 0, 0]);
+        std::fs::write(d.join("w.webp"), &webp).unwrap();
+        let html = "<p><img src=\"a%20b.png\" alt=\"A\" /> <img src=\"g.gif\" alt=\"\" />\
+                    <img src=\"p.jpg?x\" alt=\"\" /><img src=\"w.webp\" alt=\"\" />\
+                    <img src=\"g.gif\" width=\"5\" alt=\"\" /><img src=\"missing.png\" alt=\"\" />\
+                    <img src=\"https://x.test/g.gif\" alt=\"\" /></p>";
+        let out = sizes(html.into(), d);
+        assert_eq!(
+            out,
+            "<p><img width=\"640\" height=\"480\" data-mdv-sized src=\"a%20b.png\" alt=\"A\" /> \
+             <img width=\"32\" height=\"16\" data-mdv-sized src=\"g.gif\" alt=\"\" />\
+             <img width=\"300\" height=\"200\" data-mdv-sized src=\"p.jpg?x\" alt=\"\" />\
+             <img width=\"100\" height=\"50\" data-mdv-sized src=\"w.webp\" alt=\"\" />\
+             <img src=\"g.gif\" width=\"5\" alt=\"\" /><img src=\"missing.png\" alt=\"\" />\
+             <img src=\"https://x.test/g.gif\" alt=\"\" /></p>"
+        );
+    }
 
     #[test]
     fn video_and_audio_become_players() {

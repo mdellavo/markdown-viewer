@@ -1535,3 +1535,77 @@ fn tag_chips_open_the_tags_tab() {
         1
     );
 }
+
+#[test]
+fn long_pages_open_quickly_and_keep_their_shape() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("long.md");
+    // A valid 4×2 PNG (sized from its header, before it loads).
+    let png = [
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49, 0x48, 0x44, 0x52, 0,
+        0, 0, 4, 0, 0, 0, 2, 8, 6, 0, 0, 0,
+    ];
+    std::fs::write(dir.path().join("wide.png"), png).unwrap();
+    let mut text =
+        String::from("# Long\n\n```mermaid\ngraph LR\n  A --> B\n```\n\n![wide](wide.png)\n\n");
+    for i in 0..400 {
+        text.push_str(&format!("Paragraph {i}.\n\n"));
+    }
+    std::fs::write(&md, &text).unwrap();
+    let server = serve(&md, &[]);
+    let url = format!("http://{}/", server.addr);
+    let tab = open(&browser, &url);
+    until(
+        &tab,
+        "document.querySelector('div.mermaid svg')",
+        "the diagram",
+    );
+    let shape = js(
+        &tab,
+        "const ps = document.querySelectorAll('.markdown-body > p');
+         const img = document.querySelector('img[alt=wide]');
+         return JSON.stringify([document.documentElement.hasAttribute('data-mdv-long'),
+           getComputedStyle(ps[ps.length - 1]).contentVisibility,
+           img.getAttribute('width'), img.getAttribute('height')]);",
+    );
+    assert_eq!(
+        shape.as_str().unwrap(),
+        r#"[true,"auto","4","2"]"#,
+        "long page skips blocks off screen, image sized"
+    );
+    // Opened again, the remembered diagram is in place before the page's
+    // scripts finish, not drawn after it shows.
+    tab.call_method(
+        headless_chrome::protocol::cdp::Page::AddScriptToEvaluateOnNewDocument {
+            source: "document.addEventListener('DOMContentLoaded', () => {
+                   window.__atLoad = [document.querySelectorAll('pre.mermaid').length,
+                                      document.querySelectorAll('div.mermaid svg').length];
+                 });"
+            .into(),
+            world_name: None,
+            include_command_line_api: None,
+            run_immediately: None,
+        },
+    )
+    .unwrap();
+    tab.navigate_to(&url)
+        .unwrap()
+        .wait_until_navigated()
+        .unwrap();
+    until(&tab, "window.__atLoad", "the page to load");
+    assert_eq!(
+        js(&tab, "return JSON.stringify(window.__atLoad);"),
+        serde_json::json!("[0,1]")
+    );
+    // A short page isn't marked.
+    std::fs::write(dir.path().join("short.md"), "# Short\n\nOne.\n").unwrap();
+    let short = open(&browser, &format!("{url}short.md"));
+    assert_eq!(
+        js(
+            &short,
+            "return document.documentElement.hasAttribute('data-mdv-long');"
+        ),
+        serde_json::json!(false)
+    );
+}

@@ -22,7 +22,10 @@ use tokio::sync::{mpsc, watch};
 
 use crate::render::Renderer;
 
-const DEBOUNCE: Duration = Duration::from_millis(50);
+/// How long a file must be quiet before it's rendered. Saves (a write, or
+/// a temp file renamed over the original) take well under this, so it only
+/// gathers bursts; a longer wait is felt on every save.
+const DEBOUNCE: Duration = Duration::from_millis(20);
 /// Limits for the file list, so a huge folder can't stall the viewer.
 const MAX_FILES: usize = 2000;
 const MAX_DEPTH: usize = 6;
