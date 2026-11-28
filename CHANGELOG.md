@@ -6,6 +6,8 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-28
+
 ### Added
 
 - Blame (<kbd>B</kbd>): rest the pointer on a paragraph to see who last
@@ -461,7 +463,8 @@ and this project uses [Semantic Versioning](https://semver.org/).
 - Stopping `--watch` with Ctrl-C closes the window markdown-viewer opened.
   Tabs, and pages opened by hand, stay open with a "stopped" banner.
 
-[Unreleased]: https://github.com/mdellavo/markdown-viewer/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/mdellavo/markdown-viewer/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/mdellavo/markdown-viewer/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/mdellavo/markdown-viewer/compare/v0.13.0...v0.14.0
