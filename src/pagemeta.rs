@@ -18,6 +18,9 @@ pub struct PageMeta {
     pub date: String,
     pub author: String,
     pub edit_url: Option<String>,
+    /// The site the link edits on: "GitHub", "GitLab", "Bitbucket",
+    /// "Codeberg" or "Gitea".
+    pub edit_site: String,
 }
 
 fn git(dir: &Path, args: &[&str]) -> Option<String> {
@@ -47,10 +50,21 @@ pub fn for_file(file: &Path, repo: Option<&str>) -> Option<PageMeta> {
     let name = file.file_name()?.to_str()?;
     let log = git(dir, &["log", "-1", "--format=%as%x00%an", "--", name])?;
     let (date, author) = log.split_once('\0')?;
+    use crate::references::Forge;
+    let forge = match repo {
+        Some(r) => Some((Forge::GitHub, r.to_string())),
+        None => crate::references::detect_forge(dir),
+    };
+    let edit_site = match &forge {
+        Some((Forge::GitHub, _)) | None => "GitHub",
+        Some((Forge::GitLab, _)) => "GitLab",
+        Some((Forge::Bitbucket, _)) => "Bitbucket",
+        Some((Forge::Gitea, url)) if url.starts_with("https://codeberg.org/") => "Codeberg",
+        Some((Forge::Gitea, _)) => "Gitea",
+    }
+    .to_string();
     let edit_url = (|| {
-        let base = repo
-            .map(str::to_string)
-            .or_else(|| crate::references::detect(dir))?;
+        let (forge, base) = forge?;
         let branch = git(dir, &["rev-parse", "--abbrev-ref", "HEAD"]).filter(|b| b != "HEAD")?;
         let path = git(dir, &["ls-files", "--full-name", "--", name])?;
         let path: Vec<String> = path
@@ -65,12 +79,19 @@ pub fn for_file(file: &Path, repo: Option<&str>) -> Option<PageMeta> {
             .map(|p| percent_encoding::utf8_percent_encode(p, SEGMENT).to_string())
             .collect();
         let branch = branch.join("/");
-        Some(format!("{base}/edit/{branch}/{}", path.join("/")))
+        let path = path.join("/");
+        Some(match forge {
+            Forge::GitHub => format!("{base}/edit/{branch}/{path}"),
+            Forge::GitLab => format!("{base}/-/edit/{branch}/{path}"),
+            Forge::Bitbucket => format!("{base}/src/{branch}/{path}?mode=edit"),
+            Forge::Gitea => format!("{base}/_edit/{branch}/{path}"),
+        })
     })();
     Some(PageMeta {
         date: date.to_string(),
         author: author.to_string(),
         edit_url,
+        edit_site,
     })
 }
 
@@ -134,8 +155,9 @@ pub fn footer(meta: &PageMeta) -> String {
     );
     if let Some(url) = &meta.edit_url {
         html.push_str(&format!(
-            "<a href=\"{}\" target=\"_blank\" rel=\"noopener\">Edit on GitHub</a>",
-            escape_attr(url)
+            "<a href=\"{}\" target=\"_blank\" rel=\"noopener\">Edit on {}</a>",
+            escape_attr(url),
+            escape_text(&meta.edit_site)
         ));
     }
     html.push_str("</footer>\n");
@@ -152,6 +174,7 @@ mod tests {
             date: "2026-11-27".into(),
             author: "A <B>".into(),
             edit_url: Some("https://github.com/o/r/edit/main/docs/a%20b.md".into()),
+            edit_site: "GitHub".into(),
         });
         assert_eq!(
             html,
@@ -196,6 +219,32 @@ mod tests {
             meta.edit_url.as_deref(),
             Some("https://github.com/o/r/edit/main/docs/my%20notes.md")
         );
+        assert_eq!(meta.edit_site, "GitHub");
         assert_eq!(for_file(&d.join("new.md"), None), None, "never committed");
+        for (remote, site, url) in [
+            (
+                "git@gitlab.com:g/s/r.git",
+                "GitLab",
+                "https://gitlab.com/g/s/r/-/edit/main/docs/my%20notes.md",
+            ),
+            (
+                "https://bitbucket.org/o/r.git",
+                "Bitbucket",
+                "https://bitbucket.org/o/r/src/main/docs/my%20notes.md?mode=edit",
+            ),
+            (
+                "https://codeberg.org/o/r.git",
+                "Codeberg",
+                "https://codeberg.org/o/r/_edit/main/docs/my%20notes.md",
+            ),
+            ("https://git.example.com/o/r.git", "GitHub", ""),
+        ] {
+            run(&["remote", "set-url", "origin", remote]);
+            let meta = for_file(&d.join("docs/my notes.md"), None).unwrap();
+            assert_eq!(meta.edit_url.as_deref().unwrap_or(""), url, "{remote}");
+            if !url.is_empty() {
+                assert_eq!(meta.edit_site, site);
+            }
+        }
     }
 }

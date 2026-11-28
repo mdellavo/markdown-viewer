@@ -11,6 +11,25 @@ use std::process::Command;
 /// The repository's web address (`https://github.com/owner/repo`) for a
 /// folder inside a git checkout whose remote is on GitHub.
 pub fn detect(dir: &Path) -> Option<String> {
+    match detect_forge(dir)? {
+        (Forge::GitHub, url) => Some(url),
+        _ => None,
+    }
+}
+
+/// Where a repository is hosted, for links to its files.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Forge {
+    GitHub,
+    GitLab,
+    Bitbucket,
+    /// Gitea and Forgejo (Codeberg).
+    Gitea,
+}
+
+/// The hosting site and web address of the repository in `dir`, from its
+/// `origin` remote (or its first).
+pub fn detect_forge(dir: &Path) -> Option<(Forge, String)> {
     let git = |args: &[&str]| {
         Command::new("git")
             .arg("-C")
@@ -25,13 +44,23 @@ pub fn detect(dir: &Path) -> Option<String> {
         let first = git(&["remote"])?.lines().next()?.to_string();
         git(&["remote", "get-url", &first])
     })?;
-    web_url(&url)
+    forge_url(&url)
 }
 
 /// `git@github.com:o/r.git`, `ssh://git@github.com/o/r`,
 /// `https://github.com/o/r.git` → `https://github.com/o/r`. Only GitHub
 /// hosts (github.com, or a name with "github" in it for Enterprise).
 pub fn web_url(remote: &str) -> Option<String> {
+    match forge_url(remote)? {
+        (Forge::GitHub, url) => Some(url),
+        _ => None,
+    }
+}
+
+/// Like `web_url`, for GitHub, GitLab (gitlab.com, or a name with
+/// "gitlab" in it; groups may nest), Bitbucket (bitbucket.org) and Gitea
+/// or Forgejo (codeberg.org, or a name with "gitea" or "forgejo" in it).
+pub fn forge_url(remote: &str) -> Option<(Forge, String)> {
     let rest = remote
         .strip_prefix("https://")
         .or_else(|| remote.strip_prefix("http://"))
@@ -55,17 +84,27 @@ pub fn web_url(remote: &str) -> Option<String> {
         _ => return None,
     };
     let host = host.to_ascii_lowercase();
-    if host != "github.com" && !host.contains("github") {
+    let forge = if host.contains("github") {
+        Forge::GitHub
+    } else if host.contains("gitlab") {
+        Forge::GitLab
+    } else if host == "bitbucket.org" {
+        Forge::Bitbucket
+    } else if host == "codeberg.org" || host.contains("gitea") || host.contains("forgejo") {
+        Forge::Gitea
+    } else {
         return None;
-    }
+    };
     let path = path.trim_end_matches('/').trim_end_matches(".git");
-    let (owner, repo) = path.split_once('/')?;
+    let parts: Vec<&str> = path.split('/').collect();
     let ok = |s: &str| {
         !s.is_empty()
             && s.chars()
                 .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
     };
-    (ok(owner) && ok(repo)).then(|| format!("https://{host}/{owner}/{repo}"))
+    // owner/repo; GitLab also group/subgroup/…/repo.
+    let fits = parts.len() == 2 || (forge == Forge::GitLab && parts.len() > 2);
+    (fits && parts.iter().all(|p| ok(p))).then(|| (forge, format!("https://{host}/{path}")))
 }
 
 /// The setting `github_repo`: `owner/repo`, or a repository's web address.
@@ -274,6 +313,20 @@ mod tests {
             Some("https://github.example.com/team/tool")
         );
         assert_eq!(web_url("https://gitlab.com/o/r.git"), None);
+        assert_eq!(
+            forge_url("git@gitlab.com:group/sub/r.git"),
+            Some((Forge::GitLab, "https://gitlab.com/group/sub/r".into()))
+        );
+        assert_eq!(
+            forge_url("https://bitbucket.org/o/r.git"),
+            Some((Forge::Bitbucket, "https://bitbucket.org/o/r".into()))
+        );
+        assert_eq!(
+            forge_url("ssh://git@codeberg.org/o/r.git"),
+            Some((Forge::Gitea, "https://codeberg.org/o/r".into()))
+        );
+        assert_eq!(forge_url("https://github.com/o/s/r"), None);
+        assert_eq!(forge_url("https://example.com/o/r"), None);
         assert_eq!(web_url("/srv/git/r.git"), None);
         assert_eq!(from_setting("o/r").as_deref(), Some(REPO));
         assert_eq!(from_setting("not a repo"), None);

@@ -191,6 +191,7 @@
     hasRecent ? ["h", "Show recent files"] : null,
     served ? ["l", "Check this page's links"] : null,
     served ? ["D", "Show what changed since the last git commit"] : null,
+    served ? ["B", "Blame: hover a paragraph to see who last changed it"] : null,
     ["j / k", "Scroll down / up"],
     ["d / u", "Half a page down / up"],
     ["g / G", "Top / bottom"],
@@ -1145,6 +1146,7 @@
       case "#": if (!served) return; toggleSidebar("tags"); break;
       case "l": if (!served) return; checkLinks(); break;
       case "D": if (!served) return; toggleGit(); break;
+      case "B": if (!served) return; toggleBlame(); break;
       case "j": window.scrollBy(0, 80); break;
       case "k": window.scrollBy(0, -80); break;
       case "d": window.scrollBy({ top: page / 2, behavior: "smooth" }); break;
@@ -1177,6 +1179,7 @@
     buildContents();
     updateStats();
     if (gitOn) refreshGitSoon();
+    if (blameOn) loadBlame(false);
     if (presenting()) { buildSlides(); showSlide(slideIndex); return; }
     var changed = e.detail && e.detail.changed;
     if (!changed) return;
@@ -1934,6 +1937,97 @@
     else { clearGit(); showToast("Not showing git changes"); }
   }
   if (gitOn && served) setTimeout(function () { applyGit(false); }, 300);
+
+  // ---- Blame: who last changed a block ----------------------------------------
+  // With B on, resting the pointer on a paragraph shows its latest change
+  // (the newest commit among its lines) beside it.
+  var blameOn = false, blame = null, blameFor = null, blameShow, blameHide;
+  var blameBox = el("div", { "class": "mdv-ui mdv-blame", role: "tooltip", hidden: "" });
+  document.body.append(blameBox);
+  function loadBlame(announce) {
+    return fetch("/__mdv/blame?doc=" + encodeURIComponent(currentDoc)).then(function (r) { return r.json(); }).then(function (d) {
+      blame = d;
+      if (!announce) return;
+      if (d.status === "not-a-repo") showToast("Not in a git repository");
+      else if (d.status === "untracked") showToast("Not committed yet");
+      else showToast("Blame: rest the pointer on a paragraph (B to stop)");
+    }).catch(function () { if (announce) showToast("Couldn't run git blame"); });
+  }
+  function toggleBlame() {
+    blameOn = !blameOn;
+    root.toggleAttribute("data-mdv-blame", blameOn);
+    if (blameOn) loadBlame(true);
+    else { hideBlame(); showToast("Blame off"); }
+  }
+  function hideBlame() {
+    clearTimeout(blameShow);
+    blameBox.hidden = true;
+    blameFor = null;
+  }
+  function blockFor(node) {
+    var n = node && node.closest && node.closest("[data-sourcepos]");
+    while (n && INLINE.test(n.tagName)) n = n.parentElement && n.parentElement.closest("[data-sourcepos]");
+    return n && body.contains(n) ? n : null;
+  }
+  function latestChange(node) {
+    var r = range(node);
+    if (!r || !blame || blame.status !== "ok") return null;
+    var best = null;
+    for (var line = r[0]; line <= r[1] && line <= blame.lines.length; line++) {
+      var c = blame.commits[blame.lines[line - 1]];
+      // Not committed yet counts as newest.
+      if (c && (!best || (!c.hash && best.hash) || (!!c.hash === !!best.hash && c.time > best.time))) best = c;
+    }
+    return best;
+  }
+  function showBlame(node) {
+    var c = latestChange(node);
+    if (!c) { hideBlame(); return; }
+    blameFor = node;
+    blameBox.textContent = "";
+    var who = el("b");
+    who.textContent = c.author;
+    var when = el("span", { "class": "mdv-blame-date" });
+    when.textContent = new Date(c.date + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+    var what = el("span", { "class": "mdv-blame-summary" });
+    what.textContent = c.summary;
+    blameBox.append(who, " · ", when, el("br"), what);
+    if (c.hash) {
+      var link = el(c.url ? "a" : "code", c.url ? { href: c.url, target: "_blank", rel: "noopener" } : {});
+      link.textContent = c.hash;
+      blameBox.append(" ", link);
+    }
+    blameBox.hidden = false;
+    var r = node.getBoundingClientRect();
+    var article = body.getBoundingClientRect();
+    var w = blameBox.offsetWidth, h = blameBox.offsetHeight;
+    var left, top;
+    if (window.innerWidth - article.right >= w + 16) {
+      // Beside the page, level with the block.
+      left = article.right + 12;
+      top = r.top;
+    } else {
+      left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
+      top = r.top - h - 4;
+    }
+    blameBox.style.left = left + window.scrollX + "px";
+    blameBox.style.top = Math.max(0, top + window.scrollY) + "px";
+  }
+  body.addEventListener("mouseover", function (e) {
+    if (!blameOn) return;
+    var node = blockFor(e.target);
+    if (!node || node === blameFor) return;
+    clearTimeout(blameShow);
+    clearTimeout(blameHide);
+    blameShow = setTimeout(function () { showBlame(node); }, 150);
+  });
+  body.addEventListener("mouseleave", function () {
+    if (!blameOn) return;
+    clearTimeout(blameHide);
+    blameHide = setTimeout(hideBlame, 400);
+  });
+  blameBox.addEventListener("mouseenter", function () { clearTimeout(blameHide); });
+  blameBox.addEventListener("mouseleave", function () { blameHide = setTimeout(hideBlame, 400); });
 
   // ---- Backlinks ----------------------------------------------------------------
   function loadBacklinks() {

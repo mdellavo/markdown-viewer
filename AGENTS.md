@@ -47,6 +47,11 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   `.mdv-line` spans, closing and reopening spans across line breaks.
 - `src/toc.rs`: `[TOC]` / `<!-- TOC [maxN] -->` markers.
 - `src/gitdiff.rs`: lines changed since `HEAD`, via `git diff -U0`.
+- `src/blame.rs`: `git blame --porcelain` per line for `/__mdv/blame`
+  (<kbd>B</kbd> in ui.js shows a block's newest commit in `.mdv-blame`).
+  Commit links and the footer's edit link come from
+  `references::detect_forge` (GitHub, GitLab, Bitbucket, Gitea/Forgejo);
+  GitHub references in the text stay GitHub-only (`detect`).
 - `src/tables.rs`: CSV and TSV files as HTML tables (`docs::is_viewable`
   is Markdown or these; `markdown_files` stays Markdown-only for search,
   links and wiki links, `document_files` adds them for the file list and
@@ -273,11 +278,14 @@ small viewer UI: toolbar, contents/files sidebar, keyboard shortcuts.
   `/__mdv/ui.js` (versioned, kept by the browser) instead of inlining them.
   live.js prepares content in `<template>`s so media isn't fetched twice.
   The init scripts put remembered drawings in synchronously
-  (`drawRemembered`, before the first paint). Don't preload the libraries:
+  (`drawRemembered`, before the first paint); math-init.js keeps one
+  `mdv-math:` entry per page (its formulas only), and pages with math link
+  katex.css before the article so remembered math is styled at once. Don't preload the libraries:
   a preload made the first Mermaid drawing about 50 ms slower, and holds
   the page's load event. `embeds::sizes` gives local images their
-  `width`/`height` from the file header. ui.js marks pages of 150+ blocks
-  `data-mdv-long`, and ui.css gives their blocks (not headings, whose link
+  `width`/`height` from the file header, and on served pages (`sourcepos`)
+  `loading="lazy"` (not in exports or PDFs, which print every image).
+  ui.js marks pages of 150+ blocks `data-mdv-long`, and ui.css gives their blocks (not headings, whose link
   icons would be clipped) `content-visibility: auto`. docs.rs debounces
   file events by only 20 ms.
 - `window.mdvInitial`: promises for the page's own first render;

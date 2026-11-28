@@ -309,6 +309,17 @@ html.mdv-sidebar-open .mdv-sidebar { transform: none; box-shadow: 0 0 24px rgba(
 }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: .15s; }
 
+/* Blame (B): the latest change of the block under the pointer. */
+.mdv-blame {
+  position: absolute; z-index: 30; max-width: 320px; padding: 6px 10px; border-radius: 6px;
+  font: 12px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  color: var(--fgColor-default); background: var(--bgColor-default);
+  border: 1px solid var(--borderColor-default); box-shadow: 0 4px 12px rgba(0, 0, 0, .12);
+}
+.mdv-blame[hidden] { display: none; }
+.mdv-blame-date, .mdv-blame-summary { color: var(--fgColor-muted); }
+.mdv-blame a, .mdv-blame code { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--fgColor-accent); }
+
 /* Source view (v): the highlighted Markdown in place of the page. */
 .mdv-source-view { display: none; }
 /* The page keeps its layout while hidden (content-visibility, not

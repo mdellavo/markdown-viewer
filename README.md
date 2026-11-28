@@ -239,15 +239,17 @@ cargo install markdown-viewer-rs     # build from source (see Building)
   the browser before the page is rendered, so the window comes up in about
   50 ms whatever the file's size, with a "Rendering…" note until a large
   page is ready.
-- Steady while it loads: diagrams the browser remembers are in place
-  before the page first shows, local images keep their space before they
-  load (their size is read from the file), and on long pages the parts
-  off screen aren't laid out until you scroll near them. Saves reach the
+- Steady while it loads: diagrams and math the browser remembers are in
+  place before the page first shows, local images keep their space before
+  they load (their size is read from the file: PNG, GIF, JPEG, WebP, AVIF,
+  HEIC and SVG) and load only as you near them, and on long pages the
+  parts off screen aren't laid out until you scroll near them. Saves reach the
   page in about 40 ms, and moving between pages fades instead of
   flashing.
 - A file committed to git says at the foot of its page when it last
-  changed and by whom, with an **Edit on GitHub** link when its remote is
-  on GitHub (`last_updated = false` in the settings file turns this off).
+  changed and by whom, with an **Edit** link when its remote is on GitHub,
+  GitLab, Bitbucket, Codeberg or Gitea (`last_updated = false` in the
+  settings file turns this off).
 - Watch mode (`--watch`) updates the page whenever you save:
   - It scrolls to the first thing you changed and briefly highlights it.
     Otherwise your scroll position is kept.
@@ -298,6 +300,10 @@ cargo install markdown-viewer-rs     # build from source (see Building)
   runs.
 - Show what changed since the last git commit (<kbd>D</kbd>): changed blocks
   get a bar in the margin, like an editor's gutter.
+- Blame (<kbd>B</kbd>): rest the pointer on a paragraph to see who last
+  changed it, when, and the commit (linked on GitHub, GitLab, Bitbucket,
+  Codeberg and Gitea), from `git blame`, including changes not committed
+  yet.
 - A rendered diff: `markdown-viewer notes.md --diff HEAD~3` shows the page
   with what changed since that git revision marked: added words in green,
   removed words struck through in red, and changed code blocks, diagrams
@@ -460,6 +466,7 @@ code block shows its copy button.
 | <kbd>h</kbd> | Recent files, in the sidebar (when serving) |
 | <kbd>l</kbd> | Check this page's links (when serving) |
 | <kbd>D</kbd> | Show what changed since the last git commit (when serving) |
+| <kbd>B</kbd> | Blame: rest the pointer on a paragraph to see who last changed it (when serving) |
 | <kbd>j</kbd> / <kbd>k</kbd> | Scroll down / up |
 | <kbd>d</kbd> / <kbd>u</kbd> | Half a page down / up |
 | <kbd>g</kbd> / <kbd>G</kbd> | Top / bottom |
@@ -526,7 +533,7 @@ recent = false          # don't remember opened files for the Recent page
 word_count = false      # hide the word count and reading time (w toggles it)
 exit_when_closed = false  # keep serving after the window closes (until Ctrl-C)
 source_highlighting = false  # show the source view (v) without highlighting
-last_updated = false    # no "Last updated … / Edit on GitHub" footer
+last_updated = false    # no "Last updated … / Edit" footer
 ```
 
 Unknown keys are reported as errors, so typos don't go unnoticed. Set
@@ -977,6 +984,7 @@ app and the Linux desktop entry are thin launchers for the same command.
   tree, and placeholder notes for links to notes not written yet (as in
   Dendron and Foam).
 - [ ] Search hits highlighted on the page a search result opens.
+- [ ] Type to filter the Contents tab, for documents with many headings.
 - [ ] Tags: nested tags (`#projects/garden`) as a tree in the Tags tab,
   tag search in the file finder (`#tag`), and the tag chips of a folder
   listing's files.
@@ -1024,6 +1032,8 @@ app and the Linux desktop entry are thin launchers for the same command.
   molfiles.
 - [ ] 3D models with their colours and materials (glTF, 3MF, OBJ with
   `.mtl`), and molecules as ribbons for proteins.
+- [ ] Maps with an offline base map (coastlines and borders bundled at low
+  detail), so tracks and points have some context without web tiles.
 - [ ] Redraw a page when a file it shows as an image changes (models, maps,
   molecules, calendars), not only when the Markdown is saved.
 - [ ] Other Markdown dialects' extras: MkDocs admonitions (`!!! note`),
@@ -1070,6 +1080,8 @@ app and the Linux desktop entry are thin launchers for the same command.
 - [ ] Kroki diagram types through a Kroki server you run yourself (pages
   stay offline otherwise).
 - [ ] Calendar times in your own time zone, and a month grid view.
+- [ ] PDFs linked like images (`![](paper.pdf)`) shown in an embedded
+  viewer.
 
 **Git**
 

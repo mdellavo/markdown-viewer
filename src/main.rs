@@ -11,6 +11,7 @@ use clap::{CommandFactory, Parser};
 mod abbr;
 mod about;
 mod asciimath;
+mod blame;
 mod browser;
 mod calendar;
 mod chess;

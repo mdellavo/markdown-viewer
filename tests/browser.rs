@@ -1567,12 +1567,12 @@ fn long_pages_open_quickly_and_keep_their_shape() {
          const img = document.querySelector('img[alt=wide]');
          return JSON.stringify([document.documentElement.hasAttribute('data-mdv-long'),
            getComputedStyle(ps[ps.length - 1]).contentVisibility,
-           img.getAttribute('width'), img.getAttribute('height')]);",
+           img.getAttribute('width'), img.getAttribute('height'), img.getAttribute('loading')]);",
     );
     assert_eq!(
         shape.as_str().unwrap(),
-        r#"[true,"auto","4","2"]"#,
-        "long page skips blocks off screen, image sized"
+        r#"[true,"auto","4","2","lazy"]"#,
+        "long page skips blocks off screen, image sized and loaded when near"
     );
     // Opened again, the remembered diagram is in place before the page's
     // scripts finish, not drawn after it shows.
@@ -1607,5 +1607,131 @@ fn long_pages_open_quickly_and_keep_their_shape() {
             "return document.documentElement.hasAttribute('data-mdv-long');"
         ),
         serde_json::json!(false)
+    );
+}
+
+#[test]
+fn typeset_math_is_remembered() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let md = dir.path().join("m.md");
+    std::fs::write(&md, "# M\n\nInline $a^2$ and\n\n$$\\frac{1}{x}$$\n").unwrap();
+    let server = serve(&md, &[]);
+    let url = format!("http://{}/", server.addr);
+    let tab = open(&browser, &url);
+    until(
+        &tab,
+        "document.querySelectorAll('.katex').length === 2",
+        "the math",
+    );
+    // Saved shortly after typesetting.
+    std::thread::sleep(Duration::from_millis(600));
+    tab.call_method(
+        headless_chrome::protocol::cdp::Page::AddScriptToEvaluateOnNewDocument {
+            source: "document.addEventListener('DOMContentLoaded', () => {
+                   window.__atLoad = [document.querySelectorAll('[data-math-style]').length,
+                                      document.querySelectorAll('.katex').length,
+                                      typeof window.katex];
+                 });"
+            .into(),
+            world_name: None,
+            include_command_line_api: None,
+            run_immediately: None,
+        },
+    )
+    .unwrap();
+    tab.navigate_to(&url)
+        .unwrap()
+        .wait_until_navigated()
+        .unwrap();
+    until(&tab, "window.__atLoad", "the page to load");
+    assert_eq!(
+        js(&tab, "return JSON.stringify(window.__atLoad);"),
+        serde_json::json!("[0,2,\"undefined\"]"),
+        "typeset before the first paint, without loading KaTeX"
+    );
+    // A new formula is typeset (KaTeX loads), the old one still shown.
+    std::fs::write(&md, "# M\n\nInline $a^2$ and $b_1$\n\n$$\\frac{1}{x}$$\n").unwrap();
+    until(
+        &tab,
+        "document.querySelectorAll('.katex').length === 3",
+        "the new formula",
+    );
+}
+
+#[test]
+fn blame_shows_who_changed_a_paragraph() {
+    let Some(browser) = browser() else { return };
+    let dir = tempfile::tempdir().unwrap();
+    let d = dir.path();
+    let git = |args: &[&str]| {
+        assert!(
+            Command::new("git")
+                .arg("-C")
+                .arg(d)
+                .args(args)
+                .output()
+                .unwrap()
+                .status
+                .success()
+        )
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.name", "Ada Lovelace"]);
+    git(&["config", "user.email", "ada@example.com"]);
+    let md = d.join("notes.md");
+    std::fs::write(&md, "# Notes\n\nFirst paragraph.\n").unwrap();
+    git(&["add", "notes.md"]);
+    git(&["commit", "-q", "-m", "Start the notes"]);
+    std::fs::write(&md, "# Notes\n\nFirst paragraph.\n\nSecond paragraph.\n").unwrap();
+    let server = serve(&md, &[]);
+    let tab = open(&browser, &format!("http://{}/", server.addr));
+    until(
+        &tab,
+        "document.body.textContent.includes('Second paragraph')",
+        "the page",
+    );
+    press(&tab, "B");
+    until(
+        &tab,
+        "document.documentElement.hasAttribute('data-mdv-blame')",
+        "blame on",
+    );
+    std::thread::sleep(Duration::from_millis(300));
+    let hover = |n: usize| {
+        js(
+            &tab,
+            &format!(
+                "document.querySelectorAll('.markdown-body > p')[{n}]
+                   .dispatchEvent(new MouseEvent('mouseover', {{ bubbles: true }})); return 0;"
+            ),
+        );
+    };
+    hover(0);
+    until(
+        &tab,
+        "!document.querySelector('.mdv-blame').hidden && document.querySelector('.mdv-blame').textContent.includes('Start the notes')",
+        "the first paragraph's commit",
+    );
+    assert!(
+        js(
+            &tab,
+            "return document.querySelector('.mdv-blame').textContent;"
+        )
+        .as_str()
+        .unwrap()
+        .contains("Ada Lovelace")
+    );
+    hover(1);
+    until(
+        &tab,
+        "document.querySelector('.mdv-blame').textContent.includes('Not committed yet')",
+        "the new paragraph",
+    );
+    press(&tab, "B");
+    until(
+        &tab,
+        "document.querySelector('.mdv-blame').hidden",
+        "blame off",
     );
 }

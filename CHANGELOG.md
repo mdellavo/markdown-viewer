@@ -6,6 +6,21 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Blame (<kbd>B</kbd>): rest the pointer on a paragraph to see who last
+  changed it, when, and the commit, from `git blame`.
+- The page footer's edit link works for GitLab, Bitbucket, Codeberg and
+  Gitea repositories too ("Edit on GitLab" …), not only GitHub.
+
+### Changed
+
+- Math the browser has typeset before is shown in the first paint, so
+  lines no longer shift as formulas are typeset.
+- Images further down a served page load as you near them, and AVIF, HEIC
+  and SVG images (with an absolute size) keep their space while loading,
+  like PNG, GIF, JPEG and WebP.
+
 ## [0.15.1] - 2026-11-27
 
 ### Changed

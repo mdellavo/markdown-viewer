@@ -179,12 +179,13 @@ in `@media print`. `@page` sets the paper size and margins.
 | `.mdv-diagram-invalid`, `.mdv-diagram-missing` | a block that couldn't be drawn (with the reason), or whose program isn't installed |
 | `.mdv-wave-line`, `.mdv-wave-bus`, `.mdv-wave-2` … `.mdv-wave-9`, `.mdv-wave-x`, `.mdv-wave-name`, `.mdv-wave-data` | WaveDrom: signal lines, bus values and their fill colours, unknown values, lane names and value labels |
 | `.mdv-chess-light`, `.mdv-chess-dark`, `.mdv-chess-moved`, `.mdv-chess-white`, `.mdv-chess-black` | chess squares, the last move's squares, and the pieces |
-| `.mdv-page-meta` | the footer after the article: when the file last changed in git, by whom, and the "Edit on GitHub" link (outside `.markdown-body`) |
+| `.mdv-page-meta` | the footer after the article: when the file last changed in git, by whom, and the "Edit on GitHub" (or GitLab, …) link (outside `.markdown-body`) |
 | `a.mdv-tag`, `td.mdv-tags` | a tag chip (`#tag` in Obsidian notes, front matter `tags:`), and the front matter cell holding them |
 | `.mdv-color` | the swatch after a colour in inline code |
 | `.mdv-molecule`, `.mdv-molecule-3d`, `.mdv-mol-bond`, `.mdv-mol-label`, `.mdv-mol-stick`, `circle.mdv-el-O` (and other elements) | molecules: structure bonds and atom labels, and 3D sticks and atoms by element |
 | `.mdv-calendar`, `.mdv-cal-month`, `.mdv-cal-day`, `.mdv-cal-time`, `.mdv-cal-zone`, `.mdv-cal-note`, `.mdv-cal-desc` | a calendar's table, month rows, dates, times, time zones, places and descriptions |
 | `video.mdv-video`, `audio.mdv-audio` | players for video and audio linked like images |
+| `.math[data-mdv-tex]` | typeset math (the attribute keys the browser's memory of it) |
 | `img[data-mdv-sized]` | a local image given its file's `width` and `height` (styled `height: auto`, so it keeps its proportions) |
 | `abbr[title]` | an abbreviation |
 | `dl`, `dt`, `dd` | a definition list |

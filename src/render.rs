@@ -524,7 +524,9 @@ impl Renderer {
         html = crate::embeds::media(html);
         if let Some(dir) = dir {
             html = crate::embeds::finish(html, dir);
-            html = crate::embeds::sizes(html, dir);
+            // Lazy loading only where pages are served (`sourcepos` is on
+            // for those alone): exports and PDFs print every image.
+            html = crate::embeds::sizes(html, dir, self.render.sourcepos);
         }
         html = crate::toc::finish(html);
         if self.render.obsidian
@@ -712,6 +714,24 @@ impl Renderer {
         let shared = page.served && page.site_root.is_none();
         let has_mermaid = body.contains(MERMAID_MARKER);
         let has_math = body.contains(MATH_MARKER);
+        // KaTeX's styles come before the article, so math the browser
+        // remembers (math-init.js puts it in before the first paint) is
+        // styled at once. Standalone pages have them in the head.
+        if has_math {
+            if shared {
+                let _ = writeln!(
+                    out,
+                    "<link rel=\"stylesheet\" href=\"{KATEX_CSS_PATH}?v={}\">",
+                    KATEX_VERSION.trim()
+                );
+            } else if let Some(root) = &page.site_root {
+                let _ = writeln!(
+                    out,
+                    "<link rel=\"stylesheet\" href=\"{}{SITE_DIR}/katex.css\">",
+                    escape_attr(root)
+                );
+            }
+        }
         out.push_str("<article class=\"markdown-body\">\n");
         out.push_str(body);
         out.push_str("</article>\n");

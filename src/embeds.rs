@@ -176,8 +176,10 @@ fn draw_paragraph(p: &str, dir: &Path) -> Option<String> {
 /// Local images get their size (`width`, `height` and `data-mdv-sized`,
 /// which the page styles keep in proportion), so the page holds their
 /// space while they load instead of moving down when each arrives. Only
-/// images without a size of their own.
-pub fn sizes(html: String, dir: &Path) -> String {
+/// images without a size of their own. With `lazy` (served pages: exports
+/// and PDFs print every image), they also load only as the reader nears
+/// them.
+pub fn sizes(html: String, dir: &Path, lazy: bool) -> String {
     if !html.contains("<img ") {
         return html;
     }
@@ -206,6 +208,9 @@ pub fn sizes(html: String, dir: &Path) -> String {
                     &mut out,
                     format_args!(" width=\"{w}\" height=\"{h}\" data-mdv-sized"),
                 );
+                if lazy && attr(tag, "loading").is_none() {
+                    out.push_str(" loading=\"lazy\" decoding=\"async\"");
+                }
                 out.push_str(&tag[4..]);
             }
             None => out.push_str(tag),
@@ -216,7 +221,8 @@ pub fn sizes(html: String, dir: &Path) -> String {
     out
 }
 
-/// The pixel size of a PNG, GIF, JPEG or WebP file, from its header.
+/// The pixel size of a PNG, GIF, JPEG, WebP, AVIF or HEIC file, or an SVG
+/// with an absolute width and height, from its header.
 fn image_size(file: &Path) -> Option<(u32, u32)> {
     use std::io::Read;
     let mut head = Vec::new();
@@ -255,6 +261,12 @@ fn header_size(b: &[u8]) -> Option<(u32, u32)> {
             _ => None,
         };
     }
+    if b.get(4..8)? == b"ftyp" {
+        return heif_size(b);
+    }
+    if let Some(size) = svg_size(b) {
+        return Some(size);
+    }
     if b.starts_with(&[0xff, 0xd8]) {
         let mut i = 2;
         loop {
@@ -284,6 +296,72 @@ fn header_size(b: &[u8]) -> Option<(u32, u32)> {
         }
     }
     None
+}
+
+/// AVIF and HEIC: the largest `ispe` (image spatial extents) property, so
+/// the whole picture rather than one of its tiles or a thumbnail, turned
+/// by an `irot` property.
+fn heif_size(b: &[u8]) -> Option<(u32, u32)> {
+    let brand = b.get(8..12)?;
+    if ![
+        &b"avif"[..],
+        b"avis",
+        b"heic",
+        b"heix",
+        b"mif1",
+        b"msf1",
+        b"hevc",
+    ]
+    .contains(&brand)
+    {
+        return None;
+    }
+    let be32 = |i: usize| Some(u32::from_be_bytes(b.get(i..i + 4)?.try_into().ok()?));
+    let mut best: Option<(u32, u32)> = None;
+    let mut from = 0;
+    while let Some(at) = b[from..].windows(4).position(|w| w == b"ispe") {
+        let i = from + at;
+        // type, then version and flags, then width and height.
+        if let (Some(w), Some(h)) = (be32(i + 8), be32(i + 12))
+            && best.is_none_or(|(bw, bh)| (w as u64) * (h as u64) > (bw as u64) * (bh as u64))
+        {
+            best = Some((w, h));
+        }
+        from = i + 4;
+    }
+    let (w, h) = best?;
+    let turned = b
+        .windows(4)
+        .position(|w| w == b"irot")
+        .and_then(|i| b.get(i + 4))
+        .is_some_and(|angle| angle & 1 == 1);
+    Some(if turned { (h, w) } else { (w, h) })
+}
+
+/// An SVG's `width` and `height` on its root element, when both are
+/// absolute (plain numbers or `px`); others size themselves by the page.
+fn svg_size(b: &[u8]) -> Option<(u32, u32)> {
+    let head = &b[..b.len().min(8192)];
+    let text = match std::str::from_utf8(head) {
+        Ok(text) => text,
+        // Cut mid-character: the valid start.
+        Err(e) => std::str::from_utf8(&head[..e.valid_up_to()]).ok()?,
+    };
+    let start = text.find("<svg")?;
+    let tag = &text[start..start + text[start..].find('>')?];
+    let number = |name: &str| -> Option<u32> {
+        let key = format!(" {name}=");
+        let at = tag.find(&key)? + key.len();
+        let quote = tag[at..].chars().next()?;
+        if quote != '"' && quote != '\'' {
+            return None;
+        }
+        let value = &tag[at + 1..at + 1 + tag[at + 1..].find(quote)?];
+        let value = value.trim().strip_suffix("px").unwrap_or(value.trim());
+        let n: f64 = value.parse().ok()?;
+        (1.0..100_000.0).contains(&n).then_some(n.round() as u32)
+    };
+    Some((number("width")?, number("height")?))
 }
 
 /// Whether a JPEG's EXIF data says the picture is turned a quarter.
@@ -358,11 +436,40 @@ mod tests {
         let mut webp = b"RIFF\0\0\0\0WEBPVP8X\0\0\0\0\0\0\0\0".to_vec();
         webp.extend([99, 0, 0, 49, 0, 0]);
         std::fs::write(d.join("w.webp"), &webp).unwrap();
+        std::fs::write(
+            d.join("s.svg"),
+            "<?xml version=\"1.0\"?>\n<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"120px\" height='40'>",
+        )
+        .unwrap();
+        std::fs::write(d.join("rel.svg"), "<svg width=\"100%\" height=\"2em\">").unwrap();
+        // An AVIF with a 64x64 tile and the 800x600 picture, turned.
+        let mut avif = b"\0\0\0\x18ftypavif\0\0\0\0mif1miaf".to_vec();
+        for (w, h) in [(64u32, 64u32), (800, 600)] {
+            avif.extend(b"\0\0\0\x14ispe\0\0\0\0");
+            avif.extend(w.to_be_bytes());
+            avif.extend(h.to_be_bytes());
+        }
+        std::fs::write(d.join("a.avif"), &avif).unwrap();
+        avif.extend(b"\0\0\0\x09irot\x01");
+        std::fs::write(d.join("turned.heic"), &avif).unwrap();
+        let more = sizes(
+            "<img src=\"s.svg\"><img src=\"rel.svg\"><img src=\"a.avif\"><img src=\"turned.heic\">"
+                .into(),
+            d,
+            true,
+        );
+        assert_eq!(
+            more,
+            "<img width=\"120\" height=\"40\" data-mdv-sized loading=\"lazy\" decoding=\"async\" src=\"s.svg\">\
+             <img src=\"rel.svg\">\
+             <img width=\"800\" height=\"600\" data-mdv-sized loading=\"lazy\" decoding=\"async\" src=\"a.avif\">\
+             <img width=\"600\" height=\"800\" data-mdv-sized loading=\"lazy\" decoding=\"async\" src=\"turned.heic\">"
+        );
         let html = "<p><img src=\"a%20b.png\" alt=\"A\" /> <img src=\"g.gif\" alt=\"\" />\
                     <img src=\"p.jpg?x\" alt=\"\" /><img src=\"w.webp\" alt=\"\" />\
                     <img src=\"g.gif\" width=\"5\" alt=\"\" /><img src=\"missing.png\" alt=\"\" />\
                     <img src=\"https://x.test/g.gif\" alt=\"\" /></p>";
-        let out = sizes(html.into(), d);
+        let out = sizes(html.into(), d, false);
         assert_eq!(
             out,
             "<p><img width=\"640\" height=\"480\" data-mdv-sized src=\"a%20b.png\" alt=\"A\" /> \

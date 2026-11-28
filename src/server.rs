@@ -45,6 +45,7 @@ const SETTINGS_PATH: &str = "/__mdv/settings";
 const SOURCE_HTML_PATH: &str = "/__mdv/source-html";
 const SOURCE_PATH: &str = "/__mdv/source";
 const GITDIFF_PATH: &str = "/__mdv/gitdiff";
+const BLAME_PATH: &str = "/__mdv/blame";
 const CHECK_PATH: &str = "/__mdv/check";
 const BACKLINKS_PATH: &str = "/__mdv/backlinks";
 const TAGS_PATH: &str = "/__mdv/tags";
@@ -332,6 +333,7 @@ impl Server {
             .route(SOURCE_HTML_PATH, get(source_html))
             .route(SOURCE_PATH, get(source))
             .route(GITDIFF_PATH, get(gitdiff))
+            .route(BLAME_PATH, get(blame))
             .route(CHECK_PATH, get(check_links))
             .route(BACKLINKS_PATH, get(backlinks))
             .route(TAGS_PATH, get(tags))
@@ -978,6 +980,17 @@ async fn gitdiff(State(state): State<AppState>, Query(q): Query<EventsQuery>) ->
     };
     match tokio::task::spawn_blocking(move || crate::gitdiff::diff(&file)).await {
         Ok(diff) => no_store(Json(diff).into_response()),
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+/// Who last changed each line (`git blame`).
+async fn blame(State(state): State<AppState>, Query(q): Query<EventsQuery>) -> Response {
+    let Some(file) = doc_file(&state, &q.doc) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    match tokio::task::spawn_blocking(move || crate::blame::blame(&file)).await {
+        Ok(blame) => no_store(Json(blame).into_response()),
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     }
 }
