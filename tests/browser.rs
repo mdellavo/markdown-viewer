@@ -1697,7 +1697,7 @@ fn blame_shows_who_changed_a_paragraph() {
         "document.documentElement.hasAttribute('data-mdv-blame')",
         "blame on",
     );
-    std::thread::sleep(Duration::from_millis(300));
+    // Hovered at once: shown when git's answer arrives.
     let hover = |n: usize| {
         js(
             &tab,

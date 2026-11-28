@@ -1942,11 +1942,18 @@
   // With B on, resting the pointer on a paragraph shows its latest change
   // (the newest commit among its lines) beside it.
   var blameOn = false, blame = null, blameFor = null, blameShow, blameHide;
+  // The block under the pointer, shown as soon as blame arrives (git can
+  // take a moment, and the pointer may already be resting there).
+  var blamePointer = null;
   var blameBox = el("div", { "class": "mdv-ui mdv-blame", role: "tooltip", hidden: "" });
   document.body.append(blameBox);
   function loadBlame(announce) {
     return fetch("/__mdv/blame?doc=" + encodeURIComponent(currentDoc)).then(function (r) { return r.json(); }).then(function (d) {
       blame = d;
+      if (blameOn && blamePointer && blamePointer.isConnected) {
+        blameFor = null;
+        showBlame(blamePointer);
+      }
       if (!announce) return;
       if (d.status === "not-a-repo") showToast("Not in a git repository");
       else if (d.status === "untracked") showToast("Not committed yet");
@@ -1963,6 +1970,7 @@
     clearTimeout(blameShow);
     blameBox.hidden = true;
     blameFor = null;
+    blamePointer = null;
   }
   function blockFor(node) {
     var n = node && node.closest && node.closest("[data-sourcepos]");
@@ -1982,7 +1990,7 @@
   }
   function showBlame(node) {
     var c = latestChange(node);
-    if (!c) { hideBlame(); return; }
+    if (!c) { blameBox.hidden = true; blameFor = null; return; }
     blameFor = node;
     blameBox.textContent = "";
     var who = el("b");
@@ -2017,6 +2025,7 @@
     if (!blameOn) return;
     var node = blockFor(e.target);
     if (!node || node === blameFor) return;
+    blamePointer = node;
     clearTimeout(blameShow);
     clearTimeout(blameHide);
     blameShow = setTimeout(function () { showBlame(node); }, 150);
